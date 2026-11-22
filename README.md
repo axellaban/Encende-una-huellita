@@ -172,6 +172,8 @@ server/index.js         Servidor local
 
 Los gestos aceptan `glowTo` + `glowToken` (el token de edición de tu mascota) para sumarle Glow.
 
+¿Vas a seguir el proyecto? Empezá por [`AGENTS.md`](AGENTS.md) y [`PENDIENTES.md`](PENDIENTES.md).
+
 La investigación inicial, hecha con [REA](https://github.com/morluto/rea), está en
 [`docs/investigacion-rea.md`](docs/investigacion-rea.md).
 
