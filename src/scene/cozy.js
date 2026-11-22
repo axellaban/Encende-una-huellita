@@ -1,9 +1,9 @@
 // Detalles pequeños que hacen el jardín acogedor: huellitas en el camino, hongos que brillan,
 // el cuenco y la pelota de Luca, farolitos de papel, pétalos que caen, pizarrón de bienvenida,
-// el Puente del Arcoíris con su arroyo, espíritus de mascotas que pasean y el frasco de gracias.
+// el Puente del Arcoíris con su arroyo, el Prado de los espíritus y el frasco de gracias.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, GARDEN_RADIUS, CREEK_Z, nearCreek, uTime, rand } from './world.js';
+import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, CREEK_Z, MEADOW, MEADOW_R, nearCreek, uTime, rand } from './world.js';
 import { EASEL_POS } from './hall.js';
 import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture } from './textures.js';
 import { picadoBanner, marigoldCluster, PALETTE } from './muertos.js';
@@ -346,14 +346,61 @@ export function createCozy(scene, tier, colliders) {
     scene.add(signPost);
   }
 
-  // ---------- espíritus de mascotas que pasean ----------
-  const spirits = [makeSpirit('perro'), makeSpirit('gato')];
-  spirits.forEach((sp, i) => {
-    sp.group.position.set(i ? 8 : -8, 0, 8);
-    scene.add(sp.group);
-    pickables.push(sp.hit);
-  });
-  animated.push((t, dt) => spirits.forEach((sp) => walkSpirit(sp, t, dt, r)));
+  // ---------- el Prado de los espíritus: cartel, cucha, cuenco y piedritas que brillan ----------
+  {
+    const wood = new THREE.MeshLambertMaterial({ map: woodTexture('#7a5236') });
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.42), new THREE.MeshBasicMaterial({
+      map: labelTexture('Prado de los espíritus 🐾', { w: 720, h: 150, font: '700 70px Caveat, cursive', bg: 'rgba(74,48,34,0.95)', fg: '#f6e3c4' }),
+      side: THREE.DoubleSide,
+    }));
+    const sx = MEADOW.x - MEADOW_R * 0.72;
+    const sz = MEADOW.z + MEADOW_R * 0.72;
+    sign.position.set(sx, 1.15, sz);
+    sign.rotation.y = -0.75;
+    scene.add(sign);
+    for (const o of [-0.8, 0.8]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.25, 0.07), wood);
+      post.position.set(sx + Math.cos(0.75) * o, 0.62, sz + Math.sin(0.75) * o);
+      scene.add(post);
+    }
+    colliders.circles.push({ x: sx, z: sz, r: 0.35 });
+    // Cucha de madera con techo a dos aguas.
+    const house = new THREE.Group();
+    house.position.set(MEADOW.x + MEADOW_R * 0.55, 0, MEADOW.z - MEADOW_R * 0.75);
+    house.rotation.y = -2.4;
+    const walls = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.62, 1.0), new THREE.MeshLambertMaterial({ map: woodTexture('#b5482a') }));
+    walls.position.y = 0.31;
+    const roofMat = new THREE.MeshLambertMaterial({ map: woodTexture('#5a3a28') });
+    for (const sd of [-1, 1]) {
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.05, 1.12), roofMat);
+      roof.position.set(sd * 0.22, 0.78, 0);
+      roof.rotation.z = -sd * 0.72;
+      house.add(roof);
+    }
+    const door = new THREE.Mesh(new THREE.CircleGeometry(0.2, 20, 0, Math.PI), new THREE.MeshBasicMaterial({ color: '#160d12' }));
+    door.position.set(0, 0.15, 0.505);
+    const doorLow = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.15), door.material);
+    doorLow.position.set(0, 0.075, 0.505);
+    const name = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.11), new THREE.MeshBasicMaterial({ map: labelTexture('Hogar', { w: 256, h: 64, font: '700 44px Caveat, cursive' }) }));
+    name.position.set(0, 0.5, 0.506);
+    house.add(walls, door, doorLow, name);
+    scene.add(house);
+    colliders.circles.push({ x: house.position.x, z: house.position.z, r: 0.7 });
+    // Piedritas que brillan marcando el borde del prado.
+    const n = 26;
+    const glowStones = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.045, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 0.8, 0.9) }), n);
+    const m = new THREE.Object3D();
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + r() * 0.1;
+      m.position.set(MEADOW.x + Math.sin(a) * (MEADOW_R + 0.6), 0.04, MEADOW.z + Math.cos(a) * (MEADOW_R + 0.6));
+      m.rotation.set(r() * 3, r() * 3, r() * 3);
+      m.scale.setScalar(0.7 + r() * 0.6);
+      m.updateMatrix();
+      glowStones.setMatrixAt(i, m.matrix);
+    }
+    scene.add(glowStones);
+    animated.push((t) => { glowStones.material.color.setRGB(0.32 + Math.sin(t * 1.3) * 0.08, 0.75 + Math.sin(t * 1.3) * 0.12, 0.9); });
+  }
 
   // ---------- frasco de gracias ----------
   const jar = new THREE.Group();
@@ -418,109 +465,9 @@ export function createCozy(scene, tier, colliders) {
       stars.count = Math.min(STAR_MAX, Math.max(3, n));
     },
     jarWorldPos: () => new THREE.Vector3(JAR_POS.x, 1.0, JAR_POS.z),
-    spiritOf: (obj) => spirits.find((s) => s.hit === obj),
-    hop(sp) {
-      sp.hopT = 0;
-      sp.pause = 1.5;
-    },
   };
 }
 
 function tierCount(tier, n) {
   return Math.round(n * (tier.grass >= 20000 ? 1 : tier.grass >= 10000 ? 0.7 : 0.4));
-}
-
-// Un perrito o gatito de luz, hecho con formas simples.
-function makeSpirit(kind) {
-  const cat = kind === 'gato';
-  const g = new THREE.Group();
-  // Alebrije: cada parte de un color neón distinto.
-  const col = cat ? new THREE.Color(1.6, 0.5, 1.4) : new THREE.Color(0.4, 1.5, 1.5);
-  const neon = (c) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(1.4), transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending, depthWrite: false });
-  const mats = cat ? ['#ff3fa4', '#ffd23f', '#7b2cbf', '#14d3c8', '#ff8a1a'] : ['#14d3c8', '#ff8a1a', '#ff3fa4', '#ffd23f', '#8c5cff'];
-  const mat = neon(mats[0]);
-  const s = cat ? 0.75 : 1;
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), mat);
-  body.scale.set(0.85 * s, 0.75 * s, 1.35 * s);
-  body.position.y = 0.36 * s;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.15 * s, 14, 10), neon(mats[1]));
-  head.position.set(0, 0.56 * s, 0.27 * s);
-  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.07 * s, 10, 8), mat);
-  snout.position.set(0, 0.52 * s, 0.4 * s);
-  snout.visible = !cat;
-  const earGeo = new THREE.ConeGeometry(0.055 * s, cat ? 0.13 * s : 0.15 * s, 6);
-  const ears = [-1, 1].map((e) => {
-    const ear = new THREE.Mesh(earGeo, neon(mats[2]));
-    ear.position.set(e * 0.08 * s, cat ? 0.7 * s : 0.64 * s, 0.25 * s);
-    ear.rotation.z = cat ? -e * 0.25 : -e * 2.4;
-    return ear;
-  });
-  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.02 * s, 0.035 * s, cat ? 0.42 * s : 0.26 * s, 6), neon(mats[4]));
-  tail.position.set(0, 0.5 * s, -0.3 * s);
-  tail.rotation.x = cat ? -0.3 : -0.9;
-  const legs = [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([x, z]) => {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * s, 0.03 * s, 0.24 * s, 6), neon(mats[3]));
-    leg.geometry.translate(0, -0.12 * s, 0);
-    leg.position.set(x * 0.09 * s, 0.26 * s, z * 0.14 * s);
-    return leg;
-  });
-  const aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: col, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.5 }));
-  aura.scale.setScalar(1.3 * s);
-  aura.position.y = 0.4 * s;
-  const hit = new THREE.Mesh(new THREE.SphereGeometry(0.55 * s, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
-  hit.position.y = 0.4 * s;
-  hit.userData = { kind: 'spirit', pet: kind };
-  const spots = [];
-  for (let i = 0; i < 9; i++) {
-    const sp = new THREE.Mesh(new THREE.SphereGeometry(0.035 * s, 6, 5), neon(mats[(i % 4) + 1]));
-    const a = (i / 9) * Math.PI * 2;
-    sp.position.set(Math.cos(a) * 0.17 * s, 0.38 * s + Math.sin(i * 1.7) * 0.06 * s, Math.sin(a) * 0.26 * s);
-    spots.push(sp);
-  }
-  g.add(body, head, snout, ...ears, tail, ...legs, ...spots, aura, hit);
-  return { group: g, body, head, tail, legs, hit, kind, target: new THREE.Vector3(), pause: 0, phase: 0, hopT: 1, speed: cat ? 1.0 : 1.3 };
-}
-
-function pickTarget(sp, r) {
-  // Pasean entre el camino, el salón y el puente.
-  for (let i = 0; i < 20; i++) {
-    const a = r() * Math.PI * 2;
-    const d = 6 + r() * (GARDEN_RADIUS - 10);
-    const x = Math.sin(a) * d;
-    const z = Math.cos(a) * d - 4;
-    if (Math.hypot(x - HALL_CENTER.x, z - HALL_CENTER.z) > HALL_RADIUS + 2.5) { sp.target.set(x, 0, z); return; }
-  }
-  sp.target.set(0, 0, 10);
-}
-
-function walkSpirit(sp, t, dt, r) {
-  const g = sp.group;
-  if (sp.target.lengthSq() === 0) pickTarget(sp, r);
-  if (sp.hopT < 1) sp.hopT = Math.min(1, sp.hopT + dt * 1.6);
-  const hop = sp.hopT < 1 ? Math.sin(sp.hopT * Math.PI) * 0.5 : 0;
-  if (sp.pause > 0) {
-    sp.pause -= dt;
-    sp.tail.rotation.z = Math.sin(t * 9) * 0.5;
-    g.position.y = hop;
-    return;
-  }
-  const dx = sp.target.x - g.position.x;
-  const dz = sp.target.z - g.position.z;
-  const d = Math.hypot(dx, dz);
-  if (d < 0.3) {
-    sp.pause = 1.5 + r() * 4;
-    pickTarget(sp, r);
-    return;
-  }
-  const want = Math.atan2(dx, dz);
-  let diff = want - g.rotation.y;
-  diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-  g.rotation.y += diff * Math.min(1, dt * 3);
-  const step = Math.min(d, sp.speed * dt);
-  g.position.x += Math.sin(g.rotation.y) * step;
-  g.position.z += Math.cos(g.rotation.y) * step;
-  sp.phase += dt * 10;
-  g.position.y = Math.abs(Math.sin(sp.phase)) * 0.05 + hop;
-  sp.legs.forEach((l, i) => { l.rotation.x = Math.sin(sp.phase + (i % 2 ? Math.PI : 0) + (i > 1 ? Math.PI / 2 : 0)) * 0.6; });
-  sp.tail.rotation.z = Math.sin(t * 6) * 0.3;
 }

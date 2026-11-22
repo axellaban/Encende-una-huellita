@@ -2,6 +2,7 @@
 // Recibe un pedido simplificado y devuelve { status, json } o { status, bytes, type, cache }.
 
 import { allowed } from './plans.js';
+import { cleanLook } from './looks.js';
 
 export const MAX_BODY = 3.5 * 1024 * 1024;
 const MAX_AUDIO = 600 * 1024;
@@ -25,7 +26,7 @@ export function validateMemorial(body) {
   const passedDay = MMDD.test(body.passedDay || '') ? body.passedDay : null;
   const message = cleanText(body.message, 200);
   const slot = Number.isInteger(body.slot) ? body.slot : undefined;
-  return { name, species, birthday, passedDay, message, slot };
+  return { name, species, birthday, passedDay, message, slot, look: cleanLook(body.look) };
 }
 
 export function parseAudioUrl(s) {
@@ -45,6 +46,15 @@ export function parseDataUrl(s) {
   };
   if (!sig[m[1]]) return null;
   return { bytes, type: `image/${m[1]}` };
+}
+
+// El espíritu que alguien está paseando (para que los demás lo vean caminar a su lado).
+function cleanPet(p) {
+  if (!p || typeof p !== 'object') return null;
+  const n = cleanText(p.n, 30);
+  if (!n) return null;
+  const look = cleanLook(p) || {};
+  return { n, sp: ['perro', 'gato', 'otro'].includes(p.sp) ? p.sp : 'perro', ...look };
 }
 
 const countryOf = (req) => {
@@ -133,6 +143,8 @@ export async function handleApi(req, store) {
         if (!patch.name) return fail(400, 'Contanos su nombre.');
       }
       if (body.message !== undefined) patch.message = cleanText(body.message, 200);
+      if (body.look !== undefined) patch.look = cleanLook(body.look);
+      if (body.species !== undefined && ['perro', 'gato', 'otro'].includes(body.species)) patch.species = body.species;
       for (const k of ['birthday', 'passedDay']) if (body[k] !== undefined) patch[k] = MMDD.test(body[k] || '') ? body[k] : null;
       if (body.bg !== undefined) {
         if (!allowed('backgrounds')) return fail(402, 'Este fondo es especial.');
@@ -235,6 +247,7 @@ export async function handleApi(req, store) {
       say: cleanText(body.say, 40) || null,
       emote: cleanText(body.emote, 8) || null,
       country: countryOf(req),
+      pet: cleanPet(body.pet),
     };
     return ok(await store.touch(cleanText(body.sid, 40), info));
   }

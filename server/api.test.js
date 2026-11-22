@@ -138,6 +138,24 @@ for (const name of ['local', 'vercel']) {
     assert.equal(again.others.find((o) => o.name === 'X').say, null);
   });
 
+  test(`[${name}] cómo era (pelaje, orejas, tamaño) y el espíritu que alguien pasea`, async () => {
+    const c = await (await post('/api/memorials', { name: 'Toby', species: 'perro', look: { fur: 'dorado', ears: 'down', size: 'l', pattern: 'raro', x: 1 } })).json();
+    assert.deepEqual(c.memorial.look, { fur: 'dorado', ears: 'down', size: 'l' });
+    const own = { 'X-Edit-Token': c.editToken };
+    let r = await (await post(`/api/memorials/${c.memorial.id}/edit`, { look: { fur: 'negro', ears: 'up' }, species: 'gato' }, own)).json();
+    assert.deepEqual(r.look, { fur: 'negro', ears: 'up' });
+    assert.equal(r.species, 'gato');
+    r = await (await post(`/api/memorials/${c.memorial.id}/edit`, { look: 'cualquier cosa' }, own)).json();
+    assert.equal(r.look, null);
+    // Presencia con mascota paseando.
+    await post('/api/now', { sid: 'p1', visitor: 'Con Toby', x: 2, z: 3, pet: { n: 'Toby', sp: 'perro', fur: 'dorado', ears: 'down', size: 'm' } });
+    const j = await (await post('/api/now', { sid: 'p2', visitor: 'Otra', pet: { n: '', sp: 'perro' } })).json();
+    const p = j.others.find((o) => o.name === 'Con Toby');
+    assert.deepEqual(p.pet, { n: 'Toby', sp: 'perro', fur: 'dorado', ears: 'down', size: 'm' });
+    const k = await (await post('/api/now', { sid: 'p3', visitor: 'X' })).json();
+    assert.equal(k.others.find((o) => o.name === 'Otra').pet, null, 'sin nombre no hay espíritu');
+  });
+
   test(`[${name}] Glow, regalitos, abrazos, frasco y noche de velas`, async () => {
     const mine = await (await post('/api/memorials', { name: 'Mía', species: 'perro', pendingGlow: 500 })).json();
     assert.equal(mine.memorial.glow, 60, 'el Glow guardado tiene tope');

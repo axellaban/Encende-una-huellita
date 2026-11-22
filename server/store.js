@@ -161,6 +161,7 @@ export function createStore(kv) {
         message: input.message,
         birthday: input.birthday,
         passedDay: input.passedDay,
+        look: input.look || null,
         hue: Math.floor(Math.random() * 360),
         hasPhoto: !!photo,
         createdAt: Date.now(),
@@ -273,7 +274,7 @@ export function createStore(kv) {
       const o = await owner(id, token);
       if (o.error) return o.error;
       const data = JSON.parse(o.h.data);
-      for (const k of ['name', 'message', 'birthday', 'passedDay', 'species']) if (patch[k] !== undefined) data[k] = patch[k];
+      for (const k of ['name', 'message', 'birthday', 'passedDay', 'species', 'look']) if (patch[k] !== undefined) data[k] = patch[k];
       const cmds = [];
       if (photo) {
         data.hasPhoto = true;
@@ -414,6 +415,7 @@ export function createStore(kv) {
           emote,
           gestureAt: say || emote ? now : 0,
           country: info.country || null,
+          pet: info.pet || null,
         };
         cmds.push(['SET', `${P}p:${sid}`, JSON.stringify(pos), 'EX', '60']);
       }

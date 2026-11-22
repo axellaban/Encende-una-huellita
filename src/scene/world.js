@@ -11,6 +11,9 @@ export const GARDEN_RADIUS = 37;
 export const SPAWN = new THREE.Vector3(0, 1.6, 24);
 export const PATH_HALF = 1.6;
 export const CREEK_Z = -29.5;
+// El Prado de los espíritus: un claro sin árboles donde juegan las mascotas de luz.
+export const MEADOW = new THREE.Vector3(13, 0, 11);
+export const MEADOW_R = 7;
 export const creekZ = (x) => CREEK_Z + Math.sin(x * 0.12) * 2.2;
 export const nearCreek = (x, z, pad = 0) => Math.abs(z - creekZ(x)) < 2.1 + pad;
 
@@ -318,6 +321,7 @@ export function buildWorld(scene, tier) {
       const z = HALL_CENTER.z + Math.cos(a) * d;
       if (Math.abs(x) < 5 && z > -2) continue;
       if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 6) continue;
+      if (Math.hypot(x - MEADOW.x, z - MEADOW.z) < MEADOW_R + 2.5) continue;
       if (Math.hypot(x, z) > GARDEN_RADIUS - 2.5 || nearCreek(x, z, 1.5)) continue;
       if (colliders.circles.some((c) => Math.hypot(c.x - x, c.z - z) < 4)) continue;
       const blossom = r() < 0.28;

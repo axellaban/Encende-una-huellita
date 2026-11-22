@@ -516,6 +516,7 @@ dialog.guide[open] { display: flex; }
   .joy i { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff8ec, #e9c9a4); box-shadow: 0 4px 14px rgba(0,0,0,.35), 0 0 16px rgba(255,200,140,.35); transform: translate(var(--jx, 0px), var(--jy, 0px)); transition: transform .12s; }
   .joy.active i { transition: none; }
   .joy::after { content: '🐾'; position: absolute; left: 50%; top: -22px; transform: translateX(-50%); font-size: 13px; opacity: .7; }
+
   .emote-btn { bottom: calc(var(--dock-h) + var(--safe-b) + 18px); }
   .emote-tray { bottom: calc(var(--dock-h) + var(--safe-b) + 78px); }
   .hint { left: auto; right: 78px; transform: none; max-width: calc(100vw - 220px); white-space: normal; text-align: left; }
@@ -554,6 +555,55 @@ dialog.guide[open] { display: flex; }
   .card b { font-size: 15px; }
   .seg button { padding: 0 10px; font-size: 13px; }
   .toast { font-size: 14px; }
+}
+
+
+/* ---------- paseo con su espíritu ---------- */
+.walk-btn { background: linear-gradient(135deg, #14b3b0, #7b2cbf); color: #fff; box-shadow: 0 6px 22px rgba(20,179,176,.35); margin-top: 12px; }
+.walk-btn .paw { display: inline-block; animation: pawHop 1.8s var(--ease) infinite; }
+@keyframes pawHop { 0%, 70%, 100% { transform: none; } 80% { transform: translateY(-4px) rotate(-12deg); } 90% { transform: translateY(0) rotate(8deg); } }
+.walk-hud { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 22px); transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 999px; background: var(--glass-2); border: 1px solid rgba(143, 243, 255, .35); box-shadow: 0 0 22px rgba(120, 230, 255, .22), var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 5; animation: rise .4s var(--ease); transition: opacity .3s, transform .3s var(--ease); }
+.walk-who { display: flex; align-items: center; gap: 8px; padding-right: 8px; text-align: left; }
+.walk-who img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid #8ff3ff; box-shadow: 0 0 12px rgba(143,243,255,.6); }
+.walk-who small { display: block; font-size: 11px; font-weight: 700; opacity: .75; line-height: 1; }
+.walk-who b { display: block; font-family: var(--hand); font-size: 22px; line-height: 1; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.walk-act { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,240,220,.1); font-size: 20px; display: grid; place-items: center; transition: transform .15s var(--ease), background .2s; }
+.walk-act:hover { background: rgba(255,240,220,.2); }
+.walk-act:active { transform: scale(.88); }
+.walk-act.x-act { font-size: 15px; opacity: .8; }
+body.sheet-open .walk-hud, body.intro .walk-hud { opacity: 0; pointer-events: none; transform: translate(-50%, 30px); }
+.ball-prompt { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 84px); transform: translateX(-50%); padding: 12px 20px; border-radius: 999px; background: linear-gradient(135deg, #d8f06a, #8fd35a); color: #233313; font-weight: 900; font-size: 15px; box-shadow: 0 0 24px rgba(200,240,100,.45), var(--shadow); z-index: 5; animation: rise .3s var(--ease); }
+.ball-prompt:active { transform: translateX(-50%) scale(.94); }
+body.sheet-open .ball-prompt, body.walking .ball-prompt { display: none; }
+.toast.has-action { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 18px; text-align: left; }
+.toast button { flex-shrink: 0; padding: 8px 14px; border-radius: 999px; background: var(--ink); color: var(--cream); font-weight: 800; font-size: 13.5px; }
+
+/* cómo era: pelaje, orejas, tamaño */
+.look { display: grid; gap: 10px; margin: 6px 0 4px; }
+.look-row { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.look-row legend { font-weight: 800; font-size: 14px; margin-bottom: 6px; padding: 0; width: 100%; }
+.look-row label { position: relative; cursor: pointer; }
+.look-row input { position: absolute; opacity: 0; inset: 0; margin: 0; }
+.look-row span { display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border-radius: 999px; border: 2px solid var(--cream-3); background: var(--field); font-weight: 700; font-size: 14px; color: var(--ink); transition: all .15s; }
+.look-row .swatch { width: 38px; padding: 0; background: var(--c); box-shadow: inset 0 -6px 10px rgba(0,0,0,.18), inset 0 4px 8px rgba(255,255,255,.25); }
+.look-row input:checked + span { border-color: var(--accent); background-color: var(--hilite); transform: scale(1.06); }
+.look-row input:checked + .swatch { background: var(--c); box-shadow: 0 0 0 3px var(--hilite), 0 0 0 5px var(--accent); }
+.look-row input:focus-visible + span { outline: 3px solid var(--lav); }
+
+@media (max-width: 760px), (pointer: coarse) and (max-height: 540px) {
+  /* Encima de la palanca: paseo, pelota, pista y avisos no se pisan. */
+  /* Paseo y pelota: a la derecha de la palanca, sin tapar al personaje. */
+  .walk-hud, .ball-prompt { left: 140px; right: auto; transform: none; bottom: calc(var(--dock-h) + var(--safe-b) + 22px); }
+  .walk-hud { gap: 4px; padding: 5px; }
+  .walk-who { padding-right: 0; }
+  .walk-who span { display: none; }
+  .walk-who img, .walk-act { width: 40px; height: 40px; }
+  body.sheet-open .walk-hud, body.intro .walk-hud { transform: translateY(30px); }
+  .ball-prompt { padding: 12px 16px; font-size: 14.5px; }
+  .ball-prompt:active { transform: scale(.94); }
+  .hint { bottom: calc(var(--dock-h) + var(--safe-b) + 142px); white-space: normal; text-align: center; max-width: min(300px, calc(100vw - 40px)); }
+  /* Avisos arriba (debajo de los chips): abajo están la palanca y el personaje. */
+  .toast { bottom: auto; top: calc(var(--safe-t) + 120px); animation-name: drop; }
 }
 
 /* Celular acostado: ficha a un costado. */

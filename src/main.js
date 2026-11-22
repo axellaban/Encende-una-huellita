@@ -12,6 +12,9 @@ import { createLanterns } from './scene/lanterns.js';
 import { createCozy } from './scene/cozy.js';
 import { createAvatars } from './scene/avatars.js';
 import { createElevator } from './scene/elevator.js';
+import { createSpirits, MEADOW } from './scene/spirits.js';
+import { createCharacter } from './scene/character.js';
+import { FURS, EARS, SIZES } from '../server/looks.js';
 import { createGame } from './game.js';
 import { GIFTS, SAYINGS, EMOTES, STAGES, stageOf } from '../server/glow.js';
 import { BACKGROUNDS } from '../server/plans.js';
@@ -149,6 +152,8 @@ let lanterns;
 let cozy;
 let avatars;
 let elevator;
+let spirits;
+let me; // tu personaje
 let composer = null;
 let adaptive = null;
 
@@ -209,21 +214,26 @@ async function buildScene() {
   avatars.visible = store.get('huellita.quiet') !== '1';
   controls = createControls(camera, canvas, world.colliders, { reduced });
   scene.add(controls.marker);
-  controls.teleport(INTRO_FROM, INTRO_LOOK);
+  me = createCharacter({ hue: visitorHue, light: tierName !== 'low' });
+  scene.add(me.group);
+  spirits = createSpirits(scene, { blocked: controls.blocked, tier });
+  wireSpirits();
+  controls.placePlayer(SPAWN, ENTRY_LOOK);
+  controls.teleportCamera(INTRO_FROM, INTRO_LOOK);
+  controls.onLeaveFocus(() => { if (!sheetEl.hidden) closeSheet(); });
 
   controls.onTap((e) => {
     if (document.body.classList.contains('intro')) return skipIntro();
     if (!sheetEl.hidden) { closeSheet(); return; }
-    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, elevator.hit, ...world.walkable]);
+    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, ...spirits.pickables, elevator.hit, ...world.walkable]);
     if (!hit) return;
     if (hit.object.userData.kind === 'jar') return openJar();
     if (hit.object.userData.kind === 'elevator') return callElevator();
-    if (hit.object.userData.kind === 'spirit') {
-      const sp = cozy.spiritOf(hit.object);
-      cozy.hop(sp);
-      avatars.floatAt('🤍', sp.group.position.clone().setY(1));
-      haptic(10);
-      return toast(sp.kind === 'gato' ? '🐱 Un gatito de luz te saluda. Corré libre 🌈' : '🐶 Un perrito de luz mueve la cola. Corré libre 🌈');
+    if (hit.object.userData.kind === 'spirit') return tapSpirit(spirits.spiritOf(hit.object));
+    if (hit.object.userData.kind === 'ball') {
+      if (controls.player.pos.distanceTo(spirits.ball.pos.clone().setY(0)) < 4) return throwBall();
+      controls.walkTo(spirits.ball.pos.clone().setY(0));
+      return;
     }
     const key = slotKeyFromHit(hit.object);
     if (key === 'featured') return hall.featured && visit(hall.featured);
@@ -241,13 +251,13 @@ async function buildScene() {
     hideHint();
   });
   controls.onHover((e) => {
-    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, elevator.hit]);
+    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, ...spirits.pickables, elevator.hit]);
     const key = hit && hit.distance < 16 ? slotKeyFromHit(hit.object) : null;
     hall.setHover(key);
     canvas.style.cursor = hit && hit.distance < 16 && (key !== null || hit.object.userData.kind) ? 'pointer' : '';
   });
   controls.onMove(hideHint);
-  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, THREE };
+  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)) };
 
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
@@ -255,6 +265,13 @@ async function buildScene() {
     const t = clock.elapsedTime;
     uTime.value = t;
     controls.update(dt);
+    const P = controls.player;
+    me.group.position.copy(P.pos);
+    me.group.rotation.y = P.heading;
+    me.update(dt, { speed: P.speed, turn: P.turn });
+    spirits.setPlayer(P.pos, P.heading, P.moving, dt);
+    spirits.update(dt, camera.position);
+    updateBallPrompt();
     hall.animate(t);
     lanterns.update(dt, t);
     cozy.animate(t, dt);
@@ -277,6 +294,7 @@ async function refresh() {
   const r = await api.list();
   memorials = r.memorials;
   hall?.render(memorials);
+  spirits?.setPack(memorials, walking?.id);
   renderStats(r.stats);
   renderBirthdays();
   renderFloors();
@@ -384,6 +402,7 @@ function callElevator() {
   closeSheet();
   hideHint();
   const { stand, target } = elevator.standPoint();
+  placeNear(stand, target, 0.9);
   controls.flyTo(stand, target, () => {
     elevator.setOpen(true);
     ding();
@@ -418,9 +437,32 @@ function visit(m) {
       target.y -= 0.42 * stand.distanceTo(frame) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     }
     hideHint();
+    placeNear(stand, frame, key === 'featured' ? 1.0 : 0.85);
     controls.flyTo(stand, target, () => hall.pulse(key));
   }
   openSheet(m);
+}
+
+// Pone a tu personaje parado frente a un marco (o al ascensor), a un costado para no taparlo.
+function placeNear(stand, frame, side = 0.85) {
+  if (!controls) return;
+  const front = new THREE.Vector3(stand.x - frame.x, 0, stand.z - frame.z);
+  if (front.lengthSq() < 1e-4) return;
+  front.normalize();
+  const sideV = new THREE.Vector3(front.z, 0, -front.x);
+  for (const s of [side, -side, side * 1.6, 0]) {
+    const spot = new THREE.Vector3(frame.x, 0, frame.z).addScaledVector(front, 1.45).addScaledVector(sideV, s);
+    if (controls.blocked(spot.x, spot.z)) continue;
+    teleportPlayer(spot, new THREE.Vector3(frame.x, 0, frame.z));
+    return;
+  }
+}
+function teleportPlayer(spot, facing) {
+  if (spot.distanceTo(controls.player.pos.clone().setY(spot.y)) > 0.5) {
+    spirits?.sparkle(controls.player.pos.clone().setY(0.8));
+    spirits?.sparkle(new THREE.Vector3(spot.x, 0.8, spot.z));
+  }
+  controls.placePlayer(spot, facing);
 }
 
 const photoCache = new Map();
@@ -472,6 +514,7 @@ async function openSheet(m) {
 function closeSheet() {
   if (sheetEl.hidden) return;
   current = null;
+  if (controls?.mode === 'focus') controls.follow();
   document.body.classList.remove('sheet-open');
   history.replaceState(null, '', location.pathname + location.search);
   if (bottomSheet()) {
@@ -550,6 +593,8 @@ function fillSheet(m) {
   setCount('#s-gb', m.guestbookCount ?? 0, same);
   sheetEl.dataset.id = m.id;
   $('#s-delete').hidden = !myTokens()[m.id];
+  $('#s-walk').hidden = !canWalk(m);
+  $('#s-walk-label').textContent = walking?.id === m.id ? `Terminar el paseo con ${m.name}` : `Sacar a pasear a ${m.name}`;
   const lit = didToday('c', m.id);
   $('#s-candle').classList.toggle('lit', lit);
   $('#s-candle-label').textContent = lit ? 'Tu vela está encendida · volvé mañana' : 'Encender una vela';
@@ -835,6 +880,7 @@ $('#add-form').onsubmit = async (e) => {
       passedDay: toMMDD(f.passedDay.value),
       message: f.message.value.trim(),
       photo: photoData,
+      look: readLook($('#add-look')),
       slot: addSlot ?? undefined,
       visitor: visitor.name,
       pendingGlow: game.pendingGlow,
@@ -845,6 +891,7 @@ $('#add-form').onsubmit = async (e) => {
     // Al ponerla en el muro le encendemos su primera vela: cuenta como la vela de hoy.
     setTimeout(() => { game.record('candle', { memorialId: m.id, isOwn: myPet()?.id === m.id, hasPet: true }); updateTodayBadge(); }, 100);
     f.reset();
+    lookPicker($('#add-look'));
     photoData = null;
     $('#photo-preview').hidden = true;
     $('#photo-cta').hidden = false;
@@ -977,19 +1024,27 @@ function goHome() {
   closeModals();
   if (!controls) return;
   goFloor(0, true);
-  controls.flyTo(SPAWN.clone(), ENTRY_LOOK);
+  teleportPlayer(SPAWN, ENTRY_LOOK);
+  controls.follow();
 }
 $('#brand').onclick = goHome;
 
 let toastTimer;
-function toast(text) {
+function toast(text, action = null) {
   const el = $('#toast');
   el.hidden = true;
   void el.offsetWidth;
   el.textContent = text;
+  if (action) {
+    const b = document.createElement('button');
+    b.textContent = action.label;
+    b.onclick = () => { el.hidden = true; action.fn(); };
+    el.append(b);
+  }
+  el.classList.toggle('has-action', !!action);
   el.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, 3400);
+  toastTimer = setTimeout(() => { el.hidden = true; }, action ? 5200 : 3400);
 }
 
 let hintTimer;
@@ -997,7 +1052,7 @@ function hideHint() {
   $('#hint').classList.add('gone');
   clearTimeout(hintTimer);
 }
-$('#hint-text').textContent = coarse ? 'Tocá el piso para caminar · Deslizá para mirar' : 'Clic en el piso para caminar · Arrastrá para mirar';
+$('#hint-text').textContent = coarse ? 'Tocá el piso o usá la palanca · Deslizá para girar' : 'Clic en el piso o WASD para caminar · Arrastrá para girar la cámara';
 
 function timeAgo(at) {
   const s = Math.round((Date.now() - at) / 1000);
@@ -1088,15 +1143,17 @@ async function heartbeat() {
   let next = 10_000;
   if (!document.hidden && api) {
     try {
-      const pos = camera.position;
+      const pos = controls?.player.pos || SPAWN;
       const g = pendingGesture;
       pendingGesture = null;
       const r = await api.heartbeat({
         sid: visitor.sid, visitor: visitor.name, hue: visitorHue,
-        x: pos.x, z: pos.z, ry: controls?.yaw ?? 0, ...(g || {}),
+        x: pos.x, z: pos.z, ry: controls?.player.heading ?? 0, ...(g || {}),
+        ...(walking ? { pet: { n: walking.name, sp: walking.species, ...(walking.look || {}) } } : {}),
       });
       $('#here').textContent = Math.max(1, r.here);
       avatars?.update(r.others || []);
+      spirits?.setRemote(avatars?.list() || []);
       if ((r.others || []).length) next = 4_000;
     } catch { /* nada */ }
   }
@@ -1151,7 +1208,7 @@ function showGlowToast(text) {
 function floatFromCurrent(ch) {
   if (!avatars || !current || !hall) return;
   const key = hall.memorialKey(current);
-  const at = key !== null ? hall.worldPos(key) : camera.position.clone();
+  const at = key !== null ? hall.worldPos(key) : controls.player.pos.clone().setY(1.6);
   avatars.floatAt(ch, at.clone().add(new THREE.Vector3(0, -0.2, 0)));
 }
 
@@ -1432,9 +1489,9 @@ function gesture(g) {
   pendingGesture = g;
   heartbeat();
   haptic(8);
-  if (g.emote && avatars) {
-    const fwd = new THREE.Vector3(0, -0.3, -2.2).applyQuaternion(camera.quaternion).add(camera.position);
-    avatars.floatAt(g.emote, fwd);
+  if (g.emote && avatars && controls) {
+    me?.wave();
+    avatars.floatAt(g.emote, controls.player.pos.clone().setY(1.7));
   }
   if (g.say) {
     const d = document.createElement('div');
@@ -1670,6 +1727,7 @@ function openEdit() {
   f.elements.birthday.value = m.birthday ? `${y}-${m.birthday}` : '';
   f.elements.passedDay.value = m.passedDay ? `${y}-${m.passedDay}` : '';
   $('#edit-preview').src = photoSrc(m);
+  lookPicker($('#edit-look'), m.look || {});
   editPhoto = null;
   $('#edit').showModal();
 }
@@ -1687,6 +1745,7 @@ $('#edit-form').onsubmit = async (e) => {
     message: f.elements.message.value.trim(),
     birthday: toMMDD(f.elements.birthday.value),
     passedDay: toMMDD(f.elements.passedDay.value),
+    look: readLook($('#edit-look')),
     ...(editPhoto ? { photo: editPhoto } : {}),
   };
   $('#edit').close();
@@ -1851,7 +1910,8 @@ $('#farolillo-form').onsubmit = (e) => {
   if (!text) return;
   $('#farolillo').close();
   if (lanterns) {
-    const from = new THREE.Vector3(0, -0.4, -2.4).applyQuaternion(camera.quaternion).add(camera.position);
+    const P = controls.player;
+    const from = new THREE.Vector3(P.pos.x + Math.sin(P.heading) * 0.6, 1.3, P.pos.z + Math.cos(P.heading) * 0.6);
     const label = `${to ? `${to}: ` : ''}${text}`.slice(0, 60);
     lanterns.release(from, { label, scale: 1.6 });
     lanterns.burst(from.clone());
@@ -2117,6 +2177,137 @@ $('#muertos-add').onclick = () => {
   if (myPet()) visit(myPet()); else openAdd(null);
 };
 
+
+// ---------- el Prado y el paseo con su espíritu ----------
+let walking = null; // la huellita cuyo espíritu te acompaña
+const canWalk = (m) => !!m && (m.featured || isMine(m));
+const walkHud = $('#walk-hud');
+
+function startWalk(m, { quiet = false } = {}) {
+  if (!m || !spirits || !controls) return;
+  closeSheet();
+  closeModals();
+  walking = m;
+  store.set('huellita.walking', m.id);
+  const key = hall?.memorialKey(m);
+  const from = key !== null && key !== undefined ? hall.worldPos(key) : null;
+  spirits.setPack(memorials, m.id);
+  spirits.walk(m, from);
+  walkHud.hidden = false;
+  $('#walk-photo').src = photoSrc(m);
+  $('#walk-name').textContent = m.name;
+  document.body.classList.add('walking');
+  hideHint();
+  haptic([10, 40, 10]);
+  if (!quiet) toast(`✨ ${m.name} viene a tu lado…`);
+  heartbeat();
+}
+function stopWalk() {
+  if (!walking) return;
+  const name = walking.name;
+  walking = null;
+  store.set('huellita.walking', '');
+  spirits?.walk(null);
+  spirits?.setPack(memorials, null);
+  walkHud.hidden = true;
+  document.body.classList.remove('walking');
+  toast(`🌈 ${name} se fue a jugar al Prado. Volvé a buscarlo cuando quieras.`);
+  heartbeat();
+}
+function throwBall() {
+  if (!spirits || !controls) return;
+  me.throw();
+  haptic(8);
+  const P = controls.player;
+  setTimeout(() => spirits.throwBall(me.handWorld(), P.heading), 230);
+}
+$('#walk-ball').onclick = throwBall;
+$('#walk-call').onclick = () => { spirits?.call(); haptic(8); if (walking) toast(`📣 ¡${walking.name}, vení!`); };
+$('#walk-stop').onclick = stopWalk;
+$('#walk-who').onclick = () => { if (walking) visit(memorials.find((m) => m.id === walking.id) || walking); };
+$('#s-walk').onclick = () => {
+  if (!current) return;
+  if (walking?.id === current.id) stopWalk();
+  else startWalk(current);
+};
+$('#ball-prompt').onclick = throwBall;
+
+let ballPromptOn = false;
+function updateBallPrompt() {
+  const b = spirits.ball;
+  const near = !b.held && !b.inAir && controls.player.pos.distanceTo(new THREE.Vector3(b.pos.x, 0, b.pos.z)) < 2.6 && sheetEl.hidden;
+  if (near !== ballPromptOn) {
+    ballPromptOn = near;
+    $('#ball-prompt').hidden = !near;
+  }
+}
+
+const SPIRIT_LINES = ['mueve la cola de felicidad', 'te mira con ojitos brillantes', 'da un saltito de alegría', 'te quiere invitar a jugar'];
+function tapSpirit(a) {
+  if (!a) return;
+  spirits.poke(a);
+  haptic([8, 30, 8]);
+  avatars?.floatAt('🤍', a.pos.clone().setY(0.9 * a.s + 0.3));
+  if (a.role === 'companion') return toast(`🐾 ${a.name} ${pick(SPIRIT_LINES)}`);
+  if (a.role === 'remote') return toast(`🐾 ${a.name} pasea con su familia`);
+  const m = a.memorialId && memorials.find((x) => x.id === a.memorialId);
+  if (m) toast(`🐾 ${m.name} juega en el Prado de los espíritus`, { label: 'Visitar su lugar', fn: () => visit(m) });
+  else toast(a.kind === 'gato' ? '🐱 Un gatito de luz te saluda. Corré libre 🌈' : '🐶 Un perrito de luz mueve la cola. Corré libre 🌈');
+}
+
+function wireSpirits() {
+  const told = new Set();
+  const once = (k, fn) => { if (!told.has(k)) { told.add(k); fn(); } };
+  spirits.on('event', (type, a) => {
+    if (type === 'bounce') return tick();
+    if (!a) return;
+    if (type === 'arrived' && a.role === 'companion') {
+      sparkle();
+      haptic([10, 40, 16]);
+      toast(`🐾 ${a.name} está con vos. Caminen juntos por el jardín.`);
+      once('tip-ball', () => setTimeout(() => toast('🎾 Tocá la pelota para tirársela'), 4200));
+    }
+    if (type === 'dropped' && (a.role === 'companion' || a.role === 'joined')) once('drop', () => toast(`🎾 ${a.name} te trajo la pelota. ¡Tirala de nuevo!`));
+    if (type === 'dropped' && a.role === 'pack' && a.name) toast(`🎾 ${a.name} te devolvió la pelota`);
+    if (type === 'join') once('join', () => toast(`🐾 ${a.name} se fue a jugar con los del Prado. Cuando camines, vuelve con vos.`));
+    if (type === 'greet' && a.name && a.role === 'pack') once(`greet-${a.name}`, () => toast(`🐶 ${a.name} vino a saludarte`));
+  });
+}
+
+// Cómo era: pelaje, orejas y tamaño (para que su espíritu se le parezca).
+function lookPicker(box, value = {}) {
+  box.innerHTML = '';
+  const make = (title, name, list, swatch) => {
+    const fs = document.createElement('fieldset');
+    fs.className = `look-row look-${name}`;
+    const lg = document.createElement('legend');
+    lg.textContent = title;
+    fs.append(lg);
+    for (const it of list) {
+      const l = document.createElement('label');
+      const i = document.createElement('input');
+      i.type = 'radio';
+      i.name = `look-${name}`;
+      i.value = it.id;
+      i.checked = value[name] === it.id;
+      const sp = document.createElement('span');
+      if (swatch) { sp.className = 'swatch'; sp.style.setProperty('--c', it.hex); sp.title = it.name; sp.setAttribute('aria-label', it.name); } else sp.textContent = it.name;
+      l.append(i, sp);
+      fs.append(l);
+    }
+    box.append(fs);
+  };
+  make('Su pelaje', 'fur', FURS, true);
+  make('Sus orejas', 'ears', EARS);
+  make('Su tamaño', 'size', SIZES);
+}
+function readLook(box) {
+  const v = (n) => box.querySelector(`input[name="look-${n}"]:checked`)?.value;
+  const out = { fur: v('fur'), ears: v('ears'), size: v('size') };
+  return Object.values(out).some(Boolean) ? out : null;
+}
+lookPicker($('#add-look'));
+
 // ---------- arranque ----------
 function openFromHash() {
   const m = location.hash.match(/^#h\/([\w-]+)/);
@@ -2132,6 +2323,10 @@ function finishIntro() {
   if (introDone) return;
   introDone = true;
   document.body.classList.remove('intro');
+  // Si la última vez estaban paseando, vuelve a acompañarte.
+  const wid = store.get('huellita.walking');
+  const wm = wid && memorials.find((m) => m.id === wid);
+  if (canWalk(wm) && !walking) setTimeout(() => startWalk(wm, { quiet: true }), 600);
   checkCandleHour();
   if (openFromHash()) return;
   if (!store.get('huellita.welcomed')) {
@@ -2148,7 +2343,7 @@ function finishIntro() {
 }
 function skipIntro() {
   if (introDone || !controls) return;
-  controls.teleport(SPAWN, ENTRY_LOOK);
+  controls.snapFollow();
   finishIntro();
 }
 
@@ -2160,13 +2355,14 @@ $('#enter').onclick = () => {
   syncMusicBtn();
   if (!renderer || !controls) return finishIntro();
   if (reduced || location.hash.startsWith('#h/')) {
-    controls.teleport(SPAWN, ENTRY_LOOK);
+    controls.snapFollow();
     finishIntro();
     return;
   }
-  controls.flyTo(SPAWN, ENTRY_LOOK, finishIntro, {
+  controls.follow({
     duration: 5.2,
-    path: [new THREE.Vector3(9, 11, 33), new THREE.Vector3(2, 4.5, 29)],
+    path: [new THREE.Vector3(9, 11, 36), new THREE.Vector3(3, 5, 31.5)],
+    done: finishIntro,
   });
 };
 

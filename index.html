@@ -73,6 +73,15 @@
       <div class="sayings" id="sayings"></div>
     </div>
     <div class="glow-toast" id="glow-toast" hidden></div>
+
+    <!-- paseo con el espíritu de tu mascota -->
+    <div class="walk-hud" id="walk-hud" hidden>
+      <button class="walk-who" id="walk-who" aria-label="Ver su lugar"><img id="walk-photo" alt="" /><span><small>Paseando con</small><b id="walk-name"></b></span></button>
+      <button class="walk-act" id="walk-ball" aria-label="Tirar la pelota">🎾</button>
+      <button class="walk-act" id="walk-call" aria-label="Llamarlo">📣</button>
+      <button class="walk-act x-act" id="walk-stop" aria-label="Terminar el paseo">✕</button>
+    </div>
+    <button class="ball-prompt" id="ball-prompt" hidden>🎾 Tirar la pelota</button>
     <div class="confetti" id="confetti" aria-hidden="true"></div>
 
     <div class="hint" id="hint"><span class="hand">👆</span><span id="hint-text">Tocá el piso para caminar · Arrastrá para mirar</span></div>
@@ -124,9 +133,10 @@
       <h2>Te damos la <em>bienvenida</em></h2>
       <p class="sub">Un jardín tranquilo para recordar a las mascotas que amamos.</p>
       <ul class="steps">
-        <li><span>👆</span><div><b>Caminá y mirá.</b> Tocá el piso para ir hasta ahí. Arrastrá para mirar alrededor y pellizcá para acercarte.</div></li>
+        <li><span>👆</span><div><b>Caminá.</b> Tocá el piso para ir hasta ahí o usá la palanca. Deslizá para girar la cámara y pellizcá para acercarla.</div></li>
         <li><span>🖼️</span><div><b>Dale un lugar.</b> Tocá un marco libre del muro para sumar a tu mascota.</div></li>
         <li><span>🕯️</span><div><b>Encendé una vela.</b> Tocá cualquier foto para encender una vela, dejar flores o firmar su libro. Cada vela suelta un farolito al cielo.</div></li>
+        <li><span>🐾</span><div><b>Sacalo a pasear.</b> En el Prado de los espíritus juegan las huellitas. Desde su ficha podés sacar a pasear a tu mascota y tirarle la pelota.</div></li>
       </ul>
       <button class="btn primary wide" data-close data-then="featured">🕯️ Conocer a <span class="featured-name">Luca</span></button>
       <button class="btn soft wide" data-close data-then="add">🐾 Darle un lugar a mi mascota</button>
@@ -166,6 +176,8 @@
             </label>
           </div>
           <p class="tiny">Sólo guardamos el día y el mes, para recordarlo con vos cada año.</p>
+          <div class="look" id="add-look"></div>
+          <p class="tiny">Así va a ser su espíritu en el Prado, y cuando lo saques a pasear.</p>
           <label class="field">Unas palabras <small>(opcional)</small>
             <textarea name="message" maxlength="200" rows="3" placeholder="Lo que más extrañás…"></textarea>
           </label>
@@ -211,6 +223,7 @@
         <div class="gifts-row" id="s-gifts" hidden></div>
         <p class="msg" id="s-msg"></p>
         <figure class="estampita" id="s-card" hidden><img alt="" /></figure>
+        <button class="btn walk-btn wide" id="s-walk" hidden><span class="paw">🐾</span><span id="s-walk-label">Sacar a pasear</span></button>
         <button class="btn soft wide mine-btn" id="s-mine" hidden>🐾 Es mi mascota: que mis gestos la hagan brillar</button>
         <section class="family" id="s-family" hidden>
           <h3>🧡 Para la familia</h3>
@@ -364,6 +377,7 @@
           <label class="field">🌈 Día que partió<input name="passedDay" type="date" /></label>
         </div>
         <label class="field">Unas palabras<textarea name="message" maxlength="200" rows="3"></textarea></label>
+        <div class="look" id="edit-look"></div>
         <button class="btn primary wide" type="submit">Guardar cambios</button>
       </form>
     </dialog>
