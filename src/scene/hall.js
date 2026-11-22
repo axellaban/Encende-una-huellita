@@ -58,7 +58,9 @@ const COL_X = [-1.45, 0, 1.45];
 const ROW_Y = [3.05, 1.95, 0.85];
 const POST_H = 5.0;
 const POLE_H = 6.9;
-export const EASEL_POS = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 3.1);
+// La ofrenda central es grande (se ve desde la entrada y domina el salón en tercera persona).
+export const ALTAR_SCALE = 1.75;
+export const EASEL_POS = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 4.25);
 
 export function candleLevel(n) {
   return n >= 12 ? 3 : n >= 5 ? 2 : n >= 1 ? 1 : 0;
@@ -352,7 +354,7 @@ export function buildHall(scene, colliders, tier) {
   const easel = new THREE.Group();
   easel.position.copy(EASEL_POS);
   scene.add(easel);
-  colliders.circles.push({ x: EASEL_POS.x, z: EASEL_POS.z - 0.2, r: 1.7 });
+  colliders.circles.push({ x: EASEL_POS.x, z: EASEL_POS.z - 0.2 * ALTAR_SCALE, r: 1.7 * ALTAR_SCALE });
   // Ofrenda de tres escalones con mantel, papel picado, flores, calaveritas y pan de muerto.
   const cloth = new THREE.MeshLambertMaterial({ color: '#fbf3e6', emissive: '#2a1a14' });
   const steps = [[3.0, 0.35, 1.7, -0.15], [2.4, 0.7, 1.15, -0.42], [1.8, 1.05, 0.6, -0.7]];
@@ -477,9 +479,11 @@ export function buildHall(scene, colliders, tier) {
     easel.add(sp);
     return sp;
   });
-  const easelLight = new THREE.SpotLight('#ffd6a0', 9, 9, 0.5, 0.6, 1.4);
-  easelLight.position.set(EASEL_POS.x, 4.6, EASEL_POS.z + 2.6);
-  easelLight.target.position.set(EASEL_POS.x, 1.8, EASEL_POS.z);
+  easel.scale.setScalar(ALTAR_SCALE);
+  easel.userData.baseScale = ALTAR_SCALE;
+  const easelLight = new THREE.SpotLight('#ffd6a0', 14, 14, 0.55, 0.6, 1.3);
+  easelLight.position.set(EASEL_POS.x, 6.2, EASEL_POS.z + 4.2);
+  easelLight.target.position.set(EASEL_POS.x, 2.6, EASEL_POS.z);
   scene.add(easelLight, easelLight.target);
 
   let featured = null;
@@ -619,9 +623,10 @@ export function buildHall(scene, colliders, tier) {
     // Dónde pararse para mirar un lugar. `shift` corre la vista para que la ficha no tape el marco.
     viewpoint(key, shift = 0, distMul = 1) {
       if (key === 'featured') {
-        const frame = new THREE.Vector3(EASEL_POS.x, 1.7, EASEL_POS.z - 0.5);
-        const target = new THREE.Vector3(EASEL_POS.x + shift, 1.65, EASEL_POS.z - 0.5);
-        return { stand: new THREE.Vector3(EASEL_POS.x + shift, 1.6, EASEL_POS.z + 3.6 * distMul), target, frame };
+        const k = ALTAR_SCALE;
+        const frame = new THREE.Vector3(EASEL_POS.x, 1.75 * k, EASEL_POS.z - 0.5 * k);
+        const target = new THREE.Vector3(EASEL_POS.x + shift * k, 1.55 * k, EASEL_POS.z - 0.5 * k);
+        return { stand: new THREE.Vector3(EASEL_POS.x + shift * k, 2.1, EASEL_POS.z + 3.4 * k * distMul), target, frame };
       }
       const s = slots[key];
       const frame = new THREE.Vector3();
@@ -664,9 +669,10 @@ export function buildHall(scene, colliders, tier) {
       const amp = key === 'featured' ? 0.05 : 0.12;
       const tick = () => {
         const k = (performance.now() - start) / 700;
-        g.scale.setScalar(1 + Math.sin(Math.min(k, 1) * Math.PI) * amp);
+        const base = g.userData.baseScale || 1;
+        g.scale.setScalar(base * (1 + Math.sin(Math.min(k, 1) * Math.PI) * amp));
         if (k < 1) requestAnimationFrame(tick);
-        else g.scale.setScalar(1);
+        else g.scale.setScalar(base);
       };
       tick();
     },
