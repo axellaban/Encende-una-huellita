@@ -4,8 +4,27 @@
   "description": "Un jardín en 3D para recordar a las mascotas que amamos.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1f1828",
-  "theme_color": "#1f1828",
+  "background_color": "#1a1428",
+  "theme_color": "#1a1428",
   "lang": "es",
-  "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "orientation": "any"
 }

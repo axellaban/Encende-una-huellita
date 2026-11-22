@@ -1,170 +1,209 @@
-// Almacenamiento simple en un archivo JSON con escritura atómica.
-// Suficiente para un jardín de miles de huellitas; para más escala, cambiar por SQLite/Postgres.
-import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+// Datos de las huellitas sobre una base tipo Redis (Upstash en producción, emulador en local).
+//
+// Claves (prefijo hu:):
+//   ids            ZSET  id -> createdAt
+//   m:<id>         HASH  data (JSON), candles, flowers, gb, tokenHash
+//   slots          HASH  slot -> id (HSETNX evita que dos personas tomen el mismo lugar)
+//   photo:<id>     STR   JSON { t: mime, d: base64 }
+//   gb:<id>        LIST  firmas del libro de visitas (JSON, la más nueva primero)
+//   ev / seq       LIST / INT  actividad reciente
+//   now            ZSET  sid -> último latido (presencia)
+//   cd:<sid>:<id>  STR   vela reciente (evita repetir en 10 min)
+//   rl:<k>:<min>   INT   límite de envíos por minuto
 import { randomBytes, createHash } from 'node:crypto';
-import { SEED_MEMORIALS } from './seed.js';
+import { FEATURED, FEATURED_IDS } from './seed.js';
 
+const P = 'hu:';
 export const SLOTS_PER_FLOOR = 90;
+const MAX_SLOT = SLOTS_PER_FLOOR * 200;
+const PRESENCE_MS = 60_000;
 
-const MAX_EVENTS = 300;
+const newId = () => randomBytes(6).toString('base64url');
+const hashToken = (t) => createHash('sha256').update(String(t)).digest('hex');
 
-export function createStore(dataDir) {
-  mkdirSync(join(dataDir, 'uploads'), { recursive: true });
-  const dbPath = join(dataDir, 'db.json');
-  let db;
-  if (existsSync(dbPath)) {
-    db = JSON.parse(readFileSync(dbPath, 'utf8'));
-  } else {
-    db = { memorials: [], guestbook: {}, events: [], seq: 0 };
-    const now = Date.now();
-    SEED_MEMORIALS.forEach((m, i) => {
-      db.memorials.push({
-        id: newId(),
-        slot: m.slot ?? i * 7 + 3,
-        name: m.name,
-        species: m.species,
-        message: m.message,
-        birthday: m.birthday ?? null,
-        passedDay: m.passedDay ?? null,
-        photo: null,
-        hue: m.hue,
-        candles: m.candles,
-        flowers: m.flowers,
-        demo: true,
-        createdAt: now - (SEED_MEMORIALS.length - i) * 86400000,
-        tokenHash: null,
-      });
-    });
+function fromHash(arr) {
+  const o = {};
+  for (let i = 0; i < arr.length; i += 2) o[arr[i]] = arr[i + 1];
+  return o;
+}
+
+export function createStore(kv) {
+  const featuredById = new Map(FEATURED.map((f) => [f.id, f]));
+
+  function toPublic(h, id) {
+    if (!h || !h.data) return null;
+    const d = JSON.parse(h.data);
+    const f = featuredById.get(id);
+    return {
+      ...d,
+      ...(f || {}),
+      id,
+      photo: f ? f.photo : d.hasPhoto ? `/api/photos/${id}` : null,
+      candles: Number(h.candles) || 0,
+      flowers: Number(h.flowers) || 0,
+      guestbookCount: Number(h.gb) || 0,
+    };
   }
 
-  let saveTimer = null;
-  function save() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(flush, 150);
-  }
-  function flush() {
-    const tmp = dbPath + '.tmp';
-    writeFileSync(tmp, JSON.stringify(db));
-    renameSync(tmp, dbPath);
-  }
-  flush();
-
-  function publicMemorial(m) {
-    const { tokenHash, ...rest } = m;
-    return { ...rest, guestbookCount: (db.guestbook[m.id] || []).length };
+  let featuredReady = false;
+  async function ensureFeatured() {
+    if (featuredReady) return;
+    const cmds = [];
+    for (const f of FEATURED) {
+      cmds.push(['HSETNX', `${P}m:${f.id}`, 'data', JSON.stringify({ slot: f.slot, createdAt: 0, featured: true })]);
+      cmds.push(['ZADD', `${P}ids`, '0', f.id]);
+    }
+    if (cmds.length) await kv.pipeline(cmds);
+    featuredReady = true;
   }
 
-  function pushEvent(type, memorial, visitor) {
-    db.seq += 1;
-    db.events.push({ seq: db.seq, type, memorialId: memorial.id, petName: memorial.name, visitor: visitor || 'Alguien', at: Date.now() });
-    if (db.events.length > MAX_EVENTS) db.events.splice(0, db.events.length - MAX_EVENTS);
+  async function event(type, m, visitor) {
+    const seq = await kv.cmd('INCR', `${P}seq`);
+    const ev = { seq, type, memorialId: m.id, petName: m.name, visitor: visitor || 'Alguien', at: Date.now() };
+    await kv.pipeline([['LPUSH', `${P}ev`, JSON.stringify(ev)], ['LTRIM', `${P}ev`, '0', '199']]);
   }
 
-  function find(id) {
-    return db.memorials.find((m) => m.id === id) || null;
+  async function getRaw(id) {
+    return fromHash(await kv.cmd('HGETALL', `${P}m:${id}`));
   }
 
-  return {
-    uploadsDir: join(dataDir, 'uploads'),
-    flush,
-    close() {
-      clearTimeout(saveTimer);
-      flush();
+  const store = {
+    kind: kv.kind,
+
+    async list() {
+      await ensureFeatured();
+      const ids = await kv.cmd('ZRANGE', `${P}ids`, '0', '-1');
+      const rows = await kv.pipeline(ids.map((id) => ['HGETALL', `${P}m:${id}`]));
+      return rows.map((r, i) => toPublic(fromHash(r), ids[i])).filter(Boolean);
     },
-    list() {
-      return db.memorials.map(publicMemorial);
-    },
-    get(id) {
-      const m = find(id);
+
+    async get(id) {
+      await ensureFeatured();
+      const m = toPublic(await getRaw(id), id);
       if (!m) return null;
-      return { ...publicMemorial(m), guestbook: (db.guestbook[m.id] || []).slice(-100).reverse() };
+      const gb = await kv.cmd('LRANGE', `${P}gb:${id}`, '0', '99');
+      return { ...m, guestbook: gb.map((x) => JSON.parse(x)) };
     },
-    freeSlot(preferred) {
-      const used = new Set(db.memorials.map((m) => m.slot));
-      if (Number.isInteger(preferred) && preferred >= 0 && preferred < SLOTS_PER_FLOOR * 50 && !used.has(preferred)) return preferred;
-      for (let s = 0; ; s++) if (!used.has(s)) return s;
-    },
-    create(input, visitor) {
+
+    async create(input, photo, visitor) {
+      const id = newId();
       const token = randomBytes(18).toString('base64url');
-      const m = {
-        id: newId(),
-        slot: this.freeSlot(input.slot),
+      // Reservar un lugar libre de forma atómica.
+      let slot = null;
+      if (Number.isInteger(input.slot) && input.slot >= 0 && input.slot < MAX_SLOT) {
+        if (await kv.cmd('HSETNX', `${P}slots`, String(input.slot), id)) slot = input.slot;
+      }
+      for (let tries = 0; slot === null && tries < 6; tries++) {
+        const used = new Set(Object.keys(fromHash(await kv.cmd('HGETALL', `${P}slots`))).map(Number));
+        let s = 0;
+        while (used.has(s)) s++;
+        if (await kv.cmd('HSETNX', `${P}slots`, String(s), id)) slot = s;
+      }
+      if (slot === null) throw Object.assign(new Error('El muro está muy concurrido. Probá de nuevo.'), { status: 409 });
+
+      const data = {
+        slot,
         name: input.name,
         species: input.species,
         message: input.message,
         birthday: input.birthday,
         passedDay: input.passedDay,
-        photo: input.photo,
         hue: Math.floor(Math.random() * 360),
-        candles: 1,
-        flowers: 0,
-        demo: false,
+        hasPhoto: !!photo,
         createdAt: Date.now(),
-        tokenHash: hashToken(token),
       };
-      db.memorials.push(m);
-      pushEvent('created', m, visitor);
-      save();
-      return { memorial: publicMemorial(m), editToken: token };
+      const cmds = [
+        ['HSET', `${P}m:${id}`, 'data', JSON.stringify(data), 'candles', '1', 'flowers', '0', 'gb', '0', 'tokenHash', hashToken(token)],
+        ['ZADD', `${P}ids`, String(data.createdAt), id],
+      ];
+      if (photo) cmds.push(['SET', `${P}photo:${id}`, JSON.stringify({ t: photo.type, d: photo.bytes.toString('base64') })]);
+      await kv.pipeline(cmds);
+      const memorial = toPublic(await getRaw(id), id);
+      await event('created', memorial, visitor);
+      return { memorial, editToken: token };
     },
-    remove(id, token) {
-      const m = find(id);
-      if (!m) return 'not_found';
-      if (!m.tokenHash || m.tokenHash !== hashToken(token || '')) return 'forbidden';
-      db.memorials = db.memorials.filter((x) => x.id !== id);
-      delete db.guestbook[id];
-      db.events = db.events.filter((e) => e.memorialId !== id);
-      save();
-      return m;
+
+    async remove(id, token) {
+      if (FEATURED_IDS.has(id)) return 'forbidden';
+      const h = await getRaw(id);
+      if (!h.data) return 'not_found';
+      if (!h.tokenHash || h.tokenHash !== hashToken(token || '')) return 'forbidden';
+      const { slot } = JSON.parse(h.data);
+      await kv.pipeline([
+        ['DEL', `${P}m:${id}`, `${P}photo:${id}`, `${P}gb:${id}`],
+        ['ZREM', `${P}ids`, id],
+        ['HDEL', `${P}slots`, String(slot)],
+      ]);
+      return 'ok';
     },
-    candle(id, visitor) {
-      const m = find(id);
-      if (!m) return null;
-      m.candles += 1;
-      pushEvent('candle', m, visitor);
-      save();
-      return publicMemorial(m);
+
+    async candle(id, sid, visitor) {
+      await ensureFeatured();
+      const h = await getRaw(id);
+      if (!h.data) return null;
+      const fresh = await kv.cmd('SET', `${P}cd:${sid || 'anon'}:${id}`, '1', 'NX', 'EX', '600');
+      if (fresh !== 'OK') return { memorial: toPublic(h, id), already: true };
+      await kv.cmd('HINCRBY', `${P}m:${id}`, 'candles', '1');
+      const memorial = toPublic(await getRaw(id), id);
+      await event('candle', memorial, visitor);
+      return { memorial };
     },
-    flower(id, visitor) {
-      const m = find(id);
-      if (!m) return null;
-      m.flowers += 1;
-      pushEvent('flower', m, visitor);
-      save();
-      return publicMemorial(m);
+
+    async flower(id, visitor) {
+      await ensureFeatured();
+      const h = await getRaw(id);
+      if (!h.data) return null;
+      await kv.cmd('HINCRBY', `${P}m:${id}`, 'flowers', '1');
+      const memorial = toPublic(await getRaw(id), id);
+      await event('flower', memorial, visitor);
+      return { memorial };
     },
-    sign(id, entry) {
-      const m = find(id);
-      if (!m) return null;
-      const list = (db.guestbook[id] ||= []);
+
+    async sign(id, entry) {
+      await ensureFeatured();
+      const h = await getRaw(id);
+      if (!h.data) return null;
       const e = { id: newId(), name: entry.name, text: entry.text, at: Date.now() };
-      list.push(e);
-      if (list.length > 500) list.shift();
-      pushEvent('guestbook', m, entry.name);
-      save();
+      await kv.pipeline([
+        ['LPUSH', `${P}gb:${id}`, JSON.stringify(e)],
+        ['LTRIM', `${P}gb:${id}`, '0', '499'],
+        ['HINCRBY', `${P}m:${id}`, 'gb', '1'],
+      ]);
+      await event('guestbook', toPublic(h, id), entry.name);
       return e;
     },
-    events(since) {
-      return db.events.filter((e) => e.seq > since).slice(-20);
+
+    async photo(id) {
+      const raw = await kv.cmd('GET', `${P}photo:${id}`);
+      if (!raw) return null;
+      const { t, d } = JSON.parse(raw);
+      return { type: t, bytes: Buffer.from(d, 'base64') };
     },
-    lastSeq() {
-      return db.seq;
+
+    async events(since) {
+      const [list, seq] = await kv.pipeline([['LRANGE', `${P}ev`, '0', '19'], ['GET', `${P}seq`]]);
+      return { events: list.map((x) => JSON.parse(x)).filter((e) => e.seq > since).reverse(), seq: Number(seq) || 0 };
     },
-    stats() {
-      return {
-        memorials: db.memorials.length,
-        candles: db.memorials.reduce((a, m) => a + m.candles, 0),
-        flowers: db.memorials.reduce((a, m) => a + m.flowers, 0),
-      };
+
+    async touch(sid) {
+      const now = Date.now();
+      const cmds = [['ZREMRANGEBYSCORE', `${P}now`, '-inf', String(now - PRESENCE_MS)]];
+      if (sid) cmds.push(['ZADD', `${P}now`, String(now), sid]);
+      cmds.push(['ZCARD', `${P}now`]);
+      const r = await kv.pipeline(cmds);
+      return r[r.length - 1];
+    },
+
+    async here() {
+      return store.touch(null);
+    },
+
+    // true si se pasó del límite de `max` envíos por minuto para esa clave.
+    async limited(key, max) {
+      const k = `${P}rl:${key}:${Math.floor(Date.now() / 60_000)}`;
+      const [n] = await kv.pipeline([['INCR', k], ['EXPIRE', k, '70']]);
+      return n > max;
     },
   };
-}
-
-function newId() {
-  return randomBytes(6).toString('base64url');
-}
-
-function hashToken(t) {
-  return createHash('sha256').update(t).digest('hex');
+  return store;
 }

@@ -208,3 +208,76 @@ export function floorTexture() {
   noise(g, 256, 256, ['rgba(255,220,180,0.05)', 'rgba(0,0,0,0.05)'], 600, 3);
   return toTexture(c, { repeat: [6, 6] });
 }
+
+let blobTex;
+// Sombra de contacto suave para apoyar objetos en el piso.
+export function blobShadowTexture() {
+  if (blobTex) return blobTex;
+  const [c, g] = canvas(128, 128);
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+  grad.addColorStop(0.6, 'rgba(0,0,0,0.25)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  blobTex = toTexture(c);
+  return blobTex;
+}
+
+let coneTex;
+// Haz de luz de un aplique sobre el muro (de arriba hacia abajo).
+export function lightConeTexture() {
+  if (coneTex) return coneTex;
+  const [c, g] = canvas(256, 256);
+  const grad = g.createRadialGradient(128, -40, 10, 128, -40, 300);
+  grad.addColorStop(0, 'rgba(255,214,160,0.9)');
+  grad.addColorStop(0.45, 'rgba(255,190,120,0.35)');
+  grad.addColorStop(1, 'rgba(255,170,90,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 256, 256);
+  coneTex = toTexture(c);
+  return coneTex;
+}
+
+let moonTex;
+export function moonTexture() {
+  if (moonTex) return moonTex;
+  const [c, g] = canvas(256, 256);
+  const halo = g.createRadialGradient(128, 128, 30, 128, 128, 128);
+  halo.addColorStop(0, 'rgba(255,248,230,0.55)');
+  halo.addColorStop(1, 'rgba(255,248,230,0)');
+  g.fillStyle = halo;
+  g.fillRect(0, 0, 256, 256);
+  const disk = g.createRadialGradient(118, 116, 4, 128, 128, 38);
+  disk.addColorStop(0, '#fffdf4');
+  disk.addColorStop(1, '#efe6cf');
+  g.fillStyle = disk;
+  g.beginPath();
+  g.arc(128, 128, 36, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = 'rgba(190,175,150,0.35)';
+  for (const [x, y, r] of [[116, 118, 8], [140, 136, 6], [130, 106, 4], [112, 140, 5]]) {
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  moonTex = toTexture(c);
+  return moonTex;
+}
+
+let paperTex;
+// Papel del farolito: más claro en el centro, como si la luz atravesara.
+export function lanternTexture() {
+  if (paperTex) return paperTex;
+  const [c, g] = canvas(64, 128);
+  const grad = g.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0, '#ffb36b');
+  grad.addColorStop(0.55, '#ffe7b0');
+  grad.addColorStop(1, '#ff9a4d');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 128);
+  g.fillStyle = 'rgba(160,70,20,0.25)';
+  for (let x = 0; x < 64; x += 16) g.fillRect(x, 0, 2, 128);
+  paperTex = toTexture(c);
+  return paperTex;
+}

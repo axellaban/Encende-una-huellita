@@ -1,30 +1,41 @@
-// Caminar y mirar: tocá el piso para caminar, arrastrá para mirar, WASD/flechas en teclado.
+// Caminar y mirar.
+// Táctil: tocá el piso para caminar, arrastrá con un dedo para mirar, pellizcá para acercar.
+// Compu: clic para caminar, arrastrá para mirar, rueda para acercar, WASD/flechas para moverte.
 import * as THREE from 'three';
 import { GARDEN_RADIUS } from './world.js';
 
 const EYE = 1.6;
 const BODY = 0.4;
+const FOV_MIN = 38;
+const FOV_MAX = 72;
 
-export function createControls(camera, dom, colliders) {
+export function createControls(camera, dom, colliders, { reduced = false } = {}) {
   let yaw = 0;
-  let pitch = -0.05;
+  let pitch = -0.06;
+  let vYaw = 0;
+  let vPitch = 0;
+  let fovTarget = camera.fov;
   const pos = camera.position;
   let walkTarget = null;
-  let fly = null; // { from, to, lookFrom, lookTo, t, dur, done }
+  let walkSpeed = 0;
+  let fly = null;
+  let bob = 0;
   const keys = new Set();
+  const pointers = new Map();
   let drag = null;
-  const listeners = { tap: [], hover: [] };
+  let pinch = null;
+  let enabled = true;
+  const listeners = { tap: [], hover: [], move: [] };
+
   const marker = new THREE.Mesh(
-    new THREE.RingGeometry(0.22, 0.3, 32),
-    new THREE.MeshBasicMaterial({ color: '#ffe2b8', transparent: true, opacity: 0.8, depthWrite: false }),
+    new THREE.RingGeometry(0.22, 0.3, 40),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.3, 1.0), transparent: true, opacity: 0.8, depthWrite: false }),
   );
   marker.rotation.x = -Math.PI / 2;
   marker.visible = false;
 
-  function applyRotation() {
-    camera.rotation.set(pitch, yaw, 0, 'YXZ');
-  }
-  applyRotation();
+  const apply = () => camera.rotation.set(pitch, yaw, 0, 'YXZ');
+  apply();
 
   function blocked(x, z) {
     if (Math.hypot(x, z) > GARDEN_RADIUS - 0.8) return true;
@@ -45,88 +56,141 @@ export function createControls(camera, dom, colliders) {
     return false;
   }
 
+  const pinchDist = () => {
+    const [a, b] = [...pointers.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+
   dom.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
-    drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), id: e.pointerId };
+    if (!enabled) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     dom.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      drag = null;
+      pinch = { d: pinchDist(), fov: fovTarget };
+      return;
+    }
+    vYaw = 0;
+    vPitch = 0;
+    drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), id: e.pointerId, moved: false, lastT: performance.now() };
   });
+
   dom.addEventListener('pointermove', (e) => {
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pointers.size === 2) {
+      fovTarget = THREE.MathUtils.clamp(pinch.fov * (pinch.d / Math.max(20, pinchDist())), FOV_MIN, FOV_MAX);
+      return;
+    }
     if (drag && drag.id === e.pointerId) {
       const dx = e.clientX - drag.x;
       const dy = e.clientY - drag.y;
+      const now = performance.now();
+      const dt = Math.max(1, now - drag.lastT) / 1000;
       drag.x = e.clientX;
       drag.y = e.clientY;
-      if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6) {
-        const k = e.pointerType === 'touch' ? 0.006 : 0.004;
+      drag.lastT = now;
+      if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 7) drag.moved = true;
+      if (drag.moved) {
+        // Más sensibilidad con zoom abierto, menos con zoom cerrado.
+        const k = (e.pointerType === 'touch' ? 0.0062 : 0.0042) * (camera.fov / 62);
         yaw += dx * k;
-        pitch = THREE.MathUtils.clamp(pitch + dy * k, -1.0, 0.9);
+        pitch = THREE.MathUtils.clamp(pitch + dy * k, -1.05, 0.95);
+        vYaw = (dx * k) / dt;
+        vPitch = (dy * k) / dt;
         fly = null;
-        applyRotation();
+        apply();
       }
-    } else if (e.pointerType === 'mouse') {
+    } else if (e.pointerType === 'mouse' && !e.buttons) {
       listeners.hover.forEach((fn) => fn(e));
     }
   });
-  dom.addEventListener('pointerup', (e) => {
-    if (!drag || drag.id !== e.pointerId) return;
-    const moved = Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy);
-    const quick = performance.now() - drag.t < 450;
-    drag = null;
-    if (moved < 8 && quick) listeners.tap.forEach((fn) => fn(e));
-  });
-  dom.addEventListener('pointercancel', () => { drag = null; });
 
-  window.addEventListener('keydown', (e) => {
-    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+  const end = (e) => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (!drag || drag.id !== e.pointerId) return;
+    const wasTap = !drag.moved && performance.now() - drag.t < 500;
+    if (performance.now() - drag.lastT > 60) { vYaw = 0; vPitch = 0; }
+    drag = null;
+    if (wasTap && e.type === 'pointerup') listeners.tap.forEach((fn) => fn(e));
+  };
+  dom.addEventListener('pointerup', end);
+  dom.addEventListener('pointercancel', end);
+
+  dom.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    fovTarget = THREE.MathUtils.clamp(fovTarget + e.deltaY * 0.03, FOV_MIN, FOV_MAX);
+  }, { passive: false });
+
+  addEventListener('keydown', (e) => {
+    if (e.target.closest?.('input, textarea, select, [contenteditable], dialog')) return;
     keys.add(e.key.toLowerCase());
   });
-  window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
-  window.addEventListener('blur', () => keys.clear());
+  addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+  addEventListener('blur', () => keys.clear());
+
+  function faceAngles(from, target) {
+    const look = new THREE.Vector3().subVectors(target, from);
+    return { yaw: Math.atan2(-look.x, -look.z), pitch: Math.atan2(look.y, Math.hypot(look.x, look.z)) };
+  }
 
   return {
     marker,
     onTap: (fn) => listeners.tap.push(fn),
     onHover: (fn) => listeners.hover.push(fn),
-    get yaw() { return yaw; },
+    onMove: (fn) => listeners.move.push(fn),
+    set enabled(v) { enabled = v; if (!v) { drag = null; pinch = null; pointers.clear(); } },
+    get flying() { return !!fly; },
     walkTo(point) {
       fly = null;
       walkTarget = new THREE.Vector3(point.x, EYE, point.z);
       marker.position.set(point.x, (point.y || 0) + 0.03, point.z);
       marker.visible = true;
     },
-    // Vuelo suave hasta un punto mirando a un objetivo (por ejemplo, un marco del muro).
-    flyTo(stand, target, done) {
+    // Vuelo suave a un punto mirando a un objetivo. `path` opcional: puntos intermedios (curva).
+    flyTo(stand, target, done, { path = null, duration = null } = {}) {
       walkTarget = null;
       marker.visible = false;
-      const look = new THREE.Vector3().subVectors(target, stand);
-      const toYaw = Math.atan2(-look.x, -look.z);
-      const toPitch = Math.atan2(look.y, Math.hypot(look.x, look.z));
-      let dYaw = toYaw - yaw;
+      const to = faceAngles(stand, target);
+      let dYaw = to.yaw - yaw;
       dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw));
       const dist = pos.distanceTo(stand);
+      const curve = path ? new THREE.CatmullRomCurve3([pos.clone(), ...path, stand.clone()]) : null;
       fly = {
-        from: pos.clone(), to: stand.clone(), yaw0: yaw, dYaw, pitch0: pitch, pitch1: toPitch,
-        t: 0, dur: THREE.MathUtils.clamp(dist / 6, 0.6, 3.2), done,
+        from: pos.clone(), to: stand.clone(), curve, yaw0: yaw, dYaw, pitch0: pitch, pitch1: to.pitch,
+        t: 0, dur: duration ?? (reduced ? 0.35 : THREE.MathUtils.clamp(dist / 7, 0.7, 2.6)), done,
       };
     },
-    teleport(p, newYaw = 0) {
+    teleport(p, target) {
       pos.copy(p);
-      yaw = newYaw;
-      pitch = -0.05;
+      const a = faceAngles(p, target);
+      yaw = a.yaw;
+      pitch = a.pitch;
       fly = null;
       walkTarget = null;
-      applyRotation();
+      apply();
+    },
+    stop() {
+      walkTarget = null;
+      marker.visible = false;
     },
     update(dt) {
+      if (Math.abs(camera.fov - fovTarget) > 0.05) {
+        camera.fov += (fovTarget - camera.fov) * Math.min(1, dt * 10);
+        camera.updateProjectionMatrix();
+      }
       if (fly) {
         fly.t = Math.min(1, fly.t + dt / fly.dur);
         const k = fly.t < 0.5 ? 4 * fly.t ** 3 : 1 - (-2 * fly.t + 2) ** 3 / 2;
-        pos.lerpVectors(fly.from, fly.to, k);
-        // Arco suave por encima del piso para no atravesar cosas visualmente.
-        pos.y = EYE + Math.sin(k * Math.PI) * Math.min(2, fly.from.distanceTo(fly.to) * 0.08);
+        if (fly.curve) pos.copy(fly.curve.getPoint(k));
+        else {
+          pos.lerpVectors(fly.from, fly.to, k);
+          pos.y = THREE.MathUtils.lerp(fly.from.y, fly.to.y, k) + Math.sin(k * Math.PI) * Math.min(1.6, fly.from.distanceTo(fly.to) * 0.07);
+        }
         yaw = fly.yaw0 + fly.dYaw * k;
         pitch = fly.pitch0 + (fly.pitch1 - fly.pitch0) * k;
-        applyRotation();
+        apply();
         if (fly.t >= 1) {
           const cb = fly.done;
           fly = null;
@@ -134,36 +198,57 @@ export function createControls(camera, dom, colliders) {
         }
         return;
       }
-      const speed = (keys.has('shift') ? 7 : 3.6) * dt;
+      // Inercia al soltar el arrastre.
+      if (!drag && (Math.abs(vYaw) > 0.01 || Math.abs(vPitch) > 0.01)) {
+        yaw += vYaw * dt;
+        pitch = THREE.MathUtils.clamp(pitch + vPitch * dt, -1.05, 0.95);
+        const decay = Math.exp(-dt * 7);
+        vYaw *= decay;
+        vPitch *= decay;
+        apply();
+      }
+      const run = keys.has('shift') ? 2 : 1;
       let fx = 0;
       let fz = 0;
       if (keys.has('w') || keys.has('arrowup')) fz -= 1;
       if (keys.has('s') || keys.has('arrowdown')) fz += 1;
       if (keys.has('a')) fx -= 1;
       if (keys.has('d')) fx += 1;
-      if (keys.has('arrowleft') || keys.has('q')) { yaw += 1.8 * dt; applyRotation(); }
-      if (keys.has('arrowright') || keys.has('e')) { yaw -= 1.8 * dt; applyRotation(); }
+      if (keys.has('arrowleft') || keys.has('q')) { yaw += 1.8 * dt; apply(); }
+      if (keys.has('arrowright') || keys.has('e')) { yaw -= 1.8 * dt; apply(); }
+      let moving = false;
       if (fx || fz) {
         walkTarget = null;
         marker.visible = false;
         const len = Math.hypot(fx, fz);
         const sin = Math.sin(yaw);
         const cos = Math.cos(yaw);
-        tryMove(((fx * cos + fz * sin) / len) * speed, ((-fx * sin + fz * cos) / len) * speed);
+        const sp = 3.6 * run * dt;
+        moving = tryMove(((fx * cos + fz * sin) / len) * sp, ((-fx * sin + fz * cos) / len) * sp);
       } else if (walkTarget) {
         const dx = walkTarget.x - pos.x;
         const dz = walkTarget.z - pos.z;
         const d = Math.hypot(dx, dz);
-        if (d < 0.08) {
+        // Acelera al arrancar y frena al llegar.
+        walkSpeed = Math.min(walkSpeed + dt * 9, 4.8, d * 2.2 + 0.4);
+        if (d < 0.06) {
           walkTarget = null;
+          walkSpeed = 0;
           marker.visible = false;
         } else {
-          const step = Math.min(d, speed * 1.2);
-          if (!tryMove((dx / d) * step, (dz / d) * step)) { walkTarget = null; marker.visible = false; }
+          const step = Math.min(d, walkSpeed * dt);
+          moving = tryMove((dx / d) * step, (dz / d) * step);
+          if (!moving) { walkTarget = null; walkSpeed = 0; marker.visible = false; }
         }
       }
-      pos.y += (EYE - pos.y) * Math.min(1, dt * 8);
-      if (marker.visible) marker.material.opacity = 0.5 + Math.sin(performance.now() / 180) * 0.3;
+      if (moving && !reduced) bob += dt * 9;
+      const targetY = EYE + (moving && !reduced ? Math.sin(bob) * 0.025 : 0);
+      pos.y += (targetY - pos.y) * Math.min(1, dt * 10);
+      if (moving) listeners.move.forEach((fn) => fn());
+      if (marker.visible) {
+        const s = 1 + Math.sin(performance.now() / 160) * 0.12;
+        marker.scale.set(s, s, s);
+      }
     },
   };
 }
