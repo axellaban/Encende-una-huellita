@@ -1,0 +1,11 @@
+{
+  "name": "Encendé una huellita",
+  "short_name": "Huellita",
+  "description": "Un jardín en 3D para recordar a las mascotas que amamos.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1f1828",
+  "theme_color": "#1f1828",
+  "lang": "es",
+  "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

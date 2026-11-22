@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="62%" r="55%">
+      <stop offset="0" stop-color="#fff4d6"/>
+      <stop offset=".45" stop-color="#ffc66b"/>
+      <stop offset="1" stop-color="#e0773f"/>
+    </radialGradient>
+  </defs>
+  <!-- llama -->
+  <path d="M32 6c7 9 12 15 12 23a12 12 0 0 1-24 0c0-8 5-14 12-23z" fill="url(#g)"/>
+  <!-- huellita -->
+  <g fill="#fbf4ea" stroke="#c9704e" stroke-width="1.5">
+    <ellipse cx="32" cy="50" rx="9" ry="7.5"/>
+    <ellipse cx="19.5" cy="41" rx="3.6" ry="4.6" transform="rotate(-18 19.5 41)"/>
+    <ellipse cx="44.5" cy="41" rx="3.6" ry="4.6" transform="rotate(18 44.5 41)"/>
+    <ellipse cx="25.5" cy="35.5" rx="3.4" ry="4.4" transform="rotate(-6 25.5 35.5)"/>
+    <ellipse cx="38.5" cy="35.5" rx="3.4" ry="4.4" transform="rotate(6 38.5 35.5)"/>
+  </g>
+</svg>

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Encendé una huellita — un jardín para recordar a tu mascota</title>
+    <meta name="description" content="Un jardín memorial en 3D, gratis y sin registro, para recordar a tu perro, gato o cualquier mascota. Poné su foto en el muro, encendé una vela, dejá flores y firmá el libro de visitas." />
+    <meta name="theme-color" content="#1f1828" />
+    <meta property="og:title" content="Encendé una huellita" />
+    <meta property="og:description" content="Un jardín en 3D para recordar a las mascotas que amamos." />
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <canvas id="scene" aria-label="Jardín memorial en 3D"></canvas>
+
+    <!-- Barra superior -->
+    <header class="top">
+      <div class="top-left">
+        <a class="brand" href="#" aria-label="Encendé una huellita">
+          <img src="/logo.svg" alt="" width="30" height="30" />
+          <span>Encendé una huellita</span>
+        </a>
+        <div class="chips">
+          <span class="chip"><i class="dot"></i><b id="here">1</b>&nbsp;acá ahora</span>
+          <button class="chip" id="me-chip" title="Así te ven los demás"><span class="avatar" id="me-initial">B</span><span id="me-name">…</span></button>
+        </div>
+        <nav class="chips filters" aria-label="Explorar">
+          <button class="chip" data-list="all">🐾 Todas las huellitas</button>
+          <button class="chip" data-list="waiting">🕯️ Esperando una vela</button>
+          <button class="chip" data-list="birthday">🎂 Cumpleaños</button>
+          <button class="chip" data-open="help">💡 Cómo funciona</button>
+        </nav>
+        <div class="ticker" id="ticker" aria-live="polite"></div>
+        <div class="bday" id="bday" hidden></div>
+      </div>
+      <div class="top-right">
+        <button class="btn primary" id="add-btn">＋ Sumar a mi mascota</button>
+        <button class="btn ghost round" id="music-btn" aria-pressed="false" title="Música">🎵</button>
+      </div>
+    </header>
+
+    <div class="hint" id="hint">Tocá el piso para caminar · Arrastrá para mirar</div>
+
+    <footer class="bottom">
+      <div class="stats" id="stats"></div>
+      <div class="mode" id="mode" hidden>Modo local: lo que sumes queda en este navegador</div>
+      <div class="floors">
+        <button class="btn ghost" id="floors-btn">🛗 Piso <b id="floor-num">1</b></button>
+        <div class="floors-menu" id="floors-menu" hidden></div>
+      </div>
+    </footer>
+
+    <!-- Banner de la hora de las velas -->
+    <div class="candle-hour" id="candle-hour" hidden>
+      <div><b>🕯️ La hora de las velas.</b> Cada noche a las 21, quienes visitan el jardín encienden una vela al mismo tiempo.</div>
+      <button class="btn primary small" id="candle-hour-btn">Encender la mía</button>
+      <button class="x" data-close="candle-hour" aria-label="Cerrar">✕</button>
+    </div>
+
+    <!-- Pantalla de entrada -->
+    <div class="splash" id="splash">
+      <p class="splash-quote">Los que amamos no se van del todo.<br /><span>Se quedan en cada huella que dejaron.</span></p>
+      <button class="btn primary big" id="enter">Tocá para entrar 🕯️</button>
+      <p class="splash-loading" id="loading">Preparando el jardín…</p>
+    </div>
+
+    <!-- Bienvenida -->
+    <dialog class="modal" id="help">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>Bienvenida, bienvenido</h2>
+      <p class="sub">Un jardín tranquilo para recordar a las mascotas que amamos.</p>
+      <ul class="steps">
+        <li><span>👆</span>Tocá el piso para caminar. Arrastrá para mirar alrededor. En compu también podés usar WASD.</li>
+        <li><span>🖼️</span>Tocá un lugar libre del muro para darle un lugar a tu mascota.</li>
+        <li><span>🕯️</span>Tocá cualquier foto para encender una vela, dejar flores o firmar su libro de visitas.</li>
+      </ul>
+      <button class="btn primary wide" data-close>Empezar</button>
+      <button class="btn soft wide" data-close data-then="add">🐾 Darle un lugar a mi mascota</button>
+    </dialog>
+
+    <!-- Formulario: sumar una mascota -->
+    <dialog class="modal" id="add">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>Dale un lugar a tu mascota</h2>
+      <p class="sub">Va a quedar en el muro para que todos puedan visitarla.</p>
+      <form id="add-form" autocomplete="off">
+        <label class="photo-drop" id="photo-drop">
+          <input type="file" accept="image/*" id="photo-input" hidden />
+          <img id="photo-preview" alt="" hidden />
+          <span id="photo-cta">📷<br />Sumar una foto</span>
+        </label>
+        <label class="field">Nombre
+          <input name="name" required maxlength="30" placeholder="p. ej. Luna" />
+        </label>
+        <fieldset class="field species">
+          <legend>Era…</legend>
+          <label><input type="radio" name="species" value="perro" checked /><span>🐶<br />Perro</span></label>
+          <label><input type="radio" name="species" value="gato" /><span>🐱<br />Gato</span></label>
+          <label><input type="radio" name="species" value="otro" /><span>🐾<br />Otro</span></label>
+        </fieldset>
+        <div class="row2">
+          <label class="field">🎂 Cumpleaños o día que llegó
+            <input name="birthday" type="date" />
+          </label>
+          <label class="field">🌈 Día que partió
+            <input name="passedDay" type="date" />
+          </label>
+        </div>
+        <p class="tiny">Sólo guardamos el día y el mes, para recordarlo con vos cada año.</p>
+        <label class="field">Unas palabras (opcional)
+          <textarea name="message" maxlength="200" rows="2" placeholder="Lo que más extrañás de ella o él…"></textarea>
+        </label>
+        <p class="error" id="add-error" hidden></p>
+        <button class="btn primary wide" type="submit" id="add-submit">🕯️ Ponerla en el muro</button>
+      </form>
+    </dialog>
+
+    <!-- Ficha de una huellita -->
+    <aside class="sheet" id="sheet" hidden aria-label="Huellita">
+      <button class="x" data-close-sheet aria-label="Cerrar">✕</button>
+      <div class="sheet-scroll">
+        <div class="sheet-photo"><img id="s-photo" alt="" /></div>
+        <p class="demo-tag" id="s-demo" hidden>Ejemplo</p>
+        <h2 id="s-name"></h2>
+        <p class="sub" id="s-meta"></p>
+        <p class="msg" id="s-msg"></p>
+        <div class="counts">
+          <span>🕯️ <b id="s-candles">0</b> velas</span>
+          <span>🌸 <b id="s-flowers">0</b> flores</span>
+          <span>📖 <b id="s-gb">0</b> firmas</span>
+        </div>
+        <div class="actions">
+          <button class="btn primary" id="s-candle">🕯️ Encender una vela</button>
+          <button class="btn soft" id="s-flower">🌸 Dejar una flor</button>
+          <button class="btn soft" id="s-share">💌 Compartir</button>
+        </div>
+        <section class="guestbook">
+          <h3>Libro de visitas</h3>
+          <form id="gb-form">
+            <textarea name="text" maxlength="280" rows="2" required placeholder="¿Le dejás unas palabras a su familia?"></textarea>
+            <div class="ideas" id="gb-ideas"></div>
+            <div class="gb-row">
+              <input name="name" maxlength="40" placeholder="Tu nombre (opcional)" />
+              <button class="btn primary small" type="submit">✍️ Firmar</button>
+            </div>
+          </form>
+          <ul id="gb-list"></ul>
+        </section>
+        <button class="link danger" id="s-delete" hidden>Quitar esta huellita del muro</button>
+      </div>
+    </aside>
+
+    <!-- Lista de huellitas -->
+    <dialog class="modal wide-modal" id="list">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2 id="list-title">Todas las huellitas</h2>
+      <div class="list-tools">
+        <input type="search" id="list-search" placeholder="Buscar por nombre…" />
+        <div class="seg" id="list-seg">
+          <button data-f="all">Todas</button>
+          <button data-f="waiting">Esperando</button>
+          <button data-f="birthday">Cumpleaños</button>
+        </div>
+      </div>
+      <div class="grid" id="list-grid"></div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" hidden></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
