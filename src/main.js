@@ -16,21 +16,60 @@ import { createGame } from './game.js';
 import { GIFTS, SAYINGS, EMOTES, STAGES, stageOf } from '../server/glow.js';
 import { BACKGROUNDS } from '../server/plans.js';
 import { papelPicadoTexture, backgroundTexture, PICADO_COLORS } from './scene/muertos.js';
+import { GUIDE_STEPS, renderGuide } from './guide.js';
 
-// Tira de papel picado para los bordes de paneles y la entrada (generada una vez).
+// Tira de papel picado para paneles y entrada: banderitas pastel con caritas de calavera.
 {
+  const colors = ['#2b3f86', '#e88aa8', '#b9c47a', '#4f9aa0', '#e8743b', '#b9a3d6', '#d9474f'];
+  const fw = 64;
   const c = document.createElement('canvas');
-  c.width = 7 * 76;
-  c.height = 88;
+  c.width = colors.length * (fw + 12);
+  c.height = 84;
   const g = c.getContext('2d');
-  g.strokeStyle = 'rgba(60,30,30,.6)';
+  g.strokeStyle = 'rgba(40,20,20,.55)';
   g.lineWidth = 2;
   g.beginPath();
   g.moveTo(0, 3);
   g.lineTo(c.width, 3);
   g.stroke();
-  PICADO_COLORS.forEach((col, i) => g.drawImage(papelPicadoTexture(col, i).image, i * 76 + 3, 3, 70, 82));
+  colors.forEach((col, i) => {
+    const x = i * (fw + 12) + 6;
+    g.fillStyle = col;
+    g.beginPath();
+    g.moveTo(x, 4);
+    g.lineTo(x + fw, 4);
+    g.lineTo(x + fw, 52);
+    g.arc(x + fw / 2, 52, fw / 2, 0, Math.PI);
+    g.closePath();
+    g.fill();
+    // Carita de calavera.
+    const cx = x + fw / 2;
+    g.fillStyle = 'rgba(30,14,20,.85)';
+    g.beginPath(); g.arc(cx - 11, 44, 7, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(cx + 11, 44, 7, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.moveTo(cx, 52); g.lineTo(cx - 4, 59); g.lineTo(cx + 4, 59); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.85)';
+    g.beginPath(); g.arc(cx - 12, 42, 2.2, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(cx + 10, 42, 2.2, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(30,14,20,.7)';
+    g.lineWidth = 2;
+    for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(cx + k * 5, 64); g.lineTo(cx + k * 5, 70); g.stroke(); }
+  });
   document.documentElement.style.setProperty('--picado-url', `url(${c.toDataURL()})`);
+  // Grano sutil para los paneles.
+  const n = document.createElement('canvas');
+  n.width = n.height = 120;
+  const ng = n.getContext('2d');
+  const img = ng.createImageData(120, 120);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = Math.random() * 255;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+    img.data[i + 3] = 14;
+  }
+  ng.putImageData(img, 0, 0);
+  document.documentElement.style.setProperty('--grain-url', `url(${n.toDataURL()})`);
+  void papelPicadoTexture;
+  void PICADO_COLORS;
 }
 import { portraitCanvas } from './scene/textures.js';
 import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding } from './audio.js';
@@ -914,6 +953,7 @@ function closeModals() {
   $$('dialog[open]').forEach((d) => d.close());
 }
 const THEN = {
+  guide: () => openGuide(),
   farolillo: () => openFarolillo(),
   comfort: () => openComfort(),
   add: () => openAdd(null),
@@ -1950,6 +1990,133 @@ $('#share-image').onclick = async () => {
   toast('Imagen guardada. Publicala en tu historia 📸');
 };
 
+// ---------- guía: la sexta etapa ----------
+let guideReady = false;
+function openGuide(step = 0) {
+  closeModals();
+  closeSheet();
+  const track = $('#guide-track');
+  if (!guideReady) {
+    renderGuide(track, $('#guide-dots'));
+    wireGuideActions();
+    track.addEventListener('scroll', () => {
+      const i = Math.round(track.scrollLeft / track.clientWidth);
+      $$('#guide-dots button').forEach((d, k) => d.classList.toggle('on', k === i));
+    }, { passive: true });
+    guideReady = true;
+  }
+  $('#guide').showModal();
+  requestAnimationFrame(() => {
+    track.scrollLeft = step * track.clientWidth;
+    $$('#guide-dots button').forEach((d, k) => d.classList.toggle('on', k === step));
+  });
+}
+const guideGo = (d) => {
+  const track = $('#guide-track');
+  const i = Math.max(0, Math.min(GUIDE_STEPS.length - 1, Math.round(track.scrollLeft / track.clientWidth) + d));
+  track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' });
+};
+$('#guide-prev').onclick = () => guideGo(-1);
+$('#guide-next').onclick = () => guideGo(1);
+$$('[data-guide]').forEach((b) => { b.onclick = () => openGuide(); });
+
+function wireGuideActions() {
+  const btn = (label, cls, fn) => {
+    const b = document.createElement('button');
+    b.className = `btn ${cls} wide`;
+    b.style.marginTop = '0';
+    b.textContent = label;
+    b.onclick = fn;
+    return b;
+  };
+  for (const box of $$('#guide-track .guide-actions')) {
+    const a = box.dataset.action;
+    const pet = () => myPet();
+    if (a === 'answers') {
+      const saved = JSON.parse(store.get('huellita.dondecuando') || '{}');
+      box.innerHTML = `<label class="field">¿Dónde está?<input name="donde" maxlength="80" placeholder="del otro lado, conmigo, en el sol de la tarde…" /></label>
+        <label class="field">¿Cuándo lo vuelvo a ver?<input name="cuando" maxlength="80" placeholder="el 1 y 2 de noviembre, cada vez que…" /></label>`;
+      box.querySelector('[name=donde]').value = saved.donde || '';
+      box.querySelector('[name=cuando]').value = saved.cuando || '';
+      box.append(btn(pet() ? '📖 Guardarlo en su diario' : '💛 Guardar mis respuestas', 'primary', async () => {
+        const donde = box.querySelector('[name=donde]').value.trim();
+        const cuando = box.querySelector('[name=cuando]').value.trim();
+        if (!donde && !cuando) return toast('Escribí aunque sea una de las dos 🤍');
+        store.set('huellita.dondecuando', JSON.stringify({ donde, cuando }));
+        const p = pet();
+        if (p) {
+          try {
+            await api.own(p.id, 'diary', { text: `¿Dónde está? ${donde || '…'}\n¿Cuándo lo vuelvo a ver? ${cuando || '…'}`, prompt: 'Las dos preguntas' });
+            toast(`📖 Guardado en el diario de ${p.name}`);
+          } catch (err) { return toast(err.message); }
+        } else toast('💛 Guardado. Tu cabeza ya puede dejar de buscar en el vacío.');
+        haptic(10);
+        guideGo(1);
+      }));
+    }
+    if (a === 'gift') {
+      box.append(btn('🎁 Dejarle su cosa', 'primary', () => {
+        const target = pet() || memorials.find((m) => m.featured);
+        $('#guide').close();
+        if (target) { visit(target); setTimeout(openGifts, 1200); }
+      }));
+    }
+    if (a === 'falto') {
+      box.append(btn('🏮 Soltarlo en un farolillo', 'primary', () => { $('#guide').close(); openFarolillo(); }));
+      if (pet()) box.append(btn('📖 Escribirlo en su diario', 'soft', () => { $('#guide').close(); visit(pet()); setTimeout(openDiary, 1200); }));
+    }
+    if (a === 'together') {
+      if (pet()) box.append(btn('👨‍👩‍👧 Invitar a la familia', 'primary', () => { current = pet(); inviteFamily(); }));
+      box.append(btn('🕯️ Ver a quienes están en el jardín', pet() ? 'soft' : 'primary', () => { $('#guide').close(); goHome(); }));
+    }
+    if (a === 'bond') {
+      box.append(btn('📅 Agendar el 1 y 2 de noviembre', 'primary', () => downloadMuertosIcs()));
+    }
+    if (a === 'start') {
+      box.append(btn(pet() ? `🌼 Visitar a ${pet().name}` : '🌼 Poner su foto en la ofrenda', 'primary', () => {
+        $('#guide').close();
+        if (pet()) visit(pet()); else openAdd(null);
+      }));
+    }
+  }
+}
+
+function downloadMuertosIcs() {
+  const y = new Date().getMonth() > 10 || (new Date().getMonth() === 10 && new Date().getDate() > 2) ? new Date().getFullYear() + 1 : new Date().getFullYear();
+  const pet = myPet();
+  const name = pet ? pet.name : 'quienes extrañamos';
+  const url = `${location.origin}/${pet ? `#h/${pet.id}` : ''}`;
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Encende una huellita//ES', 'BEGIN:VEVENT', `UID:muertos-${y}@huellita`,
+    `DTSTART;VALUE=DATE:${y}1101`, `DTEND;VALUE=DATE:${y}1103`, 'RRULE:FREQ=YEARLY',
+    `SUMMARY:🌼 Día de Muertos: ofrenda para ${name}`, `DESCRIPTION:Poner su foto y su cosa en la ofrenda. Encender una vela: ${url}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+  a.download = 'dia-de-muertos.ics';
+  a.click();
+  toast('📅 Cada 1 y 2 de noviembre, una cita con su ofrenda');
+}
+
+// Aviso de temporada: del 20 de octubre al 2 de noviembre.
+function checkMuertos() {
+  const d = new Date();
+  const m = d.getMonth();
+  const day = d.getDate();
+  const season = (m === 9 && day >= 20) || (m === 10 && day <= 2);
+  const key = `huellita.muertos.${d.getFullYear()}`;
+  const banner = $('#muertos-banner');
+  banner.hidden = !season || !!store.get(key);
+  if (!banner.hidden && myPet()) {
+    $('#muertos-text').textContent = `Este año, ${myPet().name} está en la ofrenda. Encendele una vela y dejale su cosa.`;
+    $('#muertos-add').textContent = `Visitar a ${myPet().name}`;
+  }
+}
+$('#muertos-x').onclick = () => { $('#muertos-banner').hidden = true; store.set(`huellita.muertos.${new Date().getFullYear()}`, '1'); };
+$('#muertos-add').onclick = () => {
+  $('#muertos-banner').hidden = true;
+  store.set(`huellita.muertos.${new Date().getFullYear()}`, '1');
+  if (myPet()) visit(myPet()); else openAdd(null);
+};
+
 // ---------- arranque ----------
 function openFromHash() {
   const m = location.hash.match(/^#h\/([\w-]+)/);
@@ -1972,6 +2139,7 @@ function finishIntro() {
     setTimeout(() => $('#help').showModal(), 250);
   }
   hintTimer = setTimeout(hideHint, 14_000);
+  checkMuertos();
   const st = game.visit();
   setTimeout(() => {
     if (awayMsg) toast(awayMsg);

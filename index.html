@@ -25,7 +25,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Lobster&family=Nunito:wght@500;600;700;800;900&family=Young+Serif&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Nunito:wght@600;700;800&family=Young+Serif&display=swap" rel="stylesheet" />
   </head>
   <body class="intro">
     <canvas id="scene" aria-label="Jardín memorial en 3D. Usá el botón Huellitas para ver la lista."></canvas>
@@ -120,7 +120,8 @@
     <!-- ---------- bienvenida ---------- -->
     <dialog class="modal" id="help">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <h2>Te damos la bienvenida</h2>
+      <p class="eyebrow">Un lugar para recordar</p>
+      <h2>Te damos la <em>bienvenida</em></h2>
       <p class="sub">Un jardín tranquilo para recordar a las mascotas que amamos.</p>
       <ul class="steps">
         <li><span>👆</span><div><b>Caminá y mirá.</b> Tocá el piso para ir hasta ahí. Arrastrá para mirar alrededor y pellizcá para acercarte.</div></li>
@@ -129,6 +130,7 @@
       </ul>
       <button class="btn primary wide" data-close data-then="featured">🕯️ Conocer a <span class="featured-name">Luca</span></button>
       <button class="btn soft wide" data-close data-then="add">🐾 Darle un lugar a mi mascota</button>
+      <button class="btn soft wide" data-close data-then="guide">🕯️ La sexta etapa del duelo</button>
       <button class="btn link wide" data-close>Explorar el jardín</button>
     </dialog>
 
@@ -137,7 +139,8 @@
       <button class="x" data-close aria-label="Cerrar">✕</button>
       <form id="add-form" autocomplete="off" novalidate>
         <div class="form-body">
-          <h2>Dale un lugar a tu mascota</h2>
+          <p class="eyebrow">Su lugar en el muro</p>
+          <h2>Dale un lugar a tu <em>mascota</em></h2>
           <p class="sub" id="add-sub">Va a quedar en el muro para que todos puedan visitarla.</p>
           <label class="photo-drop" id="photo-drop">
             <input type="file" accept="image/*" id="photo-input" class="sr" />
@@ -264,7 +267,8 @@
     <!-- ---------- pisos ---------- -->
     <dialog class="modal small-modal" id="floors">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <h2>🛗 ¿A qué piso?</h2>
+      <p class="eyebrow">Ascensor</p>
+      <h2>¿A qué <em>piso</em>?</h2>
       <p class="sub">Cada piso tiene lugar para 90 huellitas. El siguiente se abre cuando se llena el de abajo.</p>
       <div class="floor-list" id="floor-list"></div>
     </dialog>
@@ -272,7 +276,7 @@
     <!-- ---------- más opciones ---------- -->
     <dialog class="modal small-modal" id="menu">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <h2>Opciones</h2>
+      <h2><em>Opciones</em></h2>
       <div class="menu-list">
         <label class="toggle"><span>🎵 Música</span><input type="checkbox" id="opt-music" /><i></i></label>
         <label class="toggle"><span>🦗 Sonidos del jardín</span><input type="checkbox" id="opt-sounds" checked /><i></i></label>
@@ -287,6 +291,7 @@
         </div>
         <label class="toggle"><span>🙈 Modo tranquilo (ocultar visitantes)</span><input type="checkbox" id="opt-quiet" /><i></i></label>
         <button class="menu-item" data-then="floors">🛗 Pisos</button>
+        <button class="menu-item" data-guide>🕯️ La sexta etapa: crear significado</button>
         <button class="menu-item" data-jar>🫙 Frasco de gracias</button>
         <button class="menu-item" data-then="farolillo">🏮 Enviar un farolillo</button>
         <button class="menu-item" data-then="comfort">💌 Palabras de consuelo</button>
@@ -304,7 +309,8 @@
     <dialog class="modal full-mobile" id="today">
       <button class="x" data-close aria-label="Cerrar">✕</button>
       <div class="today-body">
-        <h2>✨ Hoy en el jardín</h2>
+        <p class="eyebrow">Gestos de hoy</p>
+        <h2>Hoy en el <em>jardín</em></h2>
         <p class="sub hand" id="today-sub">Cada gesto amable hace brillar un poco más el lugar de tu mascota.</p>
         <div class="pet-glow" id="pet-glow"></div>
         <div class="streak" id="streak"></div>
@@ -313,6 +319,7 @@
         <h3>Necesitan una luz 🕯️</h3>
         <p class="tiny">Nadie les encendió una vela todavía. ¿Querés ser la primera persona?</p>
         <div class="need-light" id="need-light"></div>
+        <button class="jar-cta guide-cta" data-guide><span>🕯️</span><div><b>La sexta etapa del duelo</b><small>Cinco pasos para crear significado, con la ofrenda</small></div><i>›</i></button>
         <button class="jar-cta" data-jar><span>🫙</span><div><b>Frasco de gracias</b><small id="jar-count">Dejá un "gracias por…" para tu mascota</small></div><i>›</i></button>
         <p class="tiny center">El Glow nunca se apaga y no hay rankings: todas las huellitas son queridas por igual.</p>
       </div>
@@ -321,7 +328,8 @@
     <!-- ---------- regalitos ---------- -->
     <dialog class="modal" id="gifts">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <h2>Dejale un regalito</h2>
+      <p class="eyebrow">Para su repisa</p>
+      <h2>Dejale un <em>regalito</em></h2>
       <p class="sub" id="gifts-sub">Elegí uno. Podés dejar uno por día.</p>
       <div class="seg" id="gift-tabs"></div>
       <div class="gift-grid" id="gift-grid"></div>
@@ -330,7 +338,8 @@
     <!-- ---------- frasco de gracias ---------- -->
     <dialog class="modal" id="jar">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <h2>🫙 Frasco de gracias</h2>
+      <p class="eyebrow">Lo que nos dieron</p>
+      <h2>Frasco de <em>gracias</em></h2>
       <p class="sub">Cada estrellita es un “gracias” que alguien le dejó a su mascota.</p>
       <div class="jar-notes" id="jar-notes"></div>
       <form id="jar-form">
@@ -382,7 +391,8 @@
 
     <dialog class="modal" id="diary">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <h2>📖 Una página del diario</h2>
+      <p class="eyebrow">Antes de que se desvanezca</p>
+      <h2>Una página del <em>diario</em></h2>
       <p class="sub">Escribilo antes de que se desvanezca: un olor, un sonido, una manía graciosa…</p>
       <div class="ideas prompts" id="diary-prompts"></div>
       <form id="diary-form">
@@ -406,7 +416,8 @@
     <!-- ---------- farolillo, consuelo y compartir ---------- -->
     <dialog class="modal small-modal" id="farolillo">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <h2>🏮 Enviar un farolillo</h2>
+      <p class="eyebrow">Se va volando</p>
+      <h2>Enviar un <em>farolillo</em></h2>
       <p class="sub">Escribí lo que quieras decirle. No se guarda en ningún lado: sólo se va volando.</p>
       <form id="farolillo-form">
         <label class="field">Su nombre<input name="to" maxlength="30" placeholder="p. ej. Luca" /></label>
@@ -417,7 +428,8 @@
 
     <dialog class="modal" id="comfort">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <h2>💌 Palabras de consuelo</h2>
+      <p class="eyebrow">Para quien está sufriendo</p>
+      <h2>Palabras de <em>consuelo</em></h2>
       <p class="sub">Notas que dejan los visitantes para quien está sufriendo. Leé una o dejá una para alguien que no conocés.</p>
       <div class="comfort-note hand" id="comfort-note"></div>
       <button class="btn soft wide" id="comfort-next">↻ Otra nota</button>
@@ -443,6 +455,24 @@
       <div class="lift-door l"><span class="paw">🐾</span></div>
       <div class="lift-door r"><span class="paw">🐾</span></div>
       <div class="lift-panel"><span>Piso</span><b id="lift-num">1</b><i id="lift-arrow">▲</i></div>
+    </div>
+
+    <!-- ---------- guía: la sexta etapa ---------- -->
+    <dialog class="modal full-mobile guide" id="guide">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <div class="guide-track" id="guide-track"></div>
+      <div class="guide-nav">
+        <button class="btn soft small" id="guide-prev" aria-label="Anterior">‹</button>
+        <div class="guide-dots" id="guide-dots"></div>
+        <button class="btn soft small" id="guide-next" aria-label="Siguiente">›</button>
+      </div>
+    </dialog>
+
+    <!-- aviso de temporada: Día de Muertos -->
+    <div class="candle-hour muertos-banner" id="muertos-banner" hidden>
+      <div><b>🌼 Día de Muertos.</b> <span id="muertos-text">Este año, poné su foto en la ofrenda. Nadie está listo: sólo poné la foto.</span></div>
+      <div class="row-btns"><button class="btn primary small" id="muertos-add">Poner su foto</button><button class="btn soft small" data-guide>La sexta etapa</button></div>
+      <button class="x" id="muertos-x" aria-label="Cerrar">✕</button>
     </div>
 
     <div class="toast" id="toast" role="status" hidden></div>

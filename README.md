@@ -48,6 +48,19 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   ofrenda y pegada con cintitas en su ficha.
 - Tipografías: Lobster (títulos), Caveat (escrito a mano) y Nunito.
 
+### La sexta etapa del duelo
+
+Guía interactiva en 7 tarjetas (menú, panel **Hoy** o la bienvenida) sobre *crear significado*
+después de una pérdida, con la ofrenda como práctica: responder por escrito "¿dónde está?" y
+"¿cuándo lo vuelvo a ver?" (se guarda en su diario), ponerle "su cosa", decirle lo que faltó
+(farolillo), no hacerlo solo (invitar a la familia) y decidir cómo sigue el vínculo (agendar el 1 y
+2 de noviembre). Basada en Kessler (2019), O'Connor (2022) y Klass, Silverman y Nickman (1996);
+inspirada en un carrusel de Oscar Rivas, PhD. Entre el 20 de octubre y el 2 de noviembre aparece un
+aviso de temporada: *"Este año, poné su foto en la ofrenda."*
+
+Las ventanas usan un tema vino editorial (Cormorant Garamond + DM Sans, palabra clave en itálica
+naranja, etiquetas en mayúsculas) y papel picado pastel con caritas de calavera.
+
 ### Para la familia (todo gratis por ahora, ver [MONETIZACION.md](MONETIZACION.md))
 
 Luz eterna, 12 fondos, hasta 4 fotos, su voz, diario con preguntas, lugar en la ofrenda del día,
