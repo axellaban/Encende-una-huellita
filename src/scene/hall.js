@@ -7,6 +7,9 @@ import {
   emptySlotTexture, portraitTexture, photoTexture, labelTexture, flameTexture, glowTexture, woodTexture, lightConeTexture, emojiTexture, lanternTexture,
 } from './textures.js';
 import { stageOf } from '../../server/glow.js';
+import { PALETTE, paintedWallTexture, talaveraTexture, marigoldGeometry, marigoldMaterial, marigoldCluster, picadoBanner, sugarSkull, panDeMuerto, backgroundTexture } from './muertos.js';
+
+const WALL_COLORS = ['#178f8c', '#c2186b', '#d9901c', '#6a2aa6', '#239a62', '#d9661a', '#2f6fd6', '#b5307a', '#159aa0', '#7b3fc4'];
 
 // Brillo de cada lugar según su Glow: 🏮 farolito, ⭐ estrella, ✨ constelación.
 const starMatBase = new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -37,9 +40,10 @@ function makeGlowFx(fxList, scale = 1) {
   setStage(fx, 0);
   return fx;
 }
-function setStage(fx, stage) {
-  fx.stage = stage;
-  fx.lantern.visible = stage >= 1;
+function setStage(fx, stage, eternal = false) {
+  fx.stage = Math.max(stage, eternal ? 1 : 0);
+  fx.lantern.visible = stage >= 1 || eternal;
+  fx.lantern.children[0].material.color.set(eternal ? new THREE.Color(2.6, 1.9, 0.6) : new THREE.Color(1.8, 1.4, 1.0));
   fx.star.visible = stage >= 2;
   fx.cons.forEach((c) => { c.visible = stage >= 3; });
 }
@@ -85,8 +89,11 @@ export function buildHall(scene, colliders, tier) {
   const matMat = new THREE.MeshLambertMaterial({ color: '#f1e6d4' });
   const ledgeMat = new THREE.MeshLambertMaterial({ color: '#c8b39a' });
   const waxMat = new THREE.MeshLambertMaterial({ color: '#fff3e0', emissive: '#7a5226', emissiveIntensity: 0.45 });
-  const postMat = new THREE.MeshLambertMaterial({ map: woodTexture('#5b3a27') });
-  const flowerMats = ['#f4a6b8', '#f7d774', '#b9a3f0', '#ffffff', '#f7b58a'].map((c) => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.12 }));
+  const postMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture('#b5307a') });
+  const marigoldGeo = marigoldGeometry(0.04, '#ffffff', r);
+  const flowerMats = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a'].map((c) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, color: c, emissive: c, emissiveIntensity: 0.25 }));
+  const tileMat = new THREE.MeshLambertMaterial({ map: talaveraTexture() });
+  const animators = [];
 
   const slots = [];
   const flames = [];
@@ -102,13 +109,22 @@ export function buildHall(scene, colliders, tier) {
     panel.lookAt(HALL_CENTER.x, 0, HALL_CENTER.z);
     scene.add(panel);
 
-    const board = new THREE.Mesh(new THREE.BoxGeometry(4.7, 3.9, 0.22), panelMat);
+    // Pared pintada de colores, con techito y un friso de talavera abajo.
+    const wallMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture(WALL_COLORS[p % WALL_COLORS.length]) });
+    const board = new THREE.Mesh(new THREE.BoxGeometry(4.7, 3.9, 0.22), wallMat);
     board.position.set(0, 2.05, -0.12);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.14, 0.7), panelMat);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.14, 0.7), new THREE.MeshLambertMaterial({ color: '#b5482a' }));
     roof.position.set(0, 4.06, 0.08);
     const plinth = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.2, 0.36), panelMat);
     plinth.position.set(0, 0.1, -0.05);
-    panel.add(board, roof, plinth);
+    const tiles = new THREE.Mesh(new THREE.PlaneGeometry(4.7, 0.3), tileMat.clone());
+    tiles.material.map = talaveraTexture().clone();
+    tiles.material.map.repeat.set(16, 1);
+    tiles.material.map.needsUpdate = true;
+    tiles.position.set(0, 0.36, 0.0);
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(4.74, 0.06, 0.05), new THREE.MeshLambertMaterial({ color: '#fbefd9' }));
+    trim.position.set(0, 3.98, 0.0);
+    panel.add(board, roof, plinth, tiles, trim);
 
     // Aplique de luz y su haz sobre el muro.
     const bar = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.05, 0.08), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 1.15, 0.75) }));
@@ -136,7 +152,7 @@ export function buildHall(scene, colliders, tier) {
 
         const border = new THREE.Mesh(new THREE.BoxGeometry(FRAME_W + 0.16, FRAME_H + 0.16, 0.07), frameMat);
         border.position.z = 0.01;
-        const mat = new THREE.Mesh(new THREE.PlaneGeometry(FRAME_W + 0.04, FRAME_H + 0.04), matMat);
+        const mat = new THREE.Mesh(new THREE.PlaneGeometry(FRAME_W + 0.04, FRAME_H + 0.04), new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#3a2a20', emissiveIntensity: 0.3 }));
         mat.position.z = 0.05;
         const photo = new THREE.Mesh(new THREE.PlaneGeometry(FRAME_W - 0.06, FRAME_H - 0.06), new THREE.MeshBasicMaterial({ map: emptySlotTexture(), transparent: true, color: '#e8e0d4' }));
         photo.position.z = 0.055;
@@ -155,7 +171,7 @@ export function buildHall(scene, colliders, tier) {
           return c;
         });
         const flowers = [0, 1, 2, 3].map((i) => {
-          const f = new THREE.Mesh(new THREE.DodecahedronGeometry(0.035, 0), flowerMats[(local + i) % flowerMats.length]);
+          const f = new THREE.Mesh(marigoldGeo, flowerMats[(local + i) % flowerMats.length]);
           f.position.set(-0.12 + i * 0.08, 0.05, 0.03 * (i % 2));
           f.visible = false;
           shelf.add(f);
@@ -251,8 +267,32 @@ export function buildHall(scene, colliders, tier) {
     }
   }
   for (const pt of posts) strand(new THREE.Vector3(pt.x, POST_H + 0.1, pt.z), top, tier.bulbsPerStrand, 0.9);
+  // Papel picado entre los postes y cruzando hacia el poste central.
   for (let i = 0; i < posts.length - 1; i++) {
-    strand(new THREE.Vector3(posts[i].x, POST_H - 0.05, posts[i].z), new THREE.Vector3(posts[i + 1].x, POST_H - 0.05, posts[i + 1].z), 7, 0.45);
+    const b = picadoBanner(new THREE.Vector3(posts[i].x, POST_H - 0.12, posts[i].z), new THREE.Vector3(posts[i + 1].x, POST_H - 0.12, posts[i + 1].z), { sag: 0.35, flags: 9, size: 0.36, seed: i });
+    scene.add(b);
+    animators.push(b.userData.flutter);
+  }
+  for (let i = 0; i < posts.length; i += 2) {
+    const a = new THREE.Vector3(posts[i].x, POST_H - 0.4, posts[i].z);
+    const mid = new THREE.Vector3().lerpVectors(a, new THREE.Vector3(HALL_CENTER.x, POLE_H - 1.0, HALL_CENTER.z), 0.92);
+    const b = picadoBanner(a, mid, { sag: 0.6, flags: 12, size: 0.34, seed: i * 3 });
+    scene.add(b);
+    animators.push(b.userData.flutter);
+  }
+  // Arco de cempasúchil en la entrada.
+  {
+    const a = posts[0];
+    const b = posts[posts.length - 1];
+    const pts = [];
+    for (let i = 0; i <= 64; i++) {
+      const t = i / 64;
+      const x = THREE.MathUtils.lerp(a.x, b.x, t);
+      const z = THREE.MathUtils.lerp(a.z, b.z, t);
+      const y = 0.3 + Math.sin(t * Math.PI) * (POST_H + 0.9) * (0.65 + 0.35 * Math.sin(t * Math.PI));
+      for (let k = 0; k < 2; k++) pts.push([x + (r() - 0.5) * 0.18, y + (r() - 0.5) * 0.18, z + (r() - 0.5) * 0.18, 0.9 + r() * 0.6]);
+    }
+    scene.add(marigoldCluster(pts, { r: 0.11, rnd: r }));
   }
   scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(wire), new THREE.LineBasicMaterial({ color: '#1b1512', transparent: true, opacity: 0.7 })));
   const bulbMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial(), bulbs.length);
@@ -290,10 +330,10 @@ export function buildHall(scene, colliders, tier) {
       p.rotateZ((i / 5) * Math.PI * 2);
       petals.push(p);
     }
-    const fgeo = mergeGeometries(petals).rotateX(-Math.PI / 2);
-    const n = 320;
-    const fl = new THREE.InstancedMesh(fgeo, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, emissive: '#3a2a30' }), n);
-    const pal = ['#f6c3d0', '#f7e3a1', '#c8b6f2', '#fbd1b2', '#ffffff'].map((c) => new THREE.Color(c));
+    void petals;
+    const n = 260;
+    const fl = new THREE.InstancedMesh(marigoldGeometry(0.075, '#ffffff', r), marigoldMaterial(), n);
+    const pal = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a', '#ff9a1f'].map((c) => new THREE.Color(c));
     const m = new THREE.Object3D();
     for (let i = 0; i < n; i++) {
       const a = r() * Math.PI * 2;
@@ -312,56 +352,97 @@ export function buildHall(scene, colliders, tier) {
   const easel = new THREE.Group();
   easel.position.copy(EASEL_POS);
   scene.add(easel);
-  colliders.circles.push({ x: EASEL_POS.x, z: EASEL_POS.z, r: 0.9 });
-  const easelWood = new THREE.MeshLambertMaterial({ map: woodTexture('#6b4630') });
-  for (const s of [-1, 1]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.07, 2.7, 0.07), easelWood);
-    leg.position.set(s * 0.45, 1.3, 0);
-    leg.rotation.z = s * 0.12;
-    easel.add(leg);
+  colliders.circles.push({ x: EASEL_POS.x, z: EASEL_POS.z - 0.2, r: 1.7 });
+  // Ofrenda de tres escalones con mantel, papel picado, flores, calaveritas y pan de muerto.
+  const cloth = new THREE.MeshLambertMaterial({ color: '#fbf3e6', emissive: '#2a1a14' });
+  const steps = [[3.0, 0.35, 1.7, -0.15], [2.4, 0.7, 1.15, -0.42], [1.8, 1.05, 0.6, -0.7]];
+  steps.forEach(([w, h, d, z], i) => {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cloth);
+    box.position.set(0, h / 2, z);
+    easel.add(box);
+    const front = z + d / 2 + 0.01;
+    const b = picadoBanner(new THREE.Vector3(-w / 2, h - 0.01, front), new THREE.Vector3(w / 2, h - 0.01, front), { sag: 0.0, flags: Math.round(w / 0.32), size: 0.27, seed: i * 5 });
+    b.children.forEach((c) => { if (c.isMesh) c.rotation.y = 0; });
+    easel.add(b);
+    animators.push((t) => b.children.forEach((c, k) => { if (c.isMesh) c.rotation.x = Math.sin(t * 1.6 + k + i) * 0.06; }));
+  });
+  // Flores en macetas a los costados y en los escalones.
+  {
+    const pts = [];
+    for (const s of [-1, 1]) {
+      for (let i = 0; i < 26; i++) pts.push([s * (1.3 + (r() - 0.5) * 0.25), 0.4 + r() * 0.45, 0.45 + (r() - 0.5) * 0.3, 0.8 + r() * 0.6]);
+      for (let i = 0; i < 12; i++) pts.push([s * (1.0 + r() * 0.15), 0.76 + r() * 0.2, -0.2 + (r() - 0.5) * 0.2, 0.7 + r() * 0.5]);
+    }
+    // Arco de flores sobre la ofrenda.
+    for (let i = 0; i <= 50; i++) {
+      const t = i / 50;
+      const a = Math.PI * t;
+      pts.push([-Math.cos(a) * 1.55 + (r() - 0.5) * 0.1, Math.sin(a) * 3.0 + (r() - 0.5) * 0.1, -0.95 + (r() - 0.5) * 0.1, 1 + r() * 0.4]);
+    }
+    easel.add(marigoldCluster(pts, { r: 0.09, rnd: r }));
+    for (const s of [-1, 1]) {
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.34, 14), new THREE.MeshLambertMaterial({ map: talaveraTexture() }));
+      pot.position.set(s * 1.3, 0.17, 0.45);
+      easel.add(pot);
+    }
   }
-  const backLeg = new THREE.Mesh(new THREE.BoxGeometry(0.07, 2.6, 0.07), easelWood);
-  backLeg.position.set(0, 1.25, -0.4);
-  backLeg.rotation.x = 0.3;
-  const ledge = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.06, 0.18), easelWood);
-  ledge.position.set(0, 0.95, 0.06);
-  easel.add(backLeg, ledge);
+  [[-0.95, 0.7, -0.1, 330], [0.62, 0.7, -0.1, 190], [-0.6, 0.35, 0.45, 30]].forEach(([x, y, z, hue]) => {
+    const sk = sugarSkull(hue, 1.15);
+    sk.position.set(x, y, z);
+    sk.rotation.y = -x * 0.25;
+    easel.add(sk);
+  });
+  for (const x of [-0.95, 0.95]) {
+    const pan = panDeMuerto(1);
+    pan.position.set(x, 0.35, 0.3);
+    easel.add(pan);
+  }
+  // Marco de "hoy en la ofrenda": pasan una por una las huellitas que pusieron hoy.
+  const spot = new THREE.Group();
+  spot.position.set(0.98, 0.7, -0.15);
+  spot.rotation.x = -0.1;
+  const spotBorder = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 0.04), goldMat);
+  spotBorder.position.y = 0.27;
+  const spotPhoto = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.45), new THREE.MeshBasicMaterial({ color: '#e8e0d4' }));
+  spotPhoto.position.set(0, 0.27, 0.025);
+  spotPhoto.userData = { kind: 'spot' };
+  spot.add(spotBorder, spotPhoto);
+  spot.visible = false;
+  easel.add(spot);
+  pickables.push(spotPhoto);
+
   const fBorder = new THREE.Mesh(new THREE.BoxGeometry(1.36, 1.66, 0.08), goldMat);
-  fBorder.position.set(0, 1.82, 0.08);
-  const fMat = new THREE.Mesh(new THREE.PlaneGeometry(1.24, 1.54), matMat);
-  fMat.position.set(0, 1.82, 0.125);
+  fBorder.position.set(0, 1.9, -0.6);
+  const fMat = new THREE.Mesh(new THREE.PlaneGeometry(1.24, 1.54), matMat.clone());
+  fMat.position.set(0, 1.9, -0.555);
   const fPhoto = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.375), new THREE.MeshBasicMaterial({ color: '#e8e0d4' }));
-  fPhoto.position.set(0, 1.82, 0.13);
+  fPhoto.position.set(0, 1.9, -0.55);
   fPhoto.userData = { kind: 'featured' };
-  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.24), new THREE.MeshBasicMaterial({ transparent: true }));
-  plaque.position.set(0, 0.8, 0.16);
+  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.2), new THREE.MeshBasicMaterial({ transparent: true }));
+  plaque.position.set(0, 0.47, 0.32);
+  plaque.rotation.x = -0.25;
   easel.add(fBorder, fMat, fPhoto, plaque);
   pickables.push(fPhoto);
   // Velas alrededor del atril: se encienden más a medida que llegan velas.
   const clusterCandles = [];
   for (let i = 0; i < 26; i++) {
-    const a = -Math.PI * 0.95 + (i / 25) * Math.PI * 1.9;
-    const d = 0.75 + (i % 3) * 0.22 + r() * 0.1;
+    const onFirst = i % 2 === 0;
+    const k = Math.floor(i / 2);
+    const x = (k / 12 - 0.5) * (onFirst ? 2.5 : 1.6) + (r() - 0.5) * 0.08;
     const c = makeCandle(waxMat, 0.08 + r() * 0.2, flames, tier.bloom);
     c.scale.setScalar(1.3);
-    c.position.set(Math.sin(a) * d, 0.16, Math.cos(a) * d * 0.7 + 0.25);
+    c.position.set(x, onFirst ? 0.35 : 0.7, onFirst ? 0.5 + (r() - 0.5) * 0.15 : -0.05);
     c.visible = false;
     easel.add(c);
     clusterCandles.push(c);
   }
-  for (let i = 0; i < 10; i++) {
-    const f = new THREE.Mesh(new THREE.DodecahedronGeometry(0.045, 0), flowerMats[i % flowerMats.length]);
-    const a = (i / 10) * Math.PI - Math.PI / 2;
-    f.position.set(Math.sin(a) * 0.55, 0.22, 0.45 + Math.cos(a) * 0.1);
-    easel.add(f);
-  }
   const featuredFx = makeGlowFx(glowFx, 1.6);
-  featuredFx.group.position.set(0, 1.82, 0.1);
+  featuredFx.group.position.set(0, 1.9, -0.5);
   easel.add(featuredFx.group);
   const featuredGifts = [0, 1, 2].map((i) => {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
     sp.scale.setScalar(0.16);
-    sp.position.set(-0.45 + i * 0.45, 1.06, 0.12);
+    sp.position.set(-0.4 + i * 0.4, 0.82, -0.05);
     sp.visible = false;
     easel.add(sp);
     return sp;
@@ -373,6 +454,17 @@ export function buildHall(scene, colliders, tier) {
 
   let featured = null;
   let featuredTex = [];
+  let spotList = [];
+  let spotIdx = 0;
+  let spotT = 0;
+  let spotTex = null;
+  function showSpot(m) {
+    spotTex?.dispose();
+    spotTex = m.photo ? photoTexture(m.photo) : portraitTexture(m);
+    spotPhoto.material.map = spotTex;
+    spotPhoto.material.needsUpdate = true;
+    spotPhoto.userData.id = m.id;
+  }
 
   // ---------- estado ----------
   let floor = 0;
@@ -413,7 +505,12 @@ export function buildHall(scene, colliders, tier) {
     s.memorial = m;
     s.border.visible = true;
     s.mat.visible = true;
-    s.border.material = m.candles >= 20 ? goldMat : frameMat;
+    s.border.material = m.candles >= 20 || m.eternal ? goldMat : frameMat;
+    if (s.bg !== m.bg) {
+      s.mat.material.map = backgroundTexture(m.bg || 'crema');
+      s.mat.material.needsUpdate = true;
+      s.bg = m.bg;
+    }
     s.shelf.visible = true;
     const lvl = candleLevel(m.candles);
     s.candles.forEach((c, i) => { c.visible = i < lvl; });
@@ -421,7 +518,7 @@ export function buildHall(scene, colliders, tier) {
     s.flowers.forEach((f, i) => { f.visible = i < fl && i < 4 - (m.lastGifts?.length || 0); });
     showGifts(s.gifts, m.lastGifts);
     s.fx.group.visible = true;
-    setStage(s.fx, stageOf(m.glow).index);
+    setStage(s.fx, stageOf(m.glow).index, !!m.eternal);
   }
 
   function showGifts(sprites, list = []) {
@@ -453,7 +550,9 @@ export function buildHall(scene, colliders, tier) {
     clusterCandles.forEach((c, i) => { c.visible = i < lit; });
     showGifts(featuredGifts, m.lastGifts);
     // La destacada brilla con el cariño que recibe.
-    setStage(featuredFx, stageOf((m.glow || 0) + m.candles * 3 + m.flowers * 2 + (m.gifts || 0) * 2).index);
+    setStage(featuredFx, stageOf((m.glow || 0) + m.candles * 3 + m.flowers * 2 + (m.gifts || 0) * 2).index, !!m.eternal);
+    fMat.material.map = backgroundTexture(m.bg || 'cempasuchil');
+    fMat.material.needsUpdate = true;
   }
 
   function render(memorials) {
@@ -489,8 +588,8 @@ export function buildHall(scene, colliders, tier) {
     // Dónde pararse para mirar un lugar. `shift` corre la vista para que la ficha no tape el marco.
     viewpoint(key, shift = 0, distMul = 1) {
       if (key === 'featured') {
-        const frame = new THREE.Vector3(EASEL_POS.x, 1.82, EASEL_POS.z);
-        const target = new THREE.Vector3(EASEL_POS.x + shift, 1.75, EASEL_POS.z);
+        const frame = new THREE.Vector3(EASEL_POS.x, 1.7, EASEL_POS.z - 0.5);
+        const target = new THREE.Vector3(EASEL_POS.x + shift, 1.65, EASEL_POS.z - 0.5);
         return { stand: new THREE.Vector3(EASEL_POS.x + shift, 1.6, EASEL_POS.z + 3.6 * distMul), target, frame };
       }
       const s = slots[key];
@@ -503,6 +602,14 @@ export function buildHall(scene, colliders, tier) {
       stand.y = 1.6;
       target.y = (target.y + 1.6) / 2 + 0.15;
       return { stand, target, frame };
+    },
+    setAltar(list) {
+      const ids = list.map((m) => m.id).join();
+      if (ids === spotList.map((m) => m.id).join()) return;
+      spotList = list;
+      spot.visible = list.length > 0;
+      spotIdx = 0;
+      if (list.length) showSpot(list[0]);
     },
     // Para encuadrar o soltar efectos desde un memorial.
     memorialKey(m) {
@@ -554,6 +661,13 @@ export function buildHall(scene, colliders, tier) {
             c.material.opacity = 0.6 + Math.sin(t * 3 + i) * 0.4;
           });
         }
+      }
+      animators.forEach((fn) => fn(t));
+      // Ofrenda: cambiar de huellita cada 6 s.
+      if (spotList.length && t - spotT > 6) {
+        spotT = t;
+        spotIdx = (spotIdx + 1) % spotList.length;
+        showSpot(spotList[spotIdx]);
       }
       // Guirnaldas que titilan suave.
       for (let i = 0; i < bulbs.length; i++) {

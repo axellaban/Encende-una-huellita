@@ -1,7 +1,7 @@
 // Farolitos de papel que suben al cielo cada vez que alguien enciende una vela,
 // unos cuantos que ya flotan a lo lejos, y destellos al encender.
 import * as THREE from 'three';
-import { glowTexture, lanternTexture } from './textures.js';
+import { glowTexture, lanternTexture, bubbleTexture } from './textures.js';
 
 export function createLanterns(scene, tier) {
   const bodyGeo = new THREE.CylinderGeometry(0.17, 0.12, 0.36, 8, 1, true);
@@ -11,7 +11,9 @@ export function createLanterns(scene, tier) {
 
   function makeLantern(scale = 1) {
     const g = new THREE.Group();
-    const mat = new THREE.MeshBasicMaterial({ map: lanternTexture(), side: THREE.DoubleSide, transparent: true, color: new THREE.Color(1.9, 1.5, 1.1) });
+    const tints = [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [1.3, 0.9, 2.0], [0.8, 1.8, 1.6], [2.2, 1.7, 0.6]];
+    const tc = tints[Math.floor(Math.random() * tints.length)];
+    const mat = new THREE.MeshBasicMaterial({ map: lanternTexture(), side: THREE.DoubleSide, transparent: true, color: new THREE.Color(...tc) });
     const body = new THREE.Mesh(bodyGeo, mat);
     const cap = new THREE.Mesh(capGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.8, 0.9), transparent: true }));
     cap.position.y = -0.18;
@@ -36,17 +38,24 @@ export function createLanterns(scene, tier) {
   // Destellos.
   const SPARKS = 60;
   const bursts = [];
-  const sparkMat = new THREE.PointsMaterial({ map: glowTexture(), size: 0.16, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(2.2, 1.6, 0.8) });
+  const sparkMat = new THREE.PointsMaterial({ map: glowTexture(), size: 0.16, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(2.6, 1.2, 0.3) });
 
   return {
     // Un farolito que sale desde `from` y sube al cielo.
-    release(from) {
+    release(from, { label = null, scale = 1 } = {}) {
       if (live.length > 30) {
         const old = live.shift();
         scene.remove(old);
       }
-      const l = makeLantern(1);
+      const l = makeLantern(scale);
       l.position.copy(from);
+      if (label) {
+        const t = bubbleTexture(label, { tail: false, font: '700 40px Caveat, cursive', bg: 'rgba(253,241,220,0.92)', fg: '#3a1f2b' });
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false }));
+        sp.scale.set(0.32 * t.userData.aspect, 0.32, 1);
+        sp.position.y = 0.55;
+        l.add(sp);
+      }
       l.userData = { t: 0, seed: Math.random() * 10, vx: (Math.random() - 0.5) * 0.25, vz: (Math.random() - 0.5) * 0.25 };
       scene.add(l);
       live.push(l);
@@ -79,6 +88,7 @@ export function createLanterns(scene, tier) {
         l.children[0].material.opacity = fade;
         l.children[1].material.opacity = fade;
         l.children[2].material.opacity = fade;
+        if (l.children[3]) l.children[3].material.opacity = fade;
         if (u.t > 55) {
           scene.remove(l);
           live.splice(i, 1);

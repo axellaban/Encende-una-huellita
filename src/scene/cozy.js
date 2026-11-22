@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, GARDEN_RADIUS, CREEK_Z, nearCreek, uTime, rand } from './world.js';
 import { EASEL_POS } from './hall.js';
 import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture } from './textures.js';
+import { picadoBanner, marigoldCluster, PALETTE } from './muertos.js';
 
 export const JAR_POS = new THREE.Vector3(-3.3, 0, 2.2);
 
@@ -34,6 +35,35 @@ export function createCozy(scene, tier, colliders) {
     });
     mesh.renderOrder = 2;
     scene.add(mesh);
+  }
+
+  // ---------- camino de pétalos de cempasúchil (guía hasta la ofrenda) ----------
+  {
+    const n = tierCount(tier, 900);
+    const petal = new THREE.CircleGeometry(0.045, 5).rotateX(-Math.PI / 2);
+    const mesh = new THREE.InstancedMesh(petal, new THREE.MeshLambertMaterial({ emissive: '#7a2c00', emissiveIntensity: 0.6, side: THREE.DoubleSide }), n);
+    const m = new THREE.Object3D();
+    const cols = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo].map((c) => new THREE.Color(c));
+    for (let i = 0; i < n; i++) {
+      const t = r();
+      const z = SPAWN.z + 3 - t * (SPAWN.z + 3 - (EASEL_POS.z + 1.2));
+      const spread = (r() + r() + r() - 1.5) * 0.9;
+      const x = spread + Math.sin(z * 0.35) * 0.3;
+      m.position.set(x, 0.03 + (z < HALL_CENTER.z + HALL_RADIUS + 1.3 ? 0.14 : 0) + r() * 0.01, z);
+      m.rotation.set((r() - 0.5) * 0.3, r() * 6, (r() - 0.5) * 0.3);
+      m.scale.setScalar(0.7 + r() * 0.8);
+      m.updateMatrix();
+      mesh.setMatrixAt(i, m.matrix);
+      mesh.setColorAt(i, cols[i % cols.length]);
+    }
+    scene.add(mesh);
+  }
+
+  // ---------- papel picado cruzando el camino ----------
+  for (const [z, seed] of [[19, 1], [13.5, 4], [8, 9], [2.5, 13]]) {
+    const b = picadoBanner(new THREE.Vector3(-2.7, 3.25, z), new THREE.Vector3(2.7, 3.25, z - 0.2), { sag: 0.5, flags: 11, size: 0.4, seed });
+    scene.add(b);
+    animated.push((t) => b.userData.flutter(t));
   }
 
   // ---------- hongos que brillan ----------
@@ -132,7 +162,7 @@ export function createCozy(scene, tier, colliders) {
       vertexShader: `attribute float seed; uniform float uTime; uniform float uScale; varying float vS;
         void main(){
           vec3 p = position;
-          float fall = mod(p.y - uTime * (0.35 + seed * 0.25), 9.0);
+          float fall = mod(p.y + uTime * (0.12 + seed * 0.12), 9.0);
           p.y = fall;
           p.x += sin(uTime * 0.8 + seed * 20.0) * 0.6 + uTime * 0.12;
           p.x = mod(p.x + 25.0, 50.0) - 25.0;
@@ -148,7 +178,7 @@ export function createCozy(scene, tier, colliders) {
           q = mat2(cos(a), -sin(a), sin(a), cos(a)) * q;
           float d = length(q * vec2(1.0, 1.9));
           if (d > 0.5) discard;
-          gl_FragColor = vec4(mix(vec3(0.98, 0.72, 0.8), vec3(1.0, 0.86, 0.9), vS), 0.85);
+          gl_FragColor = vec4(mix(vec3(1.4, 0.55, 0.08), vec3(1.6, 0.95, 0.2), vS), 0.9);
         }`,
     }));
     pts.frustumCulled = false;
@@ -162,7 +192,7 @@ export function createCozy(scene, tier, colliders) {
     g.position.set(PATH_HALF + 1.3, 0, SPAWN.z - 3.2);
     g.rotation.y = -0.55;
     const board = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.82), new THREE.MeshLambertMaterial({
-      map: chalkboardTexture([['¡Bienvenidos! 🐾', 64, 92], ['Encendé una vela', 50, 186], ['por quien extrañás', 50, 246], ['🕯️ ✨ 🌸', 54, 330]]),
+      map: chalkboardTexture([['¡Bienvenidos! 🐾', 64, 92], ['Seguí los pétalos', 50, 186], ['hasta la ofrenda', 50, 246], ['🌼 🕯️ 💀', 54, 330]]),
       emissive: '#222', side: THREE.DoubleSide,
     }));
     board.position.y = 1.05;
@@ -281,6 +311,14 @@ export function createCozy(scene, tier, colliders) {
       bulb.position.set(s * 0.82, 0.9 + 0.08, e * L / 2);
       bridge.add(bulb);
     }
+    {
+      const pts = [];
+      for (const s2 of [-1, 1]) for (let i = 0; i <= 30; i++) {
+        const t = i / 30;
+        pts.push([s2 * 0.82, Math.sin(t * Math.PI) * 0.75 + 0.82 + (r() - 0.5) * 0.06, (t - 0.5) * L, 0.8 + r() * 0.5]);
+      }
+      bridge.add(marigoldCluster(pts, { r: 0.07, rnd: r }));
+    }
     scene.add(bridge);
 
     // Arcoíris tenue, como el de una noche de luna.
@@ -396,29 +434,32 @@ function tierCount(tier, n) {
 function makeSpirit(kind) {
   const cat = kind === 'gato';
   const g = new THREE.Group();
-  const col = cat ? new THREE.Color(1.3, 1.0, 1.6) : new THREE.Color(0.9, 1.25, 1.7);
-  const mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+  // Alebrije: cada parte de un color neón distinto.
+  const col = cat ? new THREE.Color(1.6, 0.5, 1.4) : new THREE.Color(0.4, 1.5, 1.5);
+  const neon = (c) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(1.4), transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending, depthWrite: false });
+  const mats = cat ? ['#ff3fa4', '#ffd23f', '#7b2cbf', '#14d3c8', '#ff8a1a'] : ['#14d3c8', '#ff8a1a', '#ff3fa4', '#ffd23f', '#8c5cff'];
+  const mat = neon(mats[0]);
   const s = cat ? 0.75 : 1;
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), mat);
   body.scale.set(0.85 * s, 0.75 * s, 1.35 * s);
   body.position.y = 0.36 * s;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.15 * s, 14, 10), mat);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.15 * s, 14, 10), neon(mats[1]));
   head.position.set(0, 0.56 * s, 0.27 * s);
   const snout = new THREE.Mesh(new THREE.SphereGeometry(0.07 * s, 10, 8), mat);
   snout.position.set(0, 0.52 * s, 0.4 * s);
   snout.visible = !cat;
   const earGeo = new THREE.ConeGeometry(0.055 * s, cat ? 0.13 * s : 0.15 * s, 6);
   const ears = [-1, 1].map((e) => {
-    const ear = new THREE.Mesh(earGeo, mat);
+    const ear = new THREE.Mesh(earGeo, neon(mats[2]));
     ear.position.set(e * 0.08 * s, cat ? 0.7 * s : 0.64 * s, 0.25 * s);
     ear.rotation.z = cat ? -e * 0.25 : -e * 2.4;
     return ear;
   });
-  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.02 * s, 0.035 * s, cat ? 0.42 * s : 0.26 * s, 6), mat);
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.02 * s, 0.035 * s, cat ? 0.42 * s : 0.26 * s, 6), neon(mats[4]));
   tail.position.set(0, 0.5 * s, -0.3 * s);
   tail.rotation.x = cat ? -0.3 : -0.9;
   const legs = [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([x, z]) => {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * s, 0.03 * s, 0.24 * s, 6), mat);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * s, 0.03 * s, 0.24 * s, 6), neon(mats[3]));
     leg.geometry.translate(0, -0.12 * s, 0);
     leg.position.set(x * 0.09 * s, 0.26 * s, z * 0.14 * s);
     return leg;
@@ -429,7 +470,14 @@ function makeSpirit(kind) {
   const hit = new THREE.Mesh(new THREE.SphereGeometry(0.55 * s, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
   hit.position.y = 0.4 * s;
   hit.userData = { kind: 'spirit', pet: kind };
-  g.add(body, head, snout, ...ears, tail, ...legs, aura, hit);
+  const spots = [];
+  for (let i = 0; i < 9; i++) {
+    const sp = new THREE.Mesh(new THREE.SphereGeometry(0.035 * s, 6, 5), neon(mats[(i % 4) + 1]));
+    const a = (i / 9) * Math.PI * 2;
+    sp.position.set(Math.cos(a) * 0.17 * s, 0.38 * s + Math.sin(i * 1.7) * 0.06 * s, Math.sin(a) * 0.26 * s);
+    spots.push(sp);
+  }
+  g.add(body, head, snout, ...ears, tail, ...legs, ...spots, aura, hit);
   return { group: g, body, head, tail, legs, hit, kind, target: new THREE.Vector3(), pause: 0, phase: 0, hopT: 1, speed: cat ? 1.0 : 1.3 };
 }
 

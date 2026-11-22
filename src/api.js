@@ -55,6 +55,14 @@ const remote = {
   night: () => req('/api/night'),
   jar: () => req('/api/jar'),
   jarAdd: (text, visitor) => req('/api/jar', { method: 'POST', body: { text, visitor } }),
+  comfort: () => req('/api/comfort'),
+  comfortAdd: (text, visitor) => req('/api/comfort', { method: 'POST', body: { text, visitor } }),
+  eternal: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/eternal`, { method: 'POST', body: who }),
+  toAltar: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/altar`, { method: 'POST', body: who }),
+  altar: () => req('/api/altar'),
+  heartDiary: (id, pid, sid) => req(`/api/memorials/${encodeURIComponent(id)}/diary/${pid}/heart`, { method: 'POST', body: { sid } }),
+  // Herramientas de la familia (con el token de edición).
+  own: (id, what, body) => req(`/api/memorials/${encodeURIComponent(id)}/${what}`, { method: 'POST', body, headers: { 'X-Edit-Token': myTokens()[id] || '' } }),
 };
 
 function makeLocal() {
@@ -137,7 +145,9 @@ function makeLocal() {
     async get(id) {
       const m = find(id);
       if (!m) throw new Error('No encontramos esa huellita.');
-      return { ...pub(m), guestbook: (db.guestbook[id] || []).slice().reverse(), giftList: (db.gifts[id] || []).slice().reverse() };
+      const dh = db.dh || {};
+      const diary = ((db.diary || {})[id] || []).slice().reverse().map((p) => ({ ...p, hearts: dh[`${id}:${p.id}`] || 0 }));
+      return { ...pub(m), guestbook: (db.guestbook[id] || []).slice().reverse(), giftList: (db.gifts[id] || []).slice().reverse(), diary };
     },
     async candle(id, who) {
       if (!onceToday('c', id)) { persist(); return { memorial: pub(find(id)), already: true }; }
@@ -190,6 +200,68 @@ function makeLocal() {
       return { entry: e, glow };
     },
     async night() { return { candles: db.night[day()] || 0, countries: 1 }; },
+    async comfort() { db.comfort ||= []; return { notes: db.comfort.slice().reverse().slice(0, 60), count: db.comfort.length }; },
+    async comfortAdd(text, visitor) {
+      db.comfort ||= [];
+      const e = { text: text.slice(0, 220), who: visitor, at: Date.now() };
+      db.comfort.push(e);
+      persist();
+      return { entry: e, count: db.comfort.length };
+    },
+    async eternal(id, who) {
+      const m = find(id);
+      if (m.eternal) return { memorial: pub(m), already: true };
+      const holder = db.memorials.find((x) => x.id === id) || (db.counters[id] ||= { candles: 0, flowers: 0, gifts: 0, lastGifts: [] });
+      holder.eternal = { by: who.visitor, at: Date.now() };
+      ev('eternal', m, who.visitor);
+      persist();
+      return { memorial: pub(find(id)) };
+    },
+    async toAltar(id, who) {
+      db.altar ||= {};
+      const k = day();
+      if (db.altar.done === k) return { memorial: pub(find(id)), already: true };
+      db.altar.done = k;
+      (db.altar[k] ||= []).includes(id) || db.altar[k].push(id);
+      ev('altar', find(id), who.visitor);
+      persist();
+      return { memorial: pub(find(id)) };
+    },
+    async altar() { return { ids: (db.altar || {})[day()] || [] }; },
+    async heartDiary(id, pid) {
+      db.dh ||= {};
+      const k = `${id}:${pid}:${day()}`;
+      if (db.done[k]) return { already: true };
+      db.done[k] = 1;
+      db.dh[`${id}:${pid}`] = (db.dh[`${id}:${pid}`] || 0) + 1;
+      persist();
+      return { hearts: db.dh[`${id}:${pid}`] };
+    },
+    async own(id, what, body) {
+      const m = db.memorials.find((x) => x.id === id);
+      if (!m) throw new Error('Sólo la familia de esta huellita puede hacer esto.');
+      if (what === 'edit') {
+        for (const k of ['name', 'message', 'birthday', 'passedDay', 'bg']) if (body[k] !== undefined) m[k] = body[k];
+        if (body.photo) m.photo = body.photo;
+      }
+      if (what === 'photos') {
+        m.extraPhotos ||= [];
+        if (m.extraPhotos.length >= 3) throw new Error('Ya tiene 4 fotos.');
+        m.extraPhotos.push(body.photo);
+      }
+      if (what === 'voice') m.voice = body.audio || null;
+      if (what === 'diary') {
+        db.diary ||= {};
+        const e = { id: Math.random().toString(36).slice(2, 10), text: body.text, prompt: body.prompt || null, at: Date.now() };
+        (db.diary[id] ||= []).push(e);
+        m.diaryCount = db.diary[id].length;
+        persist();
+        return e;
+      }
+      if (what === 'gathering') m.gathering = body.at || null;
+      try { persist(); } catch { throw new Error('No hay más lugar en este navegador para guardar eso.'); }
+      return pub(m);
+    },
     async jar() { return { notes: db.jar.slice().reverse().slice(0, 60), count: db.jar.length }; },
     async jarAdd(text, visitor) {
       const e = { text: text.slice(0, 140), who: visitor, at: Date.now() };

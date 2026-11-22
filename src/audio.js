@@ -1,4 +1,5 @@
-// Sonido generado en el momento con Web Audio: colchón suave, campanitas, grillos y efectos.
+// Sonido generado en el momento con Web Audio: guitarra de cuerdas punteadas en vals (composición
+// propia, progresión menor típica de la canción mexicana), un colchón muy suave, grillos y efectos.
 // No usa archivos, así que no hay nada que descargar ni licenciar.
 let ctx = null;
 let music = null;
@@ -10,7 +11,6 @@ let musicOn = false;
 let soundsOn = true;
 
 const ROOT = 196; // Sol
-const PENTA = [0, 2, 4, 7, 9, 12, 14, 16];
 const semis = (n) => ROOT * 2 ** (n / 12);
 
 function init() {
@@ -52,7 +52,7 @@ function init() {
       o.frequency.value = semis(n - 12);
       o.detune.value = det;
       const g = ctx.createGain();
-      g.gain.value = 0.03;
+      g.gain.value = 0.012;
       const lfo = ctx.createOscillator();
       lfo.frequency.value = 0.04 + Math.random() * 0.08;
       const lg = ctx.createGain();
@@ -83,25 +83,59 @@ function init() {
   scheduleCricket();
 }
 
-function chime() {
-  const t = ctx.currentTime;
-  const o = ctx.createOscillator();
-  o.type = 'triangle';
-  o.frequency.value = semis(PENTA[(Math.random() * PENTA.length) | 0] + 12);
+// Cuerda punteada: triángulo + diente de sierra con filtro que se cierra, como una guitarra de nylon.
+function pluck(midi, t, vel = 1) {
+  const f = 440 * 2 ** ((midi - 69) / 12);
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.Q.value = 0.8;
+  lp.frequency.setValueAtTime(Math.min(5200, f * 9), t);
+  lp.frequency.exponentialRampToValueAtTime(Math.max(300, f * 1.4), t + 0.45);
   const g = ctx.createGain();
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(0.045, t + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 3.5);
-  o.connect(g).connect(music);
-  o.start(t);
-  o.stop(t + 3.6);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.07 * vel, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+  for (const [type, k, det] of [['triangle', 1, 0], ['sawtooth', 0.35, 4]]) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = f;
+    o.detune.value = det;
+    const og = ctx.createGain();
+    og.gain.value = k;
+    o.connect(og).connect(lp);
+    o.start(t);
+    o.stop(t + 2.7);
+  }
+  lp.connect(g).connect(music);
 }
 
+// Vals lento: bajo en el 1, acorde en el 2 y el 3. Am – Dm – G – C – F – Dm – E7 – Am.
+const CHORDS = [
+  [45, [57, 60, 64]], [50, [57, 62, 65]], [43, [55, 59, 62]], [48, [55, 60, 64]],
+  [41, [57, 60, 65]], [50, [57, 62, 65]], [40, [56, 59, 62, 64]], [45, [57, 60, 64]],
+];
+const MELODY = [76, 74, 72, 71, 72, 74, 72, 69, 77, 76, 74, 72, 71, 72, 69, null];
+let bar = 0;
+let nextT = 0;
 function scheduleChime() {
   chimeTimer = setTimeout(() => {
-    if (musicOn) chime();
+    if (musicOn && ctx.state === 'running') {
+      const beat = 60 / 76;
+      if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.1;
+      while (nextT < ctx.currentTime + 1.2) {
+        const [bass, chord] = CHORDS[bar % CHORDS.length];
+        pluck(bass, nextT, 1);
+        chord.forEach((n, i) => pluck(n, nextT + beat + i * 0.025, 0.55));
+        chord.forEach((n, i) => pluck(n, nextT + beat * 2 + i * 0.025, 0.45));
+        // Una melodía suave cada tanto (cada dos vueltas).
+        const mel = MELODY[bar % MELODY.length];
+        if (mel && Math.floor(bar / CHORDS.length) % 2 === 1) pluck(mel, nextT + 0.02, 0.6);
+        nextT += beat * 3;
+        bar++;
+      }
+    }
     scheduleChime();
-  }, 2500 + Math.random() * 5000);
+  }, 300);
 }
 
 // Grillos: ráfagas cortas de un tono agudo.

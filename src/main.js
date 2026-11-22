@@ -13,6 +13,24 @@ import { createCozy } from './scene/cozy.js';
 import { createAvatars } from './scene/avatars.js';
 import { createGame } from './game.js';
 import { GIFTS, SAYINGS, EMOTES, STAGES, stageOf } from '../server/glow.js';
+import { BACKGROUNDS } from '../server/plans.js';
+import { papelPicadoTexture, backgroundTexture, PICADO_COLORS } from './scene/muertos.js';
+
+// Tira de papel picado para los bordes de paneles y la entrada (generada una vez).
+{
+  const c = document.createElement('canvas');
+  c.width = 7 * 76;
+  c.height = 88;
+  const g = c.getContext('2d');
+  g.strokeStyle = 'rgba(60,30,30,.6)';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(0, 3);
+  g.lineTo(c.width, 3);
+  g.stroke();
+  PICADO_COLORS.forEach((col, i) => g.drawImage(papelPicadoTexture(col, i).image, i * 76 + 3, 3, 70, 82));
+  document.documentElement.style.setProperty('--picado-url', `url(${c.toDataURL()})`);
+}
 import { portraitCanvas } from './scene/textures.js';
 import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll } from './audio.js';
 import { TIERS, pickTier, savedQuality, saveQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
@@ -129,6 +147,7 @@ function cast(e, objects) {
 function slotKeyFromHit(obj) {
   const d = obj.userData;
   if (d.kind === 'featured') return 'featured';
+  if (d.kind === 'spot') return `spot:${d.id}`;
   if (d.kind === 'slot') return d.local;
   return null;
 }
@@ -165,6 +184,10 @@ async function buildScene() {
     }
     const key = slotKeyFromHit(hit.object);
     if (key === 'featured') return hall.featured && visit(hall.featured);
+    if (typeof key === 'string' && key.startsWith('spot:')) {
+      const m = memorials.find((x) => x.id === key.slice(5));
+      return m && visit(m);
+    }
     if (key !== null) {
       const m = hall.slots[key].memorial;
       if (m) visit(m);
@@ -214,6 +237,7 @@ async function refresh() {
   renderBirthdays();
   renderFloors();
   updateTodayBadge();
+  api.altar().then(({ ids }) => hall?.setAltar(ids.map((id) => memorials.find((m) => m.id === id)).filter(Boolean))).catch(() => {});
   return r;
 }
 
@@ -443,6 +467,7 @@ function fillSheet(m) {
     sp.title = timeAgo(g.at);
     $('#s-gifts').append(sp);
   }
+  fillExtras(m);
 }
 
 function glowCardHTML(m) {
@@ -547,7 +572,8 @@ $('#s-flower').onclick = async () => {
   } catch (err) { toast(err.message); }
 };
 
-$('#s-share').onclick = async () => {
+$('#s-share').onclick = () => openShare();
+async function shareLinkNow() {
   if (!current) return;
   const url = `${location.origin}${location.pathname}#h/${current.id}`;
   const text = `Encendé una vela por ${current.name} 🕯️`;
@@ -819,6 +845,8 @@ function closeModals() {
   $$('dialog[open]').forEach((d) => d.close());
 }
 const THEN = {
+  farolillo: () => openFarolillo(),
+  comfort: () => openComfort(),
   add: () => openAdd(null),
   featured: visitFeatured,
   help: () => $('#help').showModal(),
@@ -888,6 +916,9 @@ const VERBS = {
   candle: (e) => `🕯️ ${e.visitor} encendió una vela por ${e.petName}`,
   flower: (e) => `🌸 ${e.visitor} dejó una flor para ${e.petName}`,
   guestbook: (e) => `📖 ${e.visitor} firmó el libro de ${e.petName}`,
+  eternal: (e) => `✨ ${e.visitor} encendió la luz eterna de ${e.petName}`,
+  altar: (e) => `🌼 ${e.visitor} puso a ${e.petName} en la ofrenda`,
+  diary: (e) => `📖 La familia de ${e.petName} escribió una página en su diario`,
   gift: (e) => `🎁 ${e.visitor} le dejó ${e.gift?.split(' ')[0] || 'un regalito'} a ${e.petName}`,
   hug: (e) => `🫂 ${e.visitor} le mandó un abrazo a la familia de ${e.petName}`,
 };
@@ -1346,6 +1377,500 @@ $('#opt-quiet').onchange = (e) => {
   joy.addEventListener('pointerup', end);
   joy.addEventListener('pointercancel', end);
 }
+
+// ---------- fotos, voz, luz eterna, encuentro, diario y familia ----------
+let photoIdx = 0;
+let photoList = [];
+let voiceAudio = null;
+const isMine = (m) => !!myTokens()[m.id] && !m.featured;
+
+function fillExtras(m) {
+  // Fotos: tocar la foto pasa a la siguiente.
+  const list = [photoSrc(m), ...(m.extraPhotos || [])];
+  if (list.join() !== photoList.join()) photoIdx = 0;
+  photoList = list;
+  $('#s-photo').src = photoList[photoIdx] || photoList[0];
+  $('#s-dots').innerHTML = photoList.length > 1 ? photoList.map((_, i) => `<i class="${i === photoIdx ? 'on' : ''}"></i>`).join('') : '';
+  $('#s-voice').hidden = !m.voice;
+  // Luz eterna. MONETIZAR: pago único (ver MONETIZACION.md).
+  const et = $('#s-eternal');
+  if (m.eternal) {
+    et.innerHTML = '<div><i>🏮</i><span>Su luz eterna brilla para siempre<small></small></span></div>';
+    et.querySelector('small').textContent = `Encendida por ${m.eternal.by} · ${timeAgo(m.eternal.at)}`;
+  } else {
+    et.innerHTML = '<button id="s-eternal-btn"><i>✨</i><span>Encender su luz eterna<small>Un farolito dorado junto a su foto que nunca se apaga</small></span></button>';
+    $('#s-eternal-btn').onclick = lightEternal;
+  }
+  // Encuentro.
+  const ga = $('#s-gathering');
+  ga.hidden = !m.gathering;
+  if (m.gathering) {
+    const when = new Date(m.gathering);
+    const now = Date.now() >= m.gathering && Date.now() < m.gathering + 3 * 3600_000;
+    ga.innerHTML = `<span>🕯️ ${now ? `El encuentro de ${escapeHtml(m.name)} es ahora` : `Encuentro de ${escapeHtml(m.name)} · ${when.toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`}</span><button class="btn soft small" id="s-ics">📅 Añadir al calendario</button>`;
+    $('#s-ics').onclick = () => downloadIcs(m);
+  }
+  $('#s-family').hidden = !isMine(m);
+  renderDiary(m);
+}
+
+const escapeHtml = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+$('#s-photo-box').onclick = () => {
+  if (photoList.length < 2) return;
+  photoIdx = (photoIdx + 1) % photoList.length;
+  $('#s-photo').src = photoList[photoIdx];
+  $$('#s-dots i').forEach((d, i) => d.classList.toggle('on', i === photoIdx));
+};
+
+$('#s-voice').onclick = () => {
+  if (!current?.voice) return;
+  voiceAudio?.pause();
+  voiceAudio = new Audio(current.voice);
+  $('#s-voice').classList.add('playing');
+  voiceAudio.onended = () => $('#s-voice').classList.remove('playing');
+  voiceAudio.play().catch(() => $('#s-voice').classList.remove('playing'));
+};
+
+async function lightEternal() {
+  if (!current) return;
+  try {
+    const r = await api.eternal(current.id, who());
+    updateMemorial(r.memorial);
+    if (r.already) return toast(`✨ La luz eterna de ${r.memorial.name} ya brilla`);
+    releaseLantern(r.memorial, { burst: true });
+    confetti(['✨', '🌼', '🏮']);
+    sparkle();
+    haptic([10, 40, 10, 40, 20]);
+    toast(`✨ La luz de ${r.memorial.name} brilla aquí para siempre`);
+  } catch (err) { toast(err.message); }
+}
+
+function downloadIcs(m) {
+  const d = new Date(m.gathering);
+  const fmt = (x) => x.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const url = `${location.origin}/#h/${m.id}`;
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Encende una huellita//ES', 'BEGIN:VEVENT', `UID:${m.id}-${m.gathering}@huellita`,
+    `DTSTAMP:${fmt(new Date())}`, `DTSTART:${fmt(d)}`, `DTEND:${fmt(new Date(m.gathering + 3600_000))}`,
+    `SUMMARY:Encuentro de ${m.name} 🕯️`, `DESCRIPTION:Encendemos velas juntos por ${m.name}. ${url}`, `URL:${url}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+  a.download = `encuentro-${m.name}.ics`;
+  a.click();
+}
+
+function renderDiary(m) {
+  const ul = $('#diary-list');
+  ul.innerHTML = '';
+  const pages = m.diary || [];
+  $('#s-diary').hidden = !pages.length && !isMine(m);
+  $('#s-diary-sub').textContent = pages.length ? `${pages.length} ${pages.length === 1 ? 'página' : 'páginas'} · dejá un corazón 🤍` : 'Escribí la primera página antes de que las pequeñas cosas se desvanezcan.';
+  for (const p of pages.slice(0, 30)) {
+    const li = document.createElement('li');
+    if (p.prompt) {
+      const q = document.createElement('span');
+      q.className = 'q';
+      q.textContent = p.prompt;
+      li.append(q);
+    }
+    li.append(p.text);
+    const foot = document.createElement('div');
+    foot.className = 'foot';
+    const when = document.createElement('span');
+    when.textContent = timeAgo(p.at);
+    const heart = document.createElement('button');
+    heart.textContent = `🤍 ${p.hearts || 0}`;
+    heart.onclick = async () => {
+      try {
+        const r = await api.heartDiary(m.id, p.id, visitor.sid);
+        if (r.already) return toast('Ya dejaste un corazón en esta página hoy 🤍');
+        heart.textContent = `🤍 ${r.hearts}`;
+        haptic(8);
+      } catch (err) { toast(err.message); }
+    };
+    foot.append(when, heart);
+    li.append(foot);
+    ul.append(li);
+  }
+}
+
+// Herramientas de la familia.
+const TOOLS = {
+  edit: () => openEdit(),
+  bg: () => openBackgrounds(),
+  photos: () => $('#extra-photo-input').click(),
+  voice: () => openVoice(),
+  diary: () => openDiary(),
+  gathering: () => { $('#gathering').showModal(); },
+  invite: () => inviteFamily(),
+  altar: async () => {
+    try {
+      const r = await api.toAltar(current.id, who());
+      if (r.already) return toast('🌼 Hoy ya pusiste una huellita en la ofrenda. Volvé mañana.');
+      await refresh();
+      toast(`🌼 ${current.name} está hoy en la ofrenda del centro del salón`);
+      confetti(['🌼', '🕯️']);
+    } catch (err) { toast(err.message); }
+  },
+};
+$$('[data-tool]').forEach((b) => { b.onclick = () => current && TOOLS[b.dataset.tool]?.(); });
+
+async function ownAction(what, body, okMsg) {
+  try {
+    const r = await api.own(current.id, what, body);
+    await refresh();
+    const fresh = memorials.find((x) => x.id === current.id);
+    if (fresh) {
+      const full = await api.get(fresh.id).catch(() => fresh);
+      current = { ...current, ...full };
+      fillSheet(current);
+    }
+    if (okMsg) toast(okMsg);
+    return r;
+  } catch (err) {
+    toast(err.message);
+    return null;
+  }
+}
+
+$('#extra-photo-input').onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file || !current) return;
+  const photo = await resizePhoto(file, api.mode === 'local' ? 420 : 720).catch(() => null);
+  if (!photo) return toast('No pudimos leer esa imagen.');
+  await ownAction('photos', { photo }, '📸 Foto guardada. Tocá su foto para verlas todas.');
+};
+
+let editPhoto = null;
+function openEdit() {
+  const f = $('#edit-form');
+  const m = current;
+  f.elements.name.value = m.name;
+  f.elements.message.value = m.message || '';
+  const y = new Date().getFullYear();
+  f.elements.birthday.value = m.birthday ? `${y}-${m.birthday}` : '';
+  f.elements.passedDay.value = m.passedDay ? `${y}-${m.passedDay}` : '';
+  $('#edit-preview').src = photoSrc(m);
+  editPhoto = null;
+  $('#edit').showModal();
+}
+$('#edit-photo').onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  editPhoto = await resizePhoto(file, api.mode === 'local' ? 480 : 820).catch(() => null);
+  if (editPhoto) $('#edit-preview').src = editPhoto;
+};
+$('#edit-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const body = {
+    name: f.elements.name.value.trim(),
+    message: f.elements.message.value.trim(),
+    birthday: toMMDD(f.elements.birthday.value),
+    passedDay: toMMDD(f.elements.passedDay.value),
+    ...(editPhoto ? { photo: editPhoto } : {}),
+  };
+  $('#edit').close();
+  await ownAction('edit', body, 'Guardado 🤍');
+};
+
+function openBackgrounds() {
+  const grid = $('#bg-grid');
+  grid.innerHTML = '';
+  for (const b of BACKGROUNDS) {
+    const btn = document.createElement('button');
+    btn.className = (current.bg || 'crema') === b.id ? 'on' : '';
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = backgroundTexture(b.id).image.toDataURL();
+    btn.append(img, b.name);
+    // MONETIZAR: fondos especiales (todos menos crema, cempasúchil y noche).
+    btn.onclick = async () => {
+      $('#bgs').close();
+      await ownAction('edit', { bg: b.id }, `🎨 ${b.name}: así se ve su lugar ahora`);
+    };
+    grid.append(btn);
+  }
+  $('#bgs').showModal();
+}
+
+// Su voz: grabar hasta 10 s o elegir un archivo.
+let recorder = null;
+let voiceData = null;
+let recTimer = null;
+function openVoice() {
+  voiceData = null;
+  $('#voice-save').disabled = true;
+  $('#rec-audio').hidden = true;
+  $('#voice-del').hidden = !current.voice;
+  $('#rec-label').textContent = 'Grabar';
+  $('#rec-time').textContent = '0 / 10 s';
+  $('#voice').showModal();
+}
+const blobToDataUrl = (b) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
+async function useVoiceBlob(blob) {
+  if (blob.size > 600 * 1024) return toast('El sonido es muy largo. Que sea corto (unos 10 segundos).');
+  voiceData = await blobToDataUrl(blob);
+  $('#rec-audio').src = voiceData;
+  $('#rec-audio').hidden = false;
+  $('#voice-save').disabled = false;
+}
+$('#rec-btn').onclick = async () => {
+  if (recorder?.state === 'recording') { recorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const chunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = (e) => chunks.push(e.data);
+    recorder.onstop = () => {
+      clearInterval(recTimer);
+      stream.getTracks().forEach((t) => t.stop());
+      $('#rec-btn').classList.remove('on');
+      $('#rec-label').textContent = 'Grabar otra vez';
+      useVoiceBlob(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }));
+    };
+    recorder.start();
+    $('#rec-btn').classList.add('on');
+    $('#rec-label').textContent = 'Parar';
+    const t0 = Date.now();
+    recTimer = setInterval(() => {
+      const sec = Math.floor((Date.now() - t0) / 1000);
+      $('#rec-time').textContent = `${sec} / 10 s`;
+      if (sec >= 10) recorder.stop();
+    }, 250);
+  } catch {
+    toast('Permití el micrófono para grabar.');
+  }
+};
+$('#voice-file').onchange = (e) => { const f = e.target.files[0]; if (f) useVoiceBlob(f); e.target.value = ''; };
+$('#voice-save').onclick = async () => {
+  if (!voiceData) return;
+  $('#voice').close();
+  await ownAction('voice', { audio: voiceData.replace(/;codecs=[^;,]+/, (m) => m) }, '🎙️ Su voz quedó guardada. Quien la visite podrá escucharla.');
+};
+$('#voice-del').onclick = async () => {
+  $('#voice').close();
+  await ownAction('voice', { audio: null }, 'Listo, quitamos el sonido.');
+};
+
+// Diario con preguntas para empezar.
+const DIARY_PROMPTS = ['¿Cómo te recibía al llegar a casa?', '¿Dónde le encantaba dormir?', '¿Qué golosina lo volvía loco?', '¿Qué costumbre graciosa tenía?', '¿Cuál era su paseo favorito?',
+  '¿Cómo te consolaba cuando estabas triste?', '¿A qué olía?', '¿Cómo fue su primera noche en casa?', '¿Qué apodos le decías?', 'Si pudieras decirle una cosa, ¿qué sería?',
+  '¿Qué te enseñó?', '¿Qué pequeño detalle extrañás sin esperarlo?', '¿Cómo eligieron su nombre?', '¿Qué hacía en los días de lluvia?', 'Describí un día perfecto juntos'];
+let diaryPrompt = null;
+function openDiary() {
+  diaryPrompt = null;
+  $('#diary-prompt').textContent = '';
+  const box = $('#diary-prompts');
+  box.innerHTML = '';
+  [...DIARY_PROMPTS].sort(() => Math.random() - 0.5).slice(0, 4).forEach((q) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = q;
+    b.onclick = () => { diaryPrompt = q; $('#diary-prompt').textContent = q; $('#diary-form').text.focus(); };
+    box.append(b);
+  });
+  $('#diary-form').reset();
+  $('#diary').showModal();
+}
+$('#diary-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const text = e.target.text.value.trim();
+  if (!text) return;
+  $('#diary').close();
+  await ownAction('diary', { text, prompt: diaryPrompt }, '📖 Guardado en el diario 🤍');
+  afterGesture('words', {});
+};
+
+$('#gathering-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const at = new Date(e.target.at.value).getTime();
+  if (!at) return;
+  $('#gathering').close();
+  const r = await ownAction('gathering', { at }, '🕯️ Encuentro listo. Ahora invitá a familia y amigos.');
+  if (r) shareLinkNow();
+};
+$('#gathering-cancel').onclick = async () => {
+  $('#gathering').close();
+  await ownAction('gathering', { at: null }, 'Encuentro cancelado.');
+};
+
+async function inviteFamily() {
+  const url = `${location.origin}${location.pathname}#familia/${current.id}/${encodeURIComponent(myTokens()[current.id] || '')}`;
+  const text = `Recordemos juntos a ${current.name}. Con este enlace podés cuidar su lugar: sumar fotos, escribir en su diario y más. Es sólo para la familia 🤍`;
+  if (navigator.share) {
+    try { await navigator.share({ title: `El lugar de ${current.name}`, text, url }); } catch { /* cancelado */ }
+    return;
+  }
+  try { await navigator.clipboard.writeText(`${text} ${url}`); toast('Enlace copiado. Envialo sólo a tu familia 🤍'); } catch { prompt('Copiá este enlace y envialo a tu familia:', url); }
+}
+
+// Enlace de familia: guarda el token y abre la huellita.
+function acceptFamilyLink() {
+  const m = location.hash.match(/^#familia\/([\w-]+)\/(.+)$/);
+  if (!m) return false;
+  const tokens = myTokens();
+  tokens[m[1]] = decodeURIComponent(m[2]);
+  try { localStorage.setItem('huellita.tokens', JSON.stringify(tokens)); } catch { /* sin storage */ }
+  history.replaceState(null, '', `#h/${m[1]}`);
+  setTimeout(() => toast('🧡 Ya podés cuidar su lugar desde este dispositivo'), 1500);
+  return true;
+}
+acceptFamilyLink();
+
+// ---------- farolillo que se va volando ----------
+function openFarolillo() {
+  $('#farolillo-form').reset();
+  const pet = myPet();
+  if (pet) $('#farolillo-form').to.value = pet.name;
+  $('#farolillo').showModal();
+}
+$('#farolillo-form').onsubmit = (e) => {
+  e.preventDefault();
+  const to = e.target.to.value.trim();
+  const text = e.target.text.value.trim();
+  if (!text) return;
+  $('#farolillo').close();
+  if (lanterns) {
+    const from = new THREE.Vector3(0, -0.4, -2.4).applyQuaternion(camera.quaternion).add(camera.position);
+    const label = `${to ? `${to}: ` : ''}${text}`.slice(0, 60);
+    lanterns.release(from, { label, scale: 1.6 });
+    lanterns.burst(from.clone());
+  }
+  sparkle();
+  haptic([10, 30, 10]);
+  toast('🏮 Tus palabras van en camino');
+};
+
+// ---------- palabras de consuelo ----------
+let comfortNotes = [];
+let comfortIdx = 0;
+async function openComfort() {
+  $('#comfort').showModal();
+  showComfortNote();
+  try {
+    comfortNotes = (await api.comfort()).notes.sort(() => Math.random() - 0.5);
+    comfortIdx = 0;
+    showComfortNote();
+  } catch { /* nada */ }
+}
+function showComfortNote() {
+  const box = $('#comfort-note');
+  const n = comfortNotes[comfortIdx];
+  box.textContent = n ? n.text : 'No estás solo. Sabían que eran amados. 🤍';
+  const sm = document.createElement('small');
+  sm.textContent = n ? `— ${n.who}` : '— el jardín';
+  box.append(sm);
+}
+$('#comfort-next').onclick = () => { if (comfortNotes.length) { comfortIdx = (comfortIdx + 1) % comfortNotes.length; showComfortNote(); } };
+$('#comfort-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const text = e.target.text.value.trim();
+  if (!text) return;
+  try {
+    await api.comfortAdd(text, visitor.name);
+    e.target.reset();
+    toast('Gracias. Alguien lo va a leer en un día difícil 🤍');
+    afterGesture('words', {});
+  } catch (err) { toast(err.message); }
+};
+
+// ---------- compartir (enlace o imagen para historias) ----------
+async function drawShareCard(m) {
+  const c = $('#share-preview');
+  const g = c.getContext('2d');
+  const W = c.width;
+  const H = c.height;
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#1d0f33');
+  bg.addColorStop(0.55, '#5a1f63');
+  bg.addColorStop(1, '#f07a2a');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+  // Papel picado arriba.
+  for (let i = 0; i < 8; i++) g.drawImage(papelPicadoTexture(PICADO_COLORS[i % 7], i).image, i * 135, 0, 135, 160);
+  // Pétalos.
+  for (let i = 0; i < 90; i++) {
+    g.fillStyle = ['#ff9a1f', '#ffcf3a', '#ff7a1a'][i % 3];
+    g.globalAlpha = 0.5 + Math.random() * 0.5;
+    g.beginPath();
+    g.ellipse(Math.random() * W, 200 + Math.random() * (H - 200), 9, 5, Math.random() * 3, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+  // Foto en marco dorado.
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = photoSrc(m);
+  await new Promise((res) => { img.onload = res; img.onerror = res; setTimeout(res, 3000); });
+  const fw = 640;
+  const fh = 800;
+  const fx = (W - fw) / 2;
+  const fy = 330;
+  g.fillStyle = '#e0b55d';
+  g.fillRect(fx - 26, fy - 26, fw + 52, fh + 52);
+  g.fillStyle = '#fbefd9';
+  g.fillRect(fx - 10, fy - 10, fw + 20, fh + 20);
+  if (img.naturalWidth) {
+    const r = Math.max(fw / img.naturalWidth, fh / img.naturalHeight);
+    const w = img.naturalWidth * r;
+    const h = img.naturalHeight * r;
+    g.save();
+    g.beginPath();
+    g.rect(fx, fy, fw, fh);
+    g.clip();
+    g.drawImage(img, fx + (fw - w) / 2, fy + (fh - h) / 2, w, h);
+    g.restore();
+  }
+  g.textAlign = 'center';
+  g.fillStyle = '#ffe0b0';
+  g.font = '64px Lobster, cursive';
+  g.fillText('En memoria de', W / 2, 1290);
+  g.fillStyle = '#ffffff';
+  g.font = '150px Lobster, cursive';
+  g.fillText(m.name, W / 2, 1450, W - 120);
+  g.font = '800 52px Nunito, sans-serif';
+  g.fillStyle = '#fff3e0';
+  g.fillText(`🕯️ ${m.candles} ${m.candles === 1 ? 'vela encendida' : 'velas encendidas'}`, W / 2, 1560);
+  g.fillStyle = 'rgba(255,255,255,.92)';
+  roundRectPath(g, W / 2 - 330, 1640, 660, 110, 55);
+  g.fill();
+  g.fillStyle = '#b8326f';
+  g.font = '800 46px Nunito, sans-serif';
+  g.fillText(`Encendé una vela → ${location.host}`, W / 2, 1712, 620);
+  return c;
+}
+function roundRectPath(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+async function openShare() {
+  if (!current) return;
+  $('#share-sub').textContent = `Ayudá a que más personas recuerden a ${current.name}.`;
+  $('#share').showModal();
+  await drawShareCard(current);
+}
+$('#share-link').onclick = () => { $('#share').close(); shareLinkNow(); };
+$('#share-image').onclick = async () => {
+  const c = $('#share-preview');
+  const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.9));
+  const file = new File([blob], `${current?.name || 'huellita'}.jpg`, { type: 'image/jpeg' });
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], text: `Encendé una vela por ${current.name} 🕯️ ${location.origin}/#h/${current.id}` }); } catch { /* cancelado */ }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = file.name;
+  a.click();
+  toast('Imagen guardada. Publicala en tu historia 📸');
+};
 
 // ---------- arranque ----------
 function openFromHash() {

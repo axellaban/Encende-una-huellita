@@ -2,6 +2,7 @@
 // que dicen frases amables y mandan gestos (🤍 🕯️ 🐾 🌸 🫂 ✨).
 import * as THREE from 'three';
 import { bubbleTexture, emojiTexture } from './textures.js';
+import { calaveraTexture, marigoldGeometry, marigoldMaterial } from './muertos.js';
 
 export function createAvatars(scene) {
   const group = new THREE.Group();
@@ -14,7 +15,11 @@ export function createAvatars(scene) {
   const bodyGeo = new THREE.CapsuleGeometry(0.2, 0.42, 6, 12);
   const eyeGeo = new THREE.SphereGeometry(0.022, 8, 6);
   const scarfGeo = new THREE.TorusGeometry(0.17, 0.05, 8, 18).rotateX(Math.PI / 2);
-  const skin = new THREE.MeshLambertMaterial({ color: '#f3d9c2' });
+  const skin = new THREE.MeshLambertMaterial({ color: '#fbf3e6', emissive: '#3a2a2a' });
+  const flowerGeo = marigoldGeometry(0.055, '#ff9a1f');
+  const flowerMat = marigoldMaterial();
+  const hatMat = new THREE.MeshLambertMaterial({ color: '#2a1d2e' });
+  const hatBand = new THREE.MeshLambertMaterial({ color: '#e4167c', emissive: '#4a0a2a' });
   const eyeMat = new THREE.MeshBasicMaterial({ color: '#2a1d16' });
 
   function make(o) {
@@ -26,15 +31,32 @@ export function createAvatars(scene) {
     head.position.y = 0.98;
     const scarf = new THREE.Mesh(scarfGeo, new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((o.hue ?? 30) + 160) / 360, 0.5, 0.6) }));
     scarf.position.y = 0.8;
-    const eyes = [-1, 1].map((s) => {
-      const e = new THREE.Mesh(eyeGeo, eyeMat);
-      e.position.set(s * 0.065, 1.0, 0.17);
-      return e;
-    });
+    void eyeGeo; void eyeMat;
+    // Cara de calaverita pintada.
+    const face = new THREE.Mesh(new THREE.CircleGeometry(0.15, 20), new THREE.MeshLambertMaterial({ map: calaveraTexture(o.hue ?? 30), emissive: '#2a1a1a' }));
+    face.position.set(0, 0.99, 0.178);
+    const eyes = [face];
+    // Corona de cempasúchil o sombrero, según la persona.
+    if (Math.round(o.hue ?? 0) % 2 === 0) {
+      for (let i = 0; i < 7; i++) {
+        const f = new THREE.Mesh(flowerGeo, flowerMat);
+        const a = (i / 7) * Math.PI * 2;
+        f.position.set(Math.cos(a) * 0.16, 1.13, Math.sin(a) * 0.16);
+        eyes.push(f);
+      }
+    } else {
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.02, 20), hatMat);
+      brim.position.y = 1.12;
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.16, 16), hatMat);
+      crown.position.y = 1.2;
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.152, 0.152, 0.035, 16), hatBand);
+      band.position.y = 1.145;
+      eyes.push(brim, crown, band);
+    }
     const name = new THREE.Sprite(new THREE.SpriteMaterial({ map: bubbleTexture(o.name, { tail: false, font: '800 30px Nunito, sans-serif', bg: 'rgba(26,20,36,0.72)', fg: '#fbf4ea' }), transparent: true, depthWrite: false }));
     const aspect = name.material.map.userData.aspect;
     name.scale.set(0.22 * aspect, 0.22, 1);
-    name.position.y = 1.42;
+    name.position.y = 1.5;
     const bubble = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
     bubble.visible = false;
     g.add(body, head, scarf, ...eyes, name, bubble);

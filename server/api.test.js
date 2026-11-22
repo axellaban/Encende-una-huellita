@@ -179,6 +179,43 @@ for (const name of ['local', 'vercel']) {
     assert.equal(jar.notes[0].text, 'esperarme siempre en la puerta');
   });
 
+  test(`[${name}] herramientas de la familia, luz eterna, ofrenda y consuelo`, async () => {
+    const { memorial, editToken } = await (await post('/api/memorials', { name: 'Coco', species: 'perro' })).json();
+    const id = memorial.id;
+    const own = { 'X-Edit-Token': editToken };
+    assert.equal((await post(`/api/memorials/${id}/edit`, { message: 'x' }, { 'X-Edit-Token': 'mal' })).status, 403);
+    let r = await (await post(`/api/memorials/${id}/edit`, { message: 'Mi compañero', bg: 'talavera', birthday: '02-11', photo: PNG }, own)).json();
+    assert.equal(r.message, 'Mi compañero');
+    assert.equal(r.bg, 'talavera');
+    assert.equal(r.birthday, '02-11');
+    assert.match(r.photo, /\?v=1$/);
+    r = await (await post(`/api/memorials/${id}/photos`, { photo: PNG }, own)).json();
+    assert.equal(r.extraPhotos.length, 1);
+    assert.equal((await call(r.extraPhotos[0])).status, 200);
+    const WEBM = 'data:audio/webm;codecs=opus;base64,GkXfo0AgQoaBAUL3gQFC8oEEQvOBCEKCQAR3ZWJtQoeBAkKFgQIYU4BnQI0VSalmQCgq17FAAw9CQE2AQAZ3aGFtbXlXQUAGd2hhbW15';
+    r = await (await post(`/api/memorials/${id}/voice`, { audio: WEBM }, own)).json();
+    assert.match(r.voice, /^\/api\/voices\//);
+    const v = await call(r.voice);
+    assert.equal(v.status, 200);
+    assert.equal(v.headers.get('content-type'), 'audio/webm');
+    const page = await (await post(`/api/memorials/${id}/diary`, { text: 'Le encantaba el sol', prompt: '¿Dónde le encantaba dormir?' }, own)).json();
+    assert.equal((await (await post(`/api/memorials/${id}/diary/${page.id}/heart`, { sid: 'h1' })).json()).hearts, 1);
+    assert.equal((await (await post(`/api/memorials/${id}/diary/${page.id}/heart`, { sid: 'h1' })).json()).already, true);
+    const at = Date.now() + 86400_000;
+    r = await (await post(`/api/memorials/${id}/gathering`, { at }, own)).json();
+    assert.equal(r.gathering, at);
+    r = await (await post(`/api/memorials/${id}/eternal`, { visitor: 'Ana' })).json();
+    assert.equal(r.memorial.eternal.by, 'Ana');
+    assert.equal((await (await post(`/api/memorials/${id}/eternal`, { visitor: 'Otro' })).json()).already, true);
+    await post(`/api/memorials/${id}/altar`, { sid: 'al1' });
+    assert.ok((await (await call('/api/altar')).json()).ids.includes(id));
+    const full = await (await call(`/api/memorials/${id}`)).json();
+    assert.equal(full.diary[0].hearts, 1);
+    assert.equal(full.diaryCount, 1);
+    assert.equal((await post('/api/comfort', { text: 'No estás solo', visitor: 'Luz' })).status, 201);
+    assert.equal((await (await call('/api/comfort')).json()).notes[0].text, 'No estás solo');
+  });
+
   test(`[${name}] errores`, async () => {
     assert.equal((await post('/api/memorials', { name: '' })).status, 400);
     assert.equal((await post('/api/memorials', { name: 'x', photo: 'data:text/html;base64,AAAA' })).status, 400);

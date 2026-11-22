@@ -73,6 +73,13 @@ impresos, caballete pago, donaciones.
 | Hora de las velas | Aviso a las 21 h con velas y países de la noche (país por `x-vercel-ip-country`) |
 | Frasco de gracias | Frasco en 3D que se llena de estrellitas; "Gracias por…" |
 
-## Pendiente (posible próxima tanda)
-Diario con preguntas guía, grabar su voz, farolillo que se va volando, tablero de consuelo,
-encuentros programados, invitar a la familia, recordatorios por email/push.
+| Diario | Páginas con preguntas guía y corazones |
+| Su voz | Grabar hasta 10 s desde el celular o subir un archivo |
+| Farolillo | Palabras que se van volando en un farolito (no se guardan) |
+| Palabras de consuelo | Tablero de notas para quien está sufriendo |
+| Encuentros | Fecha y hora con archivo para el calendario |
+| Invitar a la familia | Enlace privado que comparte el permiso de edición |
+| Funciones pagas | Luz eterna, fondos, más fotos, voz, lugar en la ofrenda: gratis por ahora (ver `MONETIZACION.md` y `server/plans.js`) |
+
+## Pendiente
+Recordatorios por email/push, cartas con IA, videos de recuerdo, recuerdos impresos, iniciar sesión.

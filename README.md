@@ -1,7 +1,12 @@
 # 🕯️ Encendé una huellita
 
-Un jardín memorial en 3D para recordar a las mascotas que amamos. Gratis y sin registro:
-poné su foto en el muro, encendé una vela, dejá flores y firmá su libro de visitas.
+Un jardín memorial en 3D con estética de **Día de Muertos** para recordar a las mascotas que amamos.
+Gratis y sin registro: poné su foto en el muro, seguí el camino de pétalos de cempasúchil hasta la
+ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
+
+> La estética se inspira en la tradición mexicana del Día de Muertos (papel picado, cempasúchil,
+> ofrendas, calaveritas de azúcar, alebrijes). No usa personajes, nombres, diseños ni música de
+> ninguna película.
 
 ![El jardín de las huellitas](public/og.jpg)
 
@@ -27,6 +32,23 @@ poné su foto en el muro, encendé una vela, dejá flores y firmá su libro de v
 - **Cumpleaños**, **la hora de las velas** (21 h), **pisos** (90 lugares cada uno), **lista con
   búsqueda**, **links para compartir** (`/#h/luca`) e imagen para WhatsApp/redes.
 - **Sonido** generado en el navegador: música suave, grillos y efectos.
+
+### Día de Muertos
+
+- Papel picado (con huellitas recortadas) entre los postes y cruzando el camino, paredes pintadas de
+  colores con friso de talavera, arco de cempasúchil en la entrada y un camino de pétalos hasta la ofrenda.
+- **Ofrenda** de tres escalones con Luca arriba, veladoras, calaveritas de azúcar, pan de muerto y
+  un arco de flores; un marco muestra una por una las huellitas que pusieron hoy en la ofrenda.
+- Pueblito de colores con las ventanas encendidas en las colinas, cielo violeta con aurora de fiesta,
+  pétalos que flotan, alebrijes de colores neón y visitantes con cara de calaverita, corona de flores o sombrero.
+- Música: guitarra de cuerdas punteadas en vals (composición propia generada en el navegador).
+- Tipografías: Lobster (títulos), Caveat (escrito a mano) y Nunito.
+
+### Para la familia (todo gratis por ahora, ver [MONETIZACION.md](MONETIZACION.md))
+
+Luz eterna, 12 fondos, hasta 4 fotos, su voz, diario con preguntas, lugar en la ofrenda del día,
+encuentros con recordatorio en el calendario, invitar a la familia con un enlace privado, editar,
+tarjeta para historias, farolillo que se va volando y palabras de consuelo.
 
 ### La parte "juego" (amable)
 
@@ -123,6 +145,12 @@ server/index.js         Servidor local
 | `POST /api/memorials/:id/hug` | Abrazo en silencio |
 | `POST /api/now` | Latido: posición, gesto o frase; devuelve a los demás visitantes |
 | `GET /api/night` | Velas y países de esta noche |
+| `POST /api/memorials/:id/eternal` | Luz eterna |
+| `POST /api/memorials/:id/altar` · `GET /api/altar` | Poner en la ofrenda de hoy / lista del día |
+| `POST /api/memorials/:id/{edit,photos,voice,diary,gathering}` | Herramientas de la familia (header `X-Edit-Token`) |
+| `POST /api/memorials/:id/diary/:pid/heart` | Corazón en una página del diario |
+| `GET /api/photos/:id/:n` · `GET /api/voices/:id` | Fotos extra y voz |
+| `GET/POST /api/comfort` | Palabras de consuelo |
 | `GET/POST /api/jar` | Frasco de gracias |
 
 Los gestos aceptan `glowTo` + `glowToken` (el token de edición de tu mascota) para sumarle Glow.

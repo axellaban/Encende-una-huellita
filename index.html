@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>Encendé una huellita · un jardín para recordar a tu mascota</title>
     <meta name="description" content="Un jardín memorial en 3D, gratis y sin registro, para recordar a tu perro, gato o cualquier mascota. Poné su foto en el muro, encendé una vela, dejá flores y firmá el libro de visitas." />
-    <meta name="theme-color" content="#1a1428" />
+    <meta name="theme-color" content="#1c0f2c" />
     <meta name="color-scheme" content="dark" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -25,7 +25,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Nunito:wght@500;600;700;800;900&family=Young+Serif&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Lobster&family=Nunito:wght@500;600;700;800;900&family=Young+Serif&display=swap" rel="stylesheet" />
   </head>
   <body class="intro">
     <canvas id="scene" aria-label="Jardín memorial en 3D. Usá el botón Huellitas para ver la lista."></canvas>
@@ -102,9 +102,10 @@
 
     <!-- ---------- entrada ---------- -->
     <div class="splash" id="splash">
+      <div class="picado-strip" aria-hidden="true"></div>
       <div class="candle-css" aria-hidden="true"><i></i></div>
       <h1>Encendé una huellita</h1>
-      <p class="splash-quote">Los que amamos no se van del todo.<br /><span>Se quedan en cada huella que dejaron.</span></p>
+      <p class="splash-quote">Mientras los recordemos, siguen con nosotros.<br /><span>Seguí los pétalos hasta su ofrenda.</span></p>
       <button class="btn primary big" id="enter" disabled><span id="enter-label">Preparando el jardín…</span></button>
       <p class="splash-sub">Con sonido 🔊 · Gratis y sin registro</p>
     </div>
@@ -168,7 +169,7 @@
           <p class="error" id="add-error" role="alert" hidden></p>
         </div>
         <div class="form-foot">
-          <button class="btn primary wide" type="submit" id="add-submit">🕯️ Ponerla en el muro</button>
+          <button class="btn primary wide" type="submit" id="add-submit">🌼 Ponerla en el muro</button>
         </div>
       </form>
     </dialog>
@@ -179,11 +180,12 @@
       <button class="x" id="sheet-x" aria-label="Cerrar">✕</button>
       <div class="sheet-scroll" id="sheet-scroll">
         <div class="sheet-head">
-          <div class="sheet-photo"><img id="s-photo" alt="" /></div>
+          <div class="sheet-photo" id="s-photo-box"><img id="s-photo" alt="" /><div class="dots" id="s-dots"></div></div>
           <div class="sheet-title">
             <p class="tag" id="s-tag" hidden></p>
             <h2 id="s-name"></h2>
             <p class="meta" id="s-meta"></p>
+            <button class="voice-btn" id="s-voice" hidden>🔊 Escuchar su voz</button>
           </div>
         </div>
         <div class="counts">
@@ -200,10 +202,31 @@
             <button class="act" id="s-share"><i>💌</i><span>Compartir</span></button>
           </div>
         </div>
+        <div class="gathering" id="s-gathering" hidden></div>
+        <div class="eternal" id="s-eternal"></div>
         <div class="glow-card" id="s-glow" hidden></div>
         <div class="gifts-row" id="s-gifts" hidden></div>
         <p class="msg" id="s-msg"></p>
         <button class="btn soft wide mine-btn" id="s-mine" hidden>🐾 Es mi mascota: que mis gestos la hagan brillar</button>
+        <section class="family" id="s-family" hidden>
+          <h3>🧡 Para la familia</h3>
+          <div class="tools">
+            <button data-tool="edit"><i>✏️</i>Editar</button>
+            <button data-tool="bg"><i>🎨</i>Fondo</button>
+            <button data-tool="photos"><i>📸</i>Más fotos</button>
+            <button data-tool="voice"><i>🎙️</i>Su voz</button>
+            <button data-tool="altar"><i>🌼</i>A la ofrenda</button>
+            <button data-tool="gathering"><i>🗓️</i>Encuentro</button>
+            <button data-tool="invite"><i>👨‍👩‍👧</i>Invitar</button>
+            <button data-tool="diary"><i>📖</i>Escribir</button>
+          </div>
+          <input type="file" accept="image/*" id="extra-photo-input" class="sr" />
+        </section>
+        <section class="diary" id="s-diary">
+          <h3>📖 Diario</h3>
+          <p class="tiny" id="s-diary-sub">Pequeñas cosas que nunca queremos olvidar.</p>
+          <ul id="diary-list"></ul>
+        </section>
         <section class="guestbook">
           <h3>Libro de visitas</h3>
           <form id="gb-form">
@@ -264,6 +287,8 @@
         <label class="toggle"><span>🙈 Modo tranquilo (ocultar visitantes)</span><input type="checkbox" id="opt-quiet" /><i></i></label>
         <button class="menu-item" data-then="floors">🛗 Pisos</button>
         <button class="menu-item" data-jar>🫙 Frasco de gracias</button>
+        <button class="menu-item" data-then="farolillo">🏮 Enviar un farolillo</button>
+        <button class="menu-item" data-then="comfort">💌 Palabras de consuelo</button>
         <button class="menu-item" data-then="add">🐾 Sumar a mi mascota</button>
         <button class="menu-item" data-list="waiting">🌙 Esperando una vela</button>
         <button class="menu-item" data-list="birthday">🎂 Cumpleaños de hoy</button>
@@ -314,6 +339,102 @@
         <div class="ideas" id="jar-ideas"></div>
         <button class="btn primary wide" type="submit">＋ Ponerlo en el frasco</button>
       </form>
+    </dialog>
+
+    <!-- ---------- herramientas de la familia ---------- -->
+    <dialog class="modal" id="edit">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>✏️ Editar</h2>
+      <p class="sub">Cambiá la foto o las palabras. Sólo la familia puede hacerlo.</p>
+      <form id="edit-form">
+        <label class="photo-drop small-drop"><input type="file" accept="image/*" id="edit-photo" class="sr" /><img id="edit-preview" alt="" /><span class="photo-change">Cambiar foto</span></label>
+        <label class="field">Nombre<input name="name" maxlength="30" required /></label>
+        <div class="row2">
+          <label class="field">🎂 Cumpleaños o llegada<input name="birthday" type="date" /></label>
+          <label class="field">🌈 Día que partió<input name="passedDay" type="date" /></label>
+        </div>
+        <label class="field">Unas palabras<textarea name="message" maxlength="200" rows="3"></textarea></label>
+        <button class="btn primary wide" type="submit">Guardar cambios</button>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="bgs">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>🎨 Un fondo para su lugar</h2>
+      <p class="sub">Se ve detrás de su foto en el muro. Podés cambiarlo cuando quieras.</p>
+      <div class="bg-grid" id="bg-grid"></div>
+    </dialog>
+
+    <dialog class="modal" id="voice">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>🎙️ Su voz</h2>
+      <p class="sub">Un ladrido, un maullido, un ronroneo. Hasta 10 segundos. Quien la visite podrá escucharla.</p>
+      <div class="voice-box">
+        <button class="rec" id="rec-btn"><i></i><span id="rec-label">Grabar</span></button>
+        <p class="tiny center" id="rec-time">0 / 10 s</p>
+        <audio id="rec-audio" controls hidden></audio>
+        <label class="btn soft wide"><input type="file" accept="audio/*" id="voice-file" class="sr" />📁 O elegir un archivo</label>
+        <button class="btn primary wide" id="voice-save" disabled>Guardar su voz</button>
+        <button class="btn link wide" id="voice-del" hidden>Quitar su voz</button>
+      </div>
+    </dialog>
+
+    <dialog class="modal" id="diary">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>📖 Una página del diario</h2>
+      <p class="sub">Escribilo antes de que se desvanezca: un olor, un sonido, una manía graciosa…</p>
+      <div class="ideas prompts" id="diary-prompts"></div>
+      <form id="diary-form">
+        <p class="prompt-chosen hand" id="diary-prompt"></p>
+        <textarea name="text" maxlength="1200" rows="6" required placeholder="Todavía recuerdo…"></textarea>
+        <button class="btn primary wide" type="submit">Guardar en el diario</button>
+      </form>
+    </dialog>
+
+    <dialog class="modal small-modal" id="gathering">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>🗓️ Organizar un encuentro</h2>
+      <p class="sub">Elegí una hora. Familia y amigos se reúnen acá, encienden velas juntos y leen los mensajes.</p>
+      <form id="gathering-form">
+        <label class="field">Día y hora<input type="datetime-local" name="at" required /></label>
+        <button class="btn primary wide" type="submit">Fijar el encuentro</button>
+        <button class="btn link wide" type="button" id="gathering-cancel">Cancelar el encuentro</button>
+      </form>
+    </dialog>
+
+    <!-- ---------- farolillo, consuelo y compartir ---------- -->
+    <dialog class="modal small-modal" id="farolillo">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>🏮 Enviar un farolillo</h2>
+      <p class="sub">Escribí lo que quieras decirle. No se guarda en ningún lado: sólo se va volando.</p>
+      <form id="farolillo-form">
+        <label class="field">Su nombre<input name="to" maxlength="30" placeholder="p. ej. Luca" /></label>
+        <label class="field">Tus palabras<textarea name="text" maxlength="120" rows="3" required placeholder="Te extraño cada día…"></textarea></label>
+        <button class="btn primary wide" type="submit">Dejarlo volar 🏮</button>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="comfort">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>💌 Palabras de consuelo</h2>
+      <p class="sub">Notas que dejan los visitantes para quien está sufriendo. Leé una o dejá una para alguien que no conocés.</p>
+      <div class="comfort-note hand" id="comfort-note"></div>
+      <button class="btn soft wide" id="comfort-next">↻ Otra nota</button>
+      <form id="comfort-form">
+        <label class="field">Tu nota para alguien que acaba de perder a su compañero
+          <textarea name="text" maxlength="220" rows="3" required placeholder="No estás solo. Sabían que eran amados."></textarea>
+        </label>
+        <button class="btn primary wide" type="submit">📌 Dejar mi nota</button>
+      </form>
+    </dialog>
+
+    <dialog class="modal small-modal" id="share">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>💌 Compartir</h2>
+      <p class="sub" id="share-sub">Tus amigos pueden tocar el enlace y encender una vela en segundos.</p>
+      <canvas id="share-preview" width="1080" height="1920"></canvas>
+      <button class="btn primary wide" id="share-image">📸 Compartir como imagen (historias)</button>
+      <button class="btn soft wide" id="share-link">🔗 Enviar el enlace</button>
     </dialog>
 
     <div class="toast" id="toast" role="status" hidden></div>

@@ -16,6 +16,7 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { FEATURED, FEATURED_IDS } from './seed.js';
 import { GLOW, GIFT_SET, SAYINGS, EMOTES } from './glow.js';
+import { BACKGROUND_IDS } from './plans.js';
 
 const P = 'hu:';
 export const SLOTS_PER_FLOOR = 90;
@@ -44,13 +45,19 @@ export function createStore(kv) {
       ...d,
       ...(f || {}),
       id,
-      photo: f ? f.photo : d.hasPhoto ? `/api/photos/${id}` : null,
+      photo: f ? f.photo : d.hasPhoto ? `/api/photos/${id}${d.photoV ? `?v=${d.photoV}` : ''}` : null,
       candles: Number(h.candles) || 0,
       flowers: Number(h.flowers) || 0,
       gifts: Number(h.gifts) || 0,
       glow: Number(h.glow) || 0,
       guestbookCount: Number(h.gb) || 0,
       lastGifts: h.lastGifts ? JSON.parse(h.lastGifts) : [],
+      extraPhotos: Array.from({ length: Number(h.xp) || 0 }, (_, i) => `/api/photos/${id}/${i + 1}`),
+      voice: h.voice ? `/api/voices/${id}?v=${h.voice}` : null,
+      eternal: h.eternal ? JSON.parse(h.eternal) : null,
+      bg: h.bg || 'crema',
+      gathering: Number(h.gathering) > Date.now() - 3 * 3600_000 ? Number(h.gathering) : null,
+      diaryCount: Number(h.dc) || 0,
     };
   }
 
@@ -98,8 +105,16 @@ export function createStore(kv) {
     return /^[A-Z]{2}$/.test(code || '') ? code : null;
   }
 
+  async function owner(id, token) {
+    const h = await getRaw(id);
+    if (!h.data) return { error: 'not_found' };
+    if (!token || !h.tokenHash || h.tokenHash !== hashToken(token)) return { error: 'forbidden' };
+    return { h };
+  }
+
   const store = {
     kind: kv.kind,
+    owner,
 
     async list() {
       await ensureFeatured();
@@ -112,8 +127,17 @@ export function createStore(kv) {
       await ensureFeatured();
       const m = toPublic(await getRaw(id), id);
       if (!m) return null;
-      const [gb, gf] = await kv.pipeline([['LRANGE', `${P}gb:${id}`, '0', '99'], ['LRANGE', `${P}gf:${id}`, '0', '29']]);
-      return { ...m, guestbook: gb.map((x) => JSON.parse(x)), giftList: gf.map((x) => JSON.parse(x)) };
+      const [gb, gf, dy, dh] = await kv.pipeline([
+        ['LRANGE', `${P}gb:${id}`, '0', '99'], ['LRANGE', `${P}gf:${id}`, '0', '29'],
+        ['LRANGE', `${P}dy:${id}`, '0', '49'], ['HGETALL', `${P}dh:${id}`],
+      ]);
+      const hearts = fromHash(dh);
+      return {
+        ...m,
+        guestbook: gb.map((x) => JSON.parse(x)),
+        giftList: gf.map((x) => JSON.parse(x)),
+        diary: dy.map((x) => { const p = JSON.parse(x); return { ...p, hearts: Number(hearts[p.id]) || 0 }; }),
+      };
     },
 
     async create(input, photo, visitor, pendingGlow = 0) {
@@ -161,7 +185,7 @@ export function createStore(kv) {
       if (!h.tokenHash || h.tokenHash !== hashToken(token || '')) return 'forbidden';
       const { slot } = JSON.parse(h.data);
       await kv.pipeline([
-        ['DEL', `${P}m:${id}`, `${P}photo:${id}`, `${P}gb:${id}`, `${P}gf:${id}`],
+        ['DEL', `${P}m:${id}`, `${P}photo:${id}`, `${P}gb:${id}`, `${P}gf:${id}`, `${P}dy:${id}`, `${P}dh:${id}`, `${P}voice:${id}`, `${P}photo:${id}:1`, `${P}photo:${id}:2`, `${P}photo:${id}:3`],
         ['ZREM', `${P}ids`, id],
         ['HDEL', `${P}slots`, String(slot)],
       ]);
@@ -244,6 +268,122 @@ export function createStore(kv) {
       return { entry: e, glow };
     },
 
+    // ---------- dueños: editar, más fotos, voz, diario, encuentro, fondo ----------
+    async edit(id, token, patch, photo) {
+      const o = await owner(id, token);
+      if (o.error) return o.error;
+      const data = JSON.parse(o.h.data);
+      for (const k of ['name', 'message', 'birthday', 'passedDay', 'species']) if (patch[k] !== undefined) data[k] = patch[k];
+      const cmds = [];
+      if (photo) {
+        data.hasPhoto = true;
+        data.photoV = (data.photoV || 0) + 1;
+        cmds.push(['SET', `${P}photo:${id}`, JSON.stringify({ t: photo.type, d: photo.bytes.toString('base64') })]);
+      }
+      cmds.push(['HSET', `${P}m:${id}`, 'data', JSON.stringify(data)]);
+      if (patch.bg && BACKGROUND_IDS.has(patch.bg)) cmds.push(['HSET', `${P}m:${id}`, 'bg', patch.bg]);
+      await kv.pipeline(cmds);
+      return toPublic(await getRaw(id), id);
+    },
+
+    async addPhoto(id, token, photo) {
+      const o = await owner(id, token);
+      if (o.error) return o.error;
+      const n = Number(o.h.xp) || 0;
+      if (n >= 3) return 'full';
+      await kv.pipeline([['SET', `${P}photo:${id}:${n + 1}`, JSON.stringify({ t: photo.type, d: photo.bytes.toString('base64') })], ['HSET', `${P}m:${id}`, 'xp', String(n + 1)]]);
+      return toPublic(await getRaw(id), id);
+    },
+
+    async extraPhoto(id, n) {
+      const raw = await kv.cmd('GET', `${P}photo:${id}:${n}`);
+      if (!raw) return null;
+      const { t, d } = JSON.parse(raw);
+      return { type: t, bytes: Buffer.from(d, 'base64') };
+    },
+
+    async setVoice(id, token, audio) {
+      const o = await owner(id, token);
+      if (o.error) return o.error;
+      if (!audio) {
+        await kv.pipeline([['DEL', `${P}voice:${id}`], ['HDEL', `${P}m:${id}`, 'voice']]);
+      } else {
+        await kv.pipeline([['SET', `${P}voice:${id}`, JSON.stringify({ t: audio.type, d: audio.bytes.toString('base64') })], ['HSET', `${P}m:${id}`, 'voice', String(Date.now())]]);
+      }
+      return toPublic(await getRaw(id), id);
+    },
+
+    async voice(id) {
+      const raw = await kv.cmd('GET', `${P}voice:${id}`);
+      if (!raw) return null;
+      const { t, d } = JSON.parse(raw);
+      return { type: t, bytes: Buffer.from(d, 'base64') };
+    },
+
+    async addDiary(id, token, page) {
+      const o = await owner(id, token);
+      if (o.error) return o.error;
+      const e = { id: newId(), text: page.text, prompt: page.prompt || null, at: Date.now() };
+      await kv.pipeline([['LPUSH', `${P}dy:${id}`, JSON.stringify(e)], ['LTRIM', `${P}dy:${id}`, '0', '199'], ['HINCRBY', `${P}m:${id}`, 'dc', '1']]);
+      await event('diary', toPublic(o.h, id), 'La familia');
+      return e;
+    },
+
+    async heartDiary(id, pageId, sid) {
+      if (!(await onceToday('dh', sid, `${id}:${pageId}`))) return { already: true };
+      const n = await kv.cmd('HINCRBY', `${P}dh:${id}`, pageId, '1');
+      return { hearts: n };
+    },
+
+    async setGathering(id, token, at) {
+      const o = await owner(id, token);
+      if (o.error) return o.error;
+      if (at) await kv.cmd('HSET', `${P}m:${id}`, 'gathering', String(at));
+      else await kv.cmd('HDEL', `${P}m:${id}`, 'gathering');
+      return toPublic(await getRaw(id), id);
+    },
+
+    // Luz eterna: cualquiera puede encenderla (como un regalo) y queda para siempre.
+    async eternal(id, who) {
+      await ensureFeatured();
+      const h = await getRaw(id);
+      if (!h.data) return null;
+      if (h.eternal) return { memorial: toPublic(h, id), already: true };
+      await kv.cmd('HSET', `${P}m:${id}`, 'eternal', JSON.stringify({ by: who.visitor || 'Alguien', at: Date.now() }));
+      const memorial = toPublic(await getRaw(id), id);
+      await event('eternal', memorial, who.visitor);
+      return { memorial };
+    },
+
+    // La ofrenda central: las huellitas que alguien puso hoy pasan una por una.
+    async toAltar(id, who) {
+      await ensureFeatured();
+      const h = await getRaw(id);
+      if (!h.data) return null;
+      if (!(await onceToday('al', who.sid, 'any'))) return { memorial: toPublic(h, id), already: true };
+      const k = `${P}altar:${today()}`;
+      await kv.pipeline([['ZADD', k, String(Date.now()), id], ['EXPIRE', k, String(DAY_TTL * 2)]]);
+      const memorial = toPublic(h, id);
+      await event('altar', memorial, who.visitor);
+      return { memorial };
+    },
+
+    async altar() {
+      return kv.cmd('ZRANGE', `${P}altar:${today()}`, '0', '-1');
+    },
+
+    // Tableros de notas: frasco de gracias ("jar") y palabras de consuelo ("comfort").
+    async boardAdd(name, text, who) {
+      const e = { text, who: who || 'Alguien', at: Date.now() };
+      const [, , n] = await kv.pipeline([['LPUSH', `${P}${name}`, JSON.stringify(e)], ['LTRIM', `${P}${name}`, '0', '299'], ['INCR', `${P}${name}n`]]);
+      return { entry: e, count: n };
+    },
+
+    async board(name) {
+      const [list, n] = await kv.pipeline([['LRANGE', `${P}${name}`, '0', '59'], ['GET', `${P}${name}n`]]);
+      return { notes: list.map((x) => JSON.parse(x)), count: Number(n) || 0 };
+    },
+
     async photo(id) {
       const raw = await kv.cmd('GET', `${P}photo:${id}`);
       if (!raw) return null;
@@ -296,16 +436,8 @@ export function createStore(kv) {
       return { candles: Number(c) || 0, countries: Number(n) || 0 };
     },
 
-    async jarAdd(text, who) {
-      const e = { text, who: who || 'Alguien', at: Date.now() };
-      const [, , n] = await kv.pipeline([['LPUSH', `${P}jar`, JSON.stringify(e)], ['LTRIM', `${P}jar`, '0', '299'], ['INCR', `${P}jarn`]]);
-      return { entry: e, count: n };
-    },
-
-    async jar() {
-      const [list, n] = await kv.pipeline([['LRANGE', `${P}jar`, '0', '59'], ['GET', `${P}jarn`]]);
-      return { notes: list.map((x) => JSON.parse(x)), count: Number(n) || 0 };
-    },
+    jarAdd: (text, who) => store.boardAdd('jar', text, who),
+    jar: () => store.board('jar'),
 
     // true si se pasó del límite de `max` envíos por minuto para esa clave.
     async limited(key, max) {

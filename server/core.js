@@ -1,7 +1,10 @@
 // La API, independiente del servidor: la usan el servidor local (server/index.js) y la función de Vercel (api/handler.js).
 // Recibe un pedido simplificado y devuelve { status, json } o { status, bytes, type, cache }.
 
-export const MAX_BODY = 3 * 1024 * 1024;
+import { allowed } from './plans.js';
+
+export const MAX_BODY = 3.5 * 1024 * 1024;
+const MAX_AUDIO = 600 * 1024;
 const MAX_PHOTO = 1.5 * 1024 * 1024;
 
 const ok = (json, status = 200) => ({ status, json });
@@ -23,6 +26,12 @@ export function validateMemorial(body) {
   const message = cleanText(body.message, 200);
   const slot = Number.isInteger(body.slot) ? body.slot : undefined;
   return { name, species, birthday, passedDay, message, slot };
+}
+
+export function parseAudioUrl(s) {
+  const m = typeof s === 'string' && s.match(/^data:audio\/(webm|ogg|mp4|mpeg|wav|x-m4a|aac)(?:;codecs=[\w.,-]+)?;base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return null;
+  return { bytes: Buffer.from(m[2], 'base64'), type: `audio/${m[1]}` };
 }
 
 export function parseDataUrl(s) {
@@ -75,7 +84,7 @@ export async function handleApi(req, store) {
   }
 
   if (path === '/api/memorials' && method === 'POST') {
-    if (await store.limited(`c:${ip}`, 8)) return fail(429, 'Demasiados intentos. Probá en un minuto.');
+    if (await store.limited(`c:${ip}`, 12)) return fail(429, 'Demasiados intentos. Probá en un minuto.');
     const body = await req.json();
     const input = validateMemorial(body);
     if (input.error) return fail(400, input.error);
@@ -88,14 +97,92 @@ export async function handleApi(req, store) {
     return ok(await store.create(input, photo, cleanText(body.visitor, 40), body.pendingGlow), 201);
   }
 
-  let m = path.match(/^\/api\/photos\/([\w-]{3,24})$/);
+  let m = path.match(/^\/api\/photos\/([\w-]{3,24})\/([1-3])$/);
+  if (m && method === 'GET') {
+    const p = await store.extraPhoto(m[1], m[2]);
+    if (!p) return fail(404, 'No encontrada');
+    return { status: 200, bytes: p.bytes, type: p.type, cache: 'public, max-age=31536000, s-maxage=31536000, immutable' };
+  }
+  m = path.match(/^\/api\/voices\/([\w-]{3,24})$/);
+  if (m && method === 'GET') {
+    const p = await store.voice(m[1]);
+    if (!p) return fail(404, 'No encontrada');
+    return { status: 200, bytes: p.bytes, type: p.type, cache: 'public, max-age=31536000, s-maxage=31536000, immutable' };
+  }
+
+  m = path.match(/^\/api\/photos\/([\w-]{3,24})$/);
   if (m && method === 'GET') {
     const p = await store.photo(m[1]);
     if (!p) return fail(404, 'No encontrada');
     return { status: 200, bytes: p.bytes, type: p.type, cache: 'public, max-age=31536000, s-maxage=31536000, immutable' };
   }
 
-  m = path.match(/^\/api\/memorials\/([\w-]{3,24})(?:\/(candle|flower|guestbook|gift|hug))?$/);
+  // ---------- herramientas de dueños (token en X-Edit-Token) ----------
+  m = path.match(/^\/api\/memorials\/([\w-]{3,24})\/(edit|photos|voice|diary|gathering)$/);
+  if (m && method === 'POST') {
+    const [, id, what] = m;
+    if (await store.limited(`o:${ip}`, 20)) return fail(429, 'Más despacio, por favor 🤍');
+    const token = req.header('x-edit-token');
+    const body = await req.json();
+    const err = (r) => (r === 'not_found' ? fail(404, 'No encontramos esa huellita.') : r === 'forbidden' ? fail(403, 'Sólo la familia de esta huellita puede hacer esto.') : null);
+    let r;
+    if (what === 'edit') {
+      const patch = {};
+      if (body.name !== undefined) {
+        patch.name = cleanText(body.name, 30);
+        if (!patch.name) return fail(400, 'Contanos su nombre.');
+      }
+      if (body.message !== undefined) patch.message = cleanText(body.message, 200);
+      for (const k of ['birthday', 'passedDay']) if (body[k] !== undefined) patch[k] = MMDD.test(body[k] || '') ? body[k] : null;
+      if (body.bg !== undefined) {
+        if (!allowed('backgrounds')) return fail(402, 'Este fondo es especial.');
+        patch.bg = cleanText(body.bg, 20);
+      }
+      let photo = null;
+      if (body.photo) {
+        photo = parseDataUrl(body.photo);
+        if (!photo || photo.bytes.length > MAX_PHOTO) return fail(400, 'Esa foto no funcionó. Probá con otra.');
+      }
+      r = await store.edit(id, token, patch, photo);
+    }
+    if (what === 'photos') {
+      if (!allowed('extraPhotos')) return fail(402, 'Más fotos es parte del plan familiar.');
+      const photo = parseDataUrl(body.photo);
+      if (!photo || photo.bytes.length > MAX_PHOTO) return fail(400, 'Esa foto no funcionó. Probá con otra.');
+      r = await store.addPhoto(id, token, photo);
+      if (r === 'full') return fail(400, 'Ya tiene 4 fotos.');
+    }
+    if (what === 'voice') {
+      if (!allowed('voice')) return fail(402, 'Su voz es parte del plan familiar.');
+      let audio = null;
+      if (body.audio) {
+        audio = parseAudioUrl(body.audio);
+        if (!audio) return fail(400, 'Ese sonido no funcionó. Probá con otro.');
+        if (audio.bytes.length > MAX_AUDIO) return fail(400, 'El sonido es muy largo. Que sea corto (unos 10 segundos).');
+      }
+      r = await store.setVoice(id, token, audio);
+    }
+    if (what === 'diary') {
+      if (!allowed('diaryPages')) return fail(402, 'Más páginas es parte del plan familiar.');
+      const text = cleanText(body.text, 1200);
+      if (text.length < 2) return fail(400, 'Escribí unas palabras.');
+      r = await store.addDiary(id, token, { text, prompt: cleanText(body.prompt, 120) || null });
+    }
+    if (what === 'gathering') {
+      if (!allowed('gatherings')) return fail(402, 'Los encuentros son parte del plan familiar.');
+      const at = body.at ? Number(body.at) : null;
+      if (at && (at < Date.now() - 60_000 || at > Date.now() + 31 * 86400_000)) return fail(400, 'Elegí una hora dentro de los próximos 30 días.');
+      r = await store.setGathering(id, token, at);
+    }
+    return err(r) || ok(r);
+  }
+  m = path.match(/^\/api\/memorials\/([\w-]{3,24})\/diary\/([\w-]{3,24})\/heart$/);
+  if (m && method === 'POST') {
+    const body = await req.json();
+    return ok(await store.heartDiary(m[1], m[2], cleanText(body.sid, 40)));
+  }
+
+  m = path.match(/^\/api\/memorials\/([\w-]{3,24})(?:\/(candle|flower|guestbook|gift|hug|eternal|altar))?$/);
   if (m) {
     const [, id, action] = m;
     if (!action && method === 'GET') {
@@ -117,6 +204,14 @@ export async function handleApi(req, store) {
       if (action === 'flower') r = await store.flower(id, who);
       if (action === 'hug') r = await store.hug(id, who);
       if (action === 'gift') r = await store.gift(id, who, cleanText(body.gift, 40));
+      if (action === 'eternal') {
+        if (!allowed('eternalLight')) return fail(402, 'La luz eterna es un regalo especial.');
+        r = await store.eternal(id, who);
+      }
+      if (action === 'altar') {
+        if (!allowed('altarSpotlight')) return fail(402, 'El lugar en la ofrenda es especial.');
+        r = await store.toAltar(id, who);
+      }
       if (action === 'guestbook') {
         const text = cleanText(body.text, 280);
         if (!text) return fail(400, 'Escribí unas palabras.');
@@ -146,13 +241,16 @@ export async function handleApi(req, store) {
 
   if (path === '/api/night' && method === 'GET') return ok(await store.night());
 
-  if (path === '/api/jar' && method === 'GET') return ok(await store.jar());
-  if (path === '/api/jar' && method === 'POST') {
+  if (path === '/api/altar' && method === 'GET') return ok({ ids: await store.altar() });
+
+  m = path.match(/^\/api\/(jar|comfort)$/);
+  if (m && method === 'GET') return ok(await store.board(m[1]));
+  if (m && method === 'POST') {
     if (await store.limited(`j:${ip}`, 4)) return fail(429, 'Más despacio, por favor 🤍');
     const body = await req.json();
-    const text = cleanText(body.text, 140);
-    if (text.length < 3) return fail(400, 'Escribí por qué das las gracias.');
-    return ok(await store.jarAdd(text, cleanText(body.visitor, 40)), 201);
+    const text = cleanText(body.text, m[1] === 'jar' ? 140 : 220);
+    if (text.length < 3) return fail(400, m[1] === 'jar' ? 'Escribí por qué das las gracias.' : 'Escribí unas palabras.');
+    return ok(await store.boardAdd(m[1], text, cleanText(body.visitor, 40)), 201);
   }
 
   return fail(404, 'Ruta desconocida');

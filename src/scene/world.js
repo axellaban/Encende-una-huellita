@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { grassTexture, stoneTexture, woodTexture, floorTexture, glowTexture, blobShadowTexture, moonTexture } from './textures.js';
+import { marigoldGeometry, marigoldMaterial, buildPueblo, PALETTE } from './muertos.js';
 
 export const HALL_CENTER = new THREE.Vector3(0, 0, -10);
 export const HALL_RADIUS = 11.5;
@@ -71,8 +72,8 @@ export function buildWorld(scene, tier) {
   const walkable = [];
   const r = rand(7);
 
-  scene.fog = new THREE.FogExp2('#2c2238', 0.0125);
-  scene.background = new THREE.Color('#1a1428');
+  scene.fog = new THREE.FogExp2('#2a1640', 0.012);
+  scene.background = new THREE.Color('#150d24');
 
   // ---------- cielo ----------
   const sky = new THREE.Mesh(
@@ -82,10 +83,10 @@ export function buildWorld(scene, tier) {
       depthWrite: false,
       fog: false,
       uniforms: {
-        top: { value: new THREE.Color('#120e22') },
-        mid: { value: new THREE.Color('#3b2f58') },
-        low: { value: new THREE.Color('#9c6278') },
-        horizon: { value: new THREE.Color('#f0a978') },
+        top: { value: new THREE.Color('#0c0824') },
+        mid: { value: new THREE.Color('#34195e') },
+        low: { value: new THREE.Color('#a3337a') },
+        horizon: { value: new THREE.Color('#ff8a3d') },
       },
       vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 low; uniform vec3 horizon; varying vec3 vP;
@@ -96,7 +97,10 @@ export function buildWorld(scene, tier) {
           c = mix(horizon, c, smoothstep(-0.04, 0.07, h));
           // Resplandor del atardecer hacia el oeste.
           float sunset = pow(max(0.0, dot(normalize(vec3(-0.2, 0.0, -1.0)), normalize(vec3(vP.x, 0.0, vP.z)))), 6.0);
-          c += vec3(0.35, 0.16, 0.08) * sunset * (1.0 - smoothstep(0.0, 0.35, h));
+          c += vec3(0.45, 0.18, 0.06) * sunset * (1.0 - smoothstep(0.0, 0.35, h));
+          float band = smoothstep(0.25, 0.45, h) * (1.0 - smoothstep(0.45, 0.75, h));
+          float wave = sin(atan(vP.z, vP.x) * 5.0 + h * 9.0) * 0.5 + 0.5;
+          c += mix(vec3(0.25, 0.04, 0.18), vec3(0.04, 0.16, 0.18), wave) * band * 0.55;
           gl_FragColor = vec4(c, 1.0);
         }`,
     }),
@@ -144,11 +148,11 @@ export function buildWorld(scene, tier) {
   scene.add(moon);
 
   // ---------- luces generales ----------
-  scene.add(new THREE.HemisphereLight('#9488c4', '#2a3520', 1.25));
+  scene.add(new THREE.HemisphereLight('#a184d8', '#2c2414', 1.3));
   const moonLight = new THREE.DirectionalLight('#c3c4ff', 0.6);
   moonLight.position.set(-30, 50, -40);
   scene.add(moonLight);
-  const warmFill = new THREE.DirectionalLight('#ff9e6e', 0.25);
+  const warmFill = new THREE.DirectionalLight('#ff8a3d', 0.35);
   warmFill.position.set(-10, 6, -60);
   scene.add(warmFill);
 
@@ -166,8 +170,8 @@ export function buildWorld(scene, tier) {
     const seg = 96;
     const pos = [];
     const col = [];
-    const near = new THREE.Color('#2a2a3c');
-    const far = new THREE.Color('#3b3150');
+    const near = new THREE.Color('#2a1d3c');
+    const far = new THREE.Color('#41275a');
     for (let i = 0; i < seg; i++) {
       const a0 = (i / seg) * Math.PI * 2;
       const a1 = ((i + 1) / seg) * Math.PI * 2;
@@ -184,6 +188,7 @@ export function buildWorld(scene, tier) {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     const hills = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
     scene.add(hills);
+    scene.add(buildPueblo(r));
   }
 
   // Camino de piedra.
@@ -272,10 +277,9 @@ export function buildWorld(scene, tier) {
       p.rotateZ((i / 5) * Math.PI * 2);
       petals.push(p);
     }
-    const flowerGeo = mergeGeometries(petals);
-    flowerGeo.rotateX(-Math.PI / 2);
-    const flowers = new THREE.InstancedMesh(flowerGeo, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, emissive: '#2a1f2a' }), tier.flowers);
-    const palette = ['#f5b8c8', '#f7e09a', '#c7b3f0', '#ffffff', '#f9c39e', '#a9d4f5'].map((c) => new THREE.Color(c));
+    void petals;
+    const flowers = new THREE.InstancedMesh(marigoldGeometry(0.07, '#ffffff', r), marigoldMaterial(), tier.flowers);
+    const palette = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, PALETTE.cempasuchil, '#d6246e', '#ff9a1f'].map((c) => new THREE.Color(c));
     const m = new THREE.Object3D();
     let placed = 0;
     for (let i = 0; i < tier.flowers * 6 && placed < tier.flowers; i++) {
@@ -284,7 +288,7 @@ export function buildWorld(scene, tier) {
       if (onPath(x, z, 0.3) || insideHall(x, z, 0.2) || nearCreek(x, z, 0.3) || Math.hypot(x, z) > GARDEN_RADIUS - 1) continue;
       // Agrupadas en manchones.
       if (Math.sin(x * 0.35) * Math.cos(z * 0.3) < 0.15 && r() < 0.8) continue;
-      m.position.set(x, 0.1 + r() * 0.18, z);
+      m.position.set(x, 0.16 + r() * 0.2, z);
       m.rotation.set((r() - 0.5) * 0.5, r() * 6, (r() - 0.5) * 0.5);
       m.scale.setScalar(0.7 + r() * 0.8);
       m.updateMatrix();
@@ -378,7 +382,7 @@ export function buildWorld(scene, tier) {
 
   // ---------- faroles ----------
   const poleMat = new THREE.MeshLambertMaterial({ color: '#1d1a1c' });
-  const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 2.3, 1.3) });
+  const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 2.0, 0.9) });
   const lampSpots = [
     [-2.7, 19], [2.7, 13.5], [-2.7, 8], [2.7, 2.5],
     [HALL_CENTER.x - 5.5, HALL_CENTER.z + 5.5], [HALL_CENTER.x + 5.5, HALL_CENTER.z + 5.5],
@@ -407,7 +411,7 @@ export function buildWorld(scene, tier) {
     colliders.circles.push({ x, z, r: 0.25 });
     addBlob(x, z, 0.9);
     if (lightOrder.indexOf(i) < tier.lights) {
-      const l = new THREE.PointLight('#ffcf8f', 5, 11, 1.7);
+      const l = new THREE.PointLight('#ffb36b', 5, 11, 1.7);
       l.position.set(x, 3.0, z);
       scene.add(l);
     }
@@ -426,7 +430,7 @@ export function buildWorld(scene, tier) {
       }
     }
     scene.add(new THREE.Mesh(mergeGeometries(posts.map((g) => g.toNonIndexed())), poleMat));
-    const tops = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.065, 0.065, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.8, 1.0) }), posts.length);
+    const tops = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.065, 0.065, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.9, 1.5, 0.6) }), posts.length);
     const m = new THREE.Object3D();
     let i = 0;
     for (let z = 1.5; z < SPAWN.z + 4; z += 3.2) {
@@ -506,7 +510,7 @@ export function buildWorld(scene, tier) {
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `varying float vA; void main(){ float d = length(gl_PointCoord - 0.5);
-          float g = smoothstep(0.5, 0.0, d); g *= g; gl_FragColor = vec4(vec3(1.0, 0.82, 0.38) * 1.8, g * vA); }`,
+          float g = smoothstep(0.5, 0.0, d); g *= g; gl_FragColor = vec4(vec3(1.0, 0.68, 0.25) * 1.9, g * vA); }`,
     }));
     flies.frustumCulled = false;
     scene.add(flies);
