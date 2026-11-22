@@ -430,8 +430,9 @@ function fillSheet(m) {
   $('#s-name').textContent = m.name;
   const kind = { perro: 'Perro', gato: 'Gato', otro: 'Compañero' }[m.species] || '';
   const bits = [kind];
-  if (m.birthday) bits.push(`🎂 ${fmtDay(m.birthday)}`);
-  if (m.passedDay) bits.push(`🌈 ${fmtDay(m.passedDay)}`);
+  if (m.birthday) bits.push(`🎂 ${fmtDay(m.birthday)}${m.birthYear ? ` de ${m.birthYear}` : ''}`);
+  if (m.passedDay) bits.push(`🌈 ${fmtDay(m.passedDay)}${m.passedYear ? ` de ${m.passedYear}` : ''}`);
+  if (m.birthYear && m.passedYear) bits.push(`${m.passedYear - m.birthYear} años de amor`);
   $('#s-meta').textContent = bits.filter(Boolean).join(' · ');
   $('#s-msg').textContent = m.message ? `“${m.message}”` : '';
   const tag = m.featured ? 'Huellita destacada' : isBirthday(m) ? '🎂 Hoy es su cumpleaños' : m.slot >= 0 ? `Piso ${floorOf(m) + 1}` : '';

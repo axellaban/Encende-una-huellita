@@ -8,11 +8,12 @@ export const FEATURED = [
     slot: -1,
     name: 'Luca',
     species: 'perro',
-    // Cuando tengamos su foto: '/huellitas/luca.jpg' (archivo en public/huellitas/).
-    photo: null,
+    photo: '/huellitas/luca.jpg', // archivo en public/huellitas/
     hue: 32,
-    birthday: null, // 'MM-DD'
-    passedDay: null, // 'MM-DD'
+    birthday: '10-22', // 'MM-DD'
+    passedDay: '10-25', // 'MM-DD'
+    birthYear: 2012,
+    passedYear: 2026,
     message: 'Siempre en nuestro corazón.',
     featured: true,
   },
