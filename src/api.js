@@ -1,6 +1,7 @@
 // Cliente de la API. Si no hay servidor con base de datos (por ejemplo, un deploy en Vercel sin Upstash
 // conectado), usa un modo local con localStorage para que el jardín siga funcionando en este navegador.
 import { FEATURED } from '../server/seed.js';
+import { cleanLook } from '../server/looks.js';
 import { GLOW } from '../server/glow.js';
 
 const LS_KEY = 'huellita.local.v2';
@@ -127,7 +128,7 @@ function makeLocal() {
       const m = {
         id: Math.random().toString(36).slice(2, 10), slot, name: data.name.trim().slice(0, 30), species: data.species,
         message: (data.message || '').slice(0, 200), birthday: data.birthday || null, passedDay: data.passedDay || null,
-        photo: data.photo || null, hue: Math.floor(Math.random() * 360), candles: 1, flowers: 0, gifts: 0, lastGifts: [],
+        photo: data.photo || null, look: cleanLook(data.look), hue: Math.floor(Math.random() * 360), candles: 1, flowers: 0, gifts: 0, lastGifts: [],
         glow: Math.max(0, Math.min(60, Number(data.pendingGlow) || 0)), createdAt: Date.now(),
       };
       db.memorials.push(m);
@@ -242,6 +243,7 @@ function makeLocal() {
       if (!m) throw new Error('Sólo la familia de esta huellita puede hacer esto.');
       if (what === 'edit') {
         for (const k of ['name', 'message', 'birthday', 'passedDay', 'bg']) if (body[k] !== undefined) m[k] = body[k];
+        if (body.look !== undefined) m.look = cleanLook(body.look);
         if (body.photo) m.photo = body.photo;
       }
       if (what === 'photos') {
@@ -270,7 +272,10 @@ function makeLocal() {
       return { entry: e, count: db.jar.length };
     },
     async activity(since) { return { events: db.events.filter((e) => e.seq > since), seq: db.seq, here: 1 }; },
-    async heartbeat() { return { here: 1, others: [] }; },
+    async heartbeat(info = {}) {
+      const since = Number.isInteger(info.since) ? info.since : null;
+      return since === null ? { here: 1, others: [] } : { here: 1, others: [], events: db.events.filter((e) => e.seq > since), seq: db.seq };
+    },
   };
 }
 

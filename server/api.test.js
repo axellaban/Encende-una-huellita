@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { createApp } from './index.js';
 import { parseDataUrl, validateMemorial } from './core.js';
 import { createMemoryKv } from './kv/memory.js';
+import { createStore } from './store.js';
 
 // PNG de 1x1.
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
@@ -136,6 +137,30 @@ for (const name of ['local', 'vercel']) {
     assert.equal(k.others.find((o) => o.name === 'Luz').emote, '🤍');
     const again = await (await post('/api/now', { sid: 'b', visitor: 'Luz' })).json();
     assert.equal(again.others.find((o) => o.name === 'X').say, null);
+    assert.equal(again.events, undefined, 'sin `since` no trae eventos');
+    // Con `since`, el mismo latido trae las novedades (un solo pedido periódico).
+    const withEv = await (await post('/api/now', { sid: 'b', visitor: 'Luz', since: 0 })).json();
+    assert.ok(withEv.seq > 0);
+    assert.ok(Array.isArray(withEv.events) && withEv.events.length > 0);
+    assert.ok(!('at' in withEv.others[0]), 'no expone la hora interna');
+  });
+
+  test(`[${name}] cómo era (pelaje, orejas, tamaño) y el espíritu que alguien pasea`, async () => {
+    const c = await (await post('/api/memorials', { name: 'Toby', species: 'perro', look: { fur: 'dorado', ears: 'down', size: 'l', pattern: 'raro', x: 1 } })).json();
+    assert.deepEqual(c.memorial.look, { fur: 'dorado', ears: 'down', size: 'l' });
+    const own = { 'X-Edit-Token': c.editToken };
+    let r = await (await post(`/api/memorials/${c.memorial.id}/edit`, { look: { fur: 'negro', ears: 'up' }, species: 'gato' }, own)).json();
+    assert.deepEqual(r.look, { fur: 'negro', ears: 'up' });
+    assert.equal(r.species, 'gato');
+    r = await (await post(`/api/memorials/${c.memorial.id}/edit`, { look: 'cualquier cosa' }, own)).json();
+    assert.equal(r.look, null);
+    // Presencia con mascota paseando.
+    await post('/api/now', { sid: 'p1', visitor: 'Con Toby', x: 2, z: 3, pet: { n: 'Toby', sp: 'perro', fur: 'dorado', ears: 'down', size: 'm' } });
+    const j = await (await post('/api/now', { sid: 'p2', visitor: 'Otra', pet: { n: '', sp: 'perro' } })).json();
+    const p = j.others.find((o) => o.name === 'Con Toby');
+    assert.deepEqual(p.pet, { n: 'Toby', sp: 'perro', fur: 'dorado', ears: 'down', size: 'm' });
+    const k = await (await post('/api/now', { sid: 'p3', visitor: 'X' })).json();
+    assert.equal(k.others.find((o) => o.name === 'Otra').pet, null, 'sin nombre no hay espíritu');
   });
 
   test(`[${name}] Glow, regalitos, abrazos, frasco y noche de velas`, async () => {
@@ -234,4 +259,36 @@ test('validación', () => {
 test('el servidor local no sirve archivos fuera de dist', async () => {
   const r = await targets.local('/..%2fpackage.json');
   assert.notEqual(r.headers.get('content-type'), 'application/json');
+});
+
+test('latido barato: 3 comandos, trae novedades y limpia a quien se fue', async () => {
+  const kv = createMemoryKv();
+  let n = 0;
+  const counted = {
+    kind: 'memoria',
+    async cmd(...a) { n += 1; return kv.cmd(...a); },
+    async pipeline(cmds) { n += cmds.length; return kv.pipeline(cmds); },
+  };
+  const store = createStore(counted);
+  // Alguien que se fue hace rato y otra persona que sigue acá.
+  kv.exec(['HSET', 'hu:pres', 'viejo', JSON.stringify({ name: 'Viejo', at: Date.now() - 120_000 })]);
+  await store.touch('b', { name: 'Luz' });
+  const before = (await kv.cmd('HGETALL', 'hu:pres')).filter((_, i) => i % 2 === 0);
+  assert.deepEqual(before.sort(), ['b'], 'se limpió al que se fue');
+  // Un latido normal (sin novedades ni limpieza) cuesta 3 comandos.
+  const r0 = await store.touch('a', { name: 'Nube' }, 0);
+  n = 0;
+  const r1 = await store.touch('a', { name: 'Nube', x: 3 }, r0.seq);
+  assert.equal(n, 3);
+  assert.deepEqual(r1.events, []);
+  assert.equal(r1.others[0].name, 'Luz');
+  assert.equal(r1.here, 2);
+  assert.equal(await store.here(), 2);
+  // Una vela de otra persona llega en el próximo latido, con el contador nuevo.
+  const r = await store.candle('luca', { sid: 'v1', visitor: 'Luz' });
+  const r2 = await store.touch('a', { name: 'Nube' }, r1.seq);
+  assert.equal(r2.events.length, 1);
+  assert.equal(r2.events[0].type, 'candle');
+  assert.equal(r2.events[0].c, r.memorial.candles);
+  assert.ok(r2.seq > r1.seq);
 });

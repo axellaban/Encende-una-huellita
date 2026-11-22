@@ -11,12 +11,19 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
       fotos servidas con caché de CDN, y que sin Upstash la app caiga bien al **modo demo**.
 - [ ] **Teléfonos reales** (iPhone Safari y Android Chrome): rendimiento del 3D, calidad automática
       (`src/quality.js`), palanca, hoja deslizable, teclado sobre formularios, áreas seguras del notch.
+      Con la tercera persona: que la cámara no se meta en los muros, que la palanca se sienta natural
+      y cuántos espíritus aguanta un teléfono de gama baja (hoy 3 en "Ahorro", 4 en media, 5 en alta).
 - [ ] **Grabar la voz en iOS Safari** (MediaRecorder entrega `audio/mp4`; el servidor lo acepta,
       pero nunca se probó en un iPhone).
 - [ ] **Moderación mínima** antes de abrirlo al público: hoy cualquiera puede subir fotos y escribir en
       libros de visitas, diario, frasco y consuelo sin filtro ni forma de denunciar.
 
 ## P1 · Lo que más suma ahora
+
+- [ ] **Espíritus**: que tu espíritu juegue con los espíritus que pasean otros visitantes; más acciones
+      (tirar de una soga entre dos, cavar, perseguir mariposas de luz); ladridos/maullidos suaves.
+- [ ] **Tu personaje**: más opciones (rebozo, peinados, farolito de colores); hoy se elige color del
+      sarape y sombrero o corona desde "Así te ven los demás" (el sombrero viaja como paridad del `hue`).
 
 - [ ] **Palabras de Luca**: su mensaje sigue siendo el provisorio *"Siempre en nuestro corazón."*
       (`server/seed.js`). Pedírselas al dueño. En la foto principal aparece otro perro negro: preguntar
@@ -56,8 +63,10 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
       ascensor, presencia.
 - [ ] **Archivos fuera de Redis**: fotos (≈100–150 KB) y voces (hasta 600 KB) se guardan en base64 en
       Upstash; pasar a Vercel Blob/S3 y dejar sólo la URL.
-- [ ] **Presencia**: hoy es polling cada 4–10 s por visitante (costo de comandos en Upstash). Con más
-      tráfico, pasar a WebSockets/SSE o bajar la frecuencia.
+- [ ] **Presencia**: un solo latido (`POST /api/now` con `since`) cada 12 s (solo) o 5 s (con gente),
+      3 comandos de Redis cada uno; nada con la pestaña oculta. Una visita de 10 min gasta ≈150–400
+      comandos (el plan gratis de Upstash da 500.000/mes). Con mucho más tráfico: WebSockets/SSE
+      (Ably, Pusher, PartyKit) para que los demás se muevan en tiempo real y gastar todavía menos.
 - [ ] **Paquete JS de ~900 KB**: separar three/addons y cargar diferido lo que no hace falta al entrar.
 - [ ] **Tests de frontend**: sólo hay tests de API. Convertir los recorridos de Playwright (ver
       `AGENTS.md`) en una suite que se pueda correr.
@@ -70,7 +79,6 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 ## Detalles visuales conocidos
 
 - [ ] `public/og.jpg` (imagen para compartir el link) tiene un anillito blanco de "caminar acá" sobre el camino.
-- [ ] Panel **Hoy** sin mascota: la tarjeta "Tu Glow te espera" tiene un brillo que lava parte del texto.
 - [ ] La ilustración de la estampita del Principito tiene firma de su autora: si el sitio es público,
       pedir permiso o darle crédito.
 - [ ] En teléfonos lentos, al abrir un link directo (`#h/luca`) la cámara puede tardar en llegar a la ofrenda.

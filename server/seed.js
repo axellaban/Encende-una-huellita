@@ -18,6 +18,8 @@ export const FEATURED = [
     birthYear: 2012,
     passedYear: 2026,
     message: 'Siempre en nuestro corazón.',
+    // Cómo es su espíritu en el Prado (ver server/looks.js): dorado, orejas dobladas, mediano.
+    look: { fur: 'dorado', ears: 'tip', size: 'm', pattern: 'solid' },
     featured: true,
   },
 ];

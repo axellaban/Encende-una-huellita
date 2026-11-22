@@ -12,7 +12,7 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
 
 | Compu | Celular |
 | --- | --- |
-| ![Visitando a Luca en la compu](docs/captura-escritorio.jpg) | ![Visitando a Luca en el celular](docs/captura-celular.jpg) |
+| ![Paseando con Luca en el Prado de los espíritus, en la compu](docs/captura-escritorio.jpg) | ![Coco y Nieve vienen a saludar en el Prado, en el celular](docs/captura-celular.jpg) |
 
 ## Qué tiene
 
@@ -23,10 +23,22 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   a medida que la gente le deja una.
 - **Farolitos**: cada vela que se enciende (tuya o de cualquier visitante) suelta un farolito de papel
   que sube al cielo.
-- **Caminar y mirar**: tocá el piso para caminar, deslizá para mirar, pellizcá o usá la rueda para
-  acercarte. En compu también WASD / flechas.
+- **Tercera persona**: tenés tu propio personaje (cara de calaverita pintada, sarape de colores,
+  sombrero o corona de cempasúchil y un farolito en la mano). Tocá el piso o usá la palanca para
+  caminar; deslizá para girar la cámara y pellizcá (o la rueda) para acercarla. En compu, WASD /
+  flechas (Shift corre) y Q/E giran la cámara. La cámara esquiva muros y postes, y al visitar una
+  huellita enfoca su marco mientras tu personaje se para al lado. Tocá tu nombre para elegir el color
+  de tu sarape y si llevás sombrero o corona de flores.
+- **Prado de los espíritus**: un claro a la derecha del camino donde juegan los espíritus de las
+  huellitas del muro (Luca incluido): zoomies, se persiguen, se invitan a jugar con una reverencia,
+  luchan parados en dos patas, se sacan la pelota, ruedan panza arriba, descansan y vienen a saludarte.
+  Cada uno se parece a su mascota (pelaje, orejas y tamaño que eligió la familia).
+- **Sacar a pasear**: desde la ficha de tu mascota (o la de Luca) su espíritu sale del marco como una
+  lucecita y te acompaña: trota a tu lado, se adelanta a olfatear, se sienta cuando parás, se echa si
+  te quedás mucho y se va a jugar al Prado. Tirale la pelota (te la trae), llamalo o acaricialo.
+  Los demás visitantes ven el espíritu que paseás.
 - **Sumar a tu mascota**: tocá un lugar libre del muro (o el ＋), subí una foto (se recorta sola al
-  marco), nombre, especie, fechas y unas palabras.
+  marco), nombre, especie, fechas, unas palabras y cómo era (pelaje, orejas, tamaño) para su espíritu.
 - **Velas, flores y libro de visitas** en cada huellita. Con 20 velas el marco se vuelve dorado.
 - **En vivo**: cuántas personas hay ahora y qué está pasando ("Brisa Suave encendió una vela por Luca").
 - **Cumpleaños**, **la hora de las velas** (21 h), **pisos** (90 lugares cada uno), **lista con
@@ -121,6 +133,9 @@ npm run dev          # desarrollo con recarga: http://localhost:5173
 npm test             # tests de la API (servidor local y función de Vercel)
 ```
 
+Con `npm run dev` también está el **laboratorio de espíritus**: `/lab/pets.html` muestra todas las
+poses (`?pose=sit`, `?side` de costado) y `/lab/pets.html?mode=pack` simula el Prado.
+
 Si definís `KV_REST_API_URL` y `KV_REST_API_TOKEN`, el servidor local también usa Upstash.
 
 ## Cómo está hecho
@@ -134,7 +149,12 @@ src/audio.js            Música, grillos y efectos con Web Audio
 src/scene/world.js      Cielo, luna, colinas, pasto con viento, árboles, faroles, luciérnagas
 src/scene/hall.js       Muro, marcos, pérgola, guirnaldas, atril de Luca
 src/scene/lanterns.js   Farolitos que suben y destellos
-src/scene/controls.js   Caminar, mirar, pellizcar, inercia, vuelos de cámara
+src/scene/controls.js   Tercera persona: personaje, palanca, cámara que sigue/enfoca, colisiones
+src/scene/character.js  El personaje de cada visitante (caminar, saludar, tirar, acariciar)
+src/scene/petRig.js     Cuerpo procedural de los espíritus y su animador (marchas y acciones)
+src/scene/spirits.js    Cerebro de los espíritus: el Prado, el paseo, la pelota, huellitas de luz
+server/looks.js         Pelajes, orejas y tamaños (formulario, 3D y validación)
+lab/pets.html           Laboratorio de poses y simulación del Prado (sólo en desarrollo)
 src/scene/textures.js   Texturas dibujadas en canvas
 server/core.js          La API (independiente del servidor)
 server/store.js         Datos sobre Redis (Upstash o emulador local)
@@ -150,7 +170,7 @@ server/index.js         Servidor local
 | --- | --- |
 | `GET /api/health` | Si hay base de datos conectada |
 | `GET /api/memorials` | Todas las huellitas y totales |
-| `POST /api/memorials` | Crea una (`name`, `species`, `photo` como data URL, `birthday`/`passedDay` en `MM-DD`, `message`, `slot`). Devuelve `editToken` |
+| `POST /api/memorials` | Crea una (`name`, `species`, `photo` como data URL, `birthday`/`passedDay` en `MM-DD`, `message`, `slot`, `look` = `{fur, ears, size, pattern}`). Devuelve `editToken` |
 | `GET /api/memorials/:id` | Una huellita con su libro de visitas |
 | `DELETE /api/memorials/:id` | La quita (header `X-Edit-Token`) |
 | `POST /api/memorials/:id/candle` | Enciende una vela (una cada 10 min por visitante) |
@@ -160,7 +180,7 @@ server/index.js         Servidor local
 | `GET /api/activity/:since` | Eventos nuevos + cuántos hay ahora |
 | `POST /api/memorials/:id/gift` | Deja un regalito (`gift` del catálogo) |
 | `POST /api/memorials/:id/hug` | Abrazo en silencio |
-| `POST /api/now` | Latido: posición, gesto o frase; devuelve a los demás visitantes |
+| `POST /api/now` | Latido: posición y rumbo del personaje, gesto o frase, y `pet` (el espíritu que pasea); devuelve a los demás visitantes y, con `since`, los eventos nuevos (`events`, `seq`) |
 | `GET /api/night` | Velas y países de esta noche |
 | `POST /api/memorials/:id/eternal` | Luz eterna |
 | `POST /api/memorials/:id/altar` · `GET /api/altar` | Poner en la ofrenda de hoy / lista del día |
@@ -181,4 +201,4 @@ La investigación inicial, hecha con [REA](https://github.com/morluto/rea), est�
 
 - Moderación de fotos y textos antes de publicarlos.
 - Recuperar la edición por email (enlace mágico) en lugar del token guardado en el navegador.
-- Ver a otros visitantes como siluetas en el jardín.
+- Ver los espíritus que pasean los demás también en el Prado jugando con la manada.
