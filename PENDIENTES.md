@@ -22,7 +22,8 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 
 - [ ] **Espíritus**: que tu espíritu juegue con los espíritus que pasean otros visitantes; más acciones
       (tirar de una soga entre dos, cavar, perseguir mariposas de luz); ladridos/maullidos suaves.
-- [ ] **Tu personaje**: elegir su ropa (color del sarape, sombrero o corona) desde "Así te ven los demás".
+- [ ] **Tu personaje**: más opciones (rebozo, peinados, farolito de colores); hoy se elige color del
+      sarape y sombrero o corona desde "Así te ven los demás" (el sombrero viaja como paridad del `hue`).
 
 - [ ] **Palabras de Luca**: su mensaje sigue siendo el provisorio *"Siempre en nuestro corazón."*
       (`server/seed.js`). Pedírselas al dueño. En la foto principal aparece otro perro negro: preguntar

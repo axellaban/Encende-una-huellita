@@ -430,6 +430,21 @@
     </dialog>
 
     <!-- ---------- farolillo, consuelo y compartir ---------- -->
+    <dialog class="modal small-modal" id="me-dialog">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <p class="eyebrow">Así te ven los demás</p>
+      <h2><span id="me-dialog-name"></span></h2>
+      <p class="sub">Elegí el color de tu sarape y qué llevás en la cabeza. Los demás visitantes te ven así.</p>
+      <div class="look">
+        <fieldset class="look-row"><legend>Tu sarape</legend><div id="me-hues" class="look-inline"></div></fieldset>
+        <fieldset class="look-row"><legend>En la cabeza</legend>
+          <label><input type="radio" name="me-head" value="crown" /><span>🌼 Corona de flores</span></label>
+          <label><input type="radio" name="me-head" value="hat" /><span>👒 Sombrero</span></label>
+        </fieldset>
+      </div>
+      <button class="btn primary wide" data-close>Listo</button>
+    </dialog>
+
     <dialog class="modal small-modal" id="farolillo">
       <button class="x" data-close aria-label="Cerrar">✕</button>
       <p class="eyebrow">Se va volando</p>

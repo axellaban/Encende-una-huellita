@@ -174,7 +174,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   const offset = (y, p, d, out = new THREE.Vector3()) => out.set(Math.sin(y) * Math.cos(p) * d, Math.sin(p) * d, Math.cos(y) * Math.cos(p) * d);
 
   // Acorta la distancia si un muro del salón o el cerco quedan entre la cámara y lo que mira.
-  function clearDistance(from, y, p, d) {
+  function clearDistance(from, y, p, d, circles = true) {
     const o = offset(y, p, d);
     let best = d;
     for (const s of colliders.segments) {
@@ -185,7 +185,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     const len = Math.hypot(o.x, o.z) || 1;
     const ux = o.x / len;
     const uz = o.z / len;
-    for (const c of colliders.circles) {
+    for (const c of circles ? colliders.circles : []) {
       const cx = c.x - from.x;
       const cz = c.z - from.z;
       const along = cx * ux + cz * uz;
@@ -399,7 +399,8 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         if (Math.abs(dy) > 1.1) yaw = focus.yaw0 + Math.sign(dy) * 1.1;
       }
       dist += (distTarget - dist) * Math.min(1, dt * 8);
-      const clear = clearDistance(pivot, yaw, pitch, dist);
+      // En foco (mirando un marco) un farol finito puede quedar en cuadro; los muros no.
+      const clear = clearDistance(pivot, yaw, pitch, dist, mode !== 'focus');
       camDist += (clear - camDist) * Math.min(1, dt * (clear < camDist ? 18 : 4));
       const wantPos = new THREE.Vector3();
       const wantLook = new THREE.Vector3();

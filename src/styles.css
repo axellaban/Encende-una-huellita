@@ -591,6 +591,8 @@ body.sheet-open .ball-prompt, body.walking .ball-prompt { display: none; }
 .look-row input:checked + span { border-color: var(--accent); background-color: var(--hilite); transform: scale(1.06); }
 .look-row input:checked + .swatch { background: var(--c); box-shadow: 0 0 0 3px var(--hilite), 0 0 0 5px var(--accent); }
 .look-row input:focus-visible + span { outline: 3px solid var(--lav); }
+.look-inline { display: flex; flex-wrap: wrap; gap: 6px; }
+#me-dialog .look { margin-bottom: 8px; }
 
 @media (max-width: 760px), (pointer: coarse) and (max-height: 540px) {
   /* Encima de la palanca: paseo, pelota, pista y avisos no se pisan. */

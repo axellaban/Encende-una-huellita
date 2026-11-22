@@ -108,7 +108,8 @@ const visitor = {
 };
 $('#me-name').textContent = visitor.name;
 $('#me-initial').textContent = visitor.name[0];
-const visitorHue = Number(remember('huellita.hue', () => String(Math.floor(Math.random() * 360))));
+// El color del sarape; si es impar lleva sombrero y si es par, corona de flores (así lo ven los demás).
+let visitorHue = Number(remember('huellita.hue', () => String(Math.floor(Math.random() * 360))));
 const game = createGame();
 // Mi mascota: la que recibe el Glow de mis gestos (tengo que ser quien la creó).
 function myPet() {
@@ -450,7 +451,10 @@ function placeNear(stand, frame, side = 0.85) {
   if (front.lengthSq() < 1e-4) return;
   front.normalize();
   const sideV = new THREE.Vector3(front.z, 0, -front.x);
-  for (const s of [side, -side, side * 1.6, 0]) {
+  // Del lado contrario a donde queda la cámara, para no tapar la foto.
+  const camSide = Math.sign((stand.x - frame.x) * sideV.x + (stand.z - frame.z) * sideV.z) || 1;
+  const away = -camSide * side;
+  for (const s of [away, away * 1.5, -away, 0]) {
     const spot = new THREE.Vector3(frame.x, 0, frame.z).addScaledVector(front, 1.45).addScaledVector(sideV, s);
     if (controls.blocked(spot.x, spot.z)) continue;
     teleportPlayer(spot, new THREE.Vector3(frame.x, 0, frame.z));
@@ -1066,7 +1070,55 @@ function timeAgo(at) {
   return `hace ${Math.round(s / 86400)} días`;
 }
 
-$('#me-chip').onclick = () => toast(`Así te ven los demás: ${visitor.name} 🤍`);
+// Así te ven los demás: color del sarape y sombrero o corona.
+{
+  const HUES = [8, 32, 50, 140, 176, 210, 262, 318];
+  const box = $('#me-hues');
+  const hatOf = (h) => Math.round(h) % 2 === 1;
+  const swapCharacter = (h) => {
+    const old = me;
+    me = createCharacter({ hue: h, light: tierName !== 'low' });
+    me.group.position.copy(old.group.position);
+    me.group.rotation.y = old.group.rotation.y;
+    old.group.parent?.remove(old.group);
+    old.dispose();
+    scene.add(me.group);
+    spirits?.sparkle(me.group.position.clone().setY(1));
+    me.wave();
+  };
+  const paintChip = () => { $('#me-initial').style.background = `hsl(${visitorHue} 55% 46%)`; };
+  paintChip();
+  const setHue = (h) => {
+    visitorHue = h;
+    paintChip();
+    store.set('huellita.hue', String(h));
+    if (me) swapCharacter(h);
+    heartbeat();
+  };
+  for (const h of HUES) {
+    const l = document.createElement('label');
+    const i = document.createElement('input');
+    i.type = 'radio';
+    i.name = 'me-hue';
+    i.value = String(h);
+    const sp = document.createElement('span');
+    sp.className = 'swatch';
+    sp.style.setProperty('--c', `hsl(${h} 55% 46%)`);
+    sp.setAttribute('aria-label', `Color ${h}`);
+    l.append(i, sp);
+    i.onchange = () => setHue(h + (hatOf(h) === hatOf(visitorHue) ? 0 : 1));
+    box.append(l);
+  }
+  $$('input[name="me-head"]').forEach((i) => {
+    i.onchange = () => setHue(hatOf(visitorHue) === (i.value === 'hat') ? visitorHue : visitorHue >= 358 ? visitorHue - 1 : visitorHue + 1);
+  });
+  $('#me-chip').onclick = () => {
+    $('#me-dialog-name').textContent = visitor.name;
+    $$('input[name="me-hue"]').forEach((i) => { i.checked = Math.abs(Number(i.value) - visitorHue) <= 1; });
+    $$('input[name="me-head"]').forEach((i) => { i.checked = (i.value === 'hat') === hatOf(visitorHue); });
+    $('#me-dialog').showModal();
+  };
+}
 
 function syncMusicBtn() {
   $('#music-btn').setAttribute('aria-pressed', String(isMusicOn()));

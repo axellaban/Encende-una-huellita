@@ -27,7 +27,8 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   sombrero o corona de cempasúchil y un farolito en la mano). Tocá el piso o usá la palanca para
   caminar; deslizá para girar la cámara y pellizcá (o la rueda) para acercarla. En compu, WASD /
   flechas (Shift corre) y Q/E giran la cámara. La cámara esquiva muros y postes, y al visitar una
-  huellita enfoca su marco mientras tu personaje se para al lado.
+  huellita enfoca su marco mientras tu personaje se para al lado. Tocá tu nombre para elegir el color
+  de tu sarape y si llevás sombrero o corona de flores.
 - **Prado de los espíritus**: un claro a la derecha del camino donde juegan los espíritus de las
   huellitas del muro (Luca incluido): zoomies, se persiguen, se invitan a jugar con una reverencia,
   luchan parados en dos patas, se sacan la pelota, ruedan panza arriba, descansan y vienen a saludarte.
