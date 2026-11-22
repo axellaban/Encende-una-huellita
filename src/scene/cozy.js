@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, CREEK_Z, MEADOW, MEADOW_R, nearCreek, uTime, rand } from './world.js';
-import { EASEL_POS } from './hall.js';
+import { EASEL_POS, ALTAR_SCALE } from './hall.js';
 import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture } from './textures.js';
 import { picadoBanner, marigoldCluster, PALETTE } from './muertos.js';
 
@@ -46,7 +46,7 @@ export function createCozy(scene, tier, colliders) {
     const cols = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo].map((c) => new THREE.Color(c));
     for (let i = 0; i < n; i++) {
       const t = r();
-      const z = SPAWN.z + 3 - t * (SPAWN.z + 3 - (EASEL_POS.z + 1.2));
+      const z = SPAWN.z + 3 - t * (SPAWN.z + 3 - (EASEL_POS.z + 1.2 * ALTAR_SCALE));
       const spread = (r() + r() + r() - 1.5) * 0.9;
       const x = spread + Math.sin(z * 0.35) * 0.3;
       m.position.set(x, 0.03 + (z < HALL_CENTER.z + HALL_RADIUS + 1.3 ? 0.14 : 0) + r() * 0.01, z);
@@ -119,7 +119,7 @@ export function createCozy(scene, tier, colliders) {
   // ---------- el cuenco y la pelota de Luca ----------
   {
     const g = new THREE.Group();
-    g.position.set(EASEL_POS.x + 1.05, 0.16, EASEL_POS.z + 0.75);
+    g.position.set(EASEL_POS.x + 2.95, 0.16, EASEL_POS.z + 1.35);
     const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.08, 20, 1, true), new THREE.MeshLambertMaterial({ color: '#c9704e', side: THREE.DoubleSide }));
     bowl.position.y = 0.04;
     const water = new THREE.Mesh(new THREE.CircleGeometry(0.14, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.7, 1.0) }));

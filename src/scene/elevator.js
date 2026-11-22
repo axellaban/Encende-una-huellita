@@ -1,11 +1,13 @@
 // El ascensor del jardín: una cabina pintada con talavera, indicador de piso de aguja,
 // botón que brilla y puertas que se abren. Tocándolo se eligen los pisos del muro.
 import * as THREE from 'three';
-import { HALL_CENTER } from './world.js';
+import { HALL_CENTER, ELEVATOR_POS } from './world.js';
 import { labelTexture, glowTexture } from './textures.js';
 import { paintedWallTexture, talaveraTexture, marigoldCluster } from './muertos.js';
 
-export const ELEVATOR_POS = new THREE.Vector3(-6.4, 0, 2.6);
+export { ELEVATOR_POS };
+// Más grande que una persona: se ve desde el camino como un edificio propio.
+export const ELEVATOR_SCALE = 1.45;
 
 function dialTexture() {
   const c = document.createElement('canvas');
@@ -40,7 +42,8 @@ export function createElevator(scene, colliders, rnd) {
   // Mirando hacia el camino.
   g.rotation.y = Math.atan2(0 - ELEVATOR_POS.x, 12 - ELEVATOR_POS.z);
   scene.add(g);
-  colliders.circles.push({ x: ELEVATOR_POS.x, z: ELEVATOR_POS.z, r: 1.1 });
+  g.scale.setScalar(ELEVATOR_SCALE);
+  colliders.circles.push({ x: ELEVATOR_POS.x, z: ELEVATOR_POS.z, r: 1.1 * ELEVATOR_SCALE });
 
   const W = 1.7;
   const H = 2.9;
@@ -138,9 +141,9 @@ export function createElevator(scene, colliders, rnd) {
   return {
     hit,
     standPoint() {
-      const front = new THREE.Vector3(0, 0, D / 2 + 2.6).applyQuaternion(g.quaternion).add(g.position);
-      front.y = 1.6;
-      return { stand: front, target: new THREE.Vector3(g.position.x, 1.6, g.position.z) };
+      const front = new THREE.Vector3(0, 0, (D / 2 + 2.6) * ELEVATOR_SCALE).applyQuaternion(g.quaternion).add(g.position);
+      front.y = 1.9;
+      return { stand: front, target: new THREE.Vector3(g.position.x, 1.6 * ELEVATOR_SCALE, g.position.z) };
     },
     setOpen(v) { openTarget = v ? 1 : 0; },
     setFloor(n) { needleTarget = (-Math.PI / 2) + (Math.min(n, 4) / 4) * Math.PI; },

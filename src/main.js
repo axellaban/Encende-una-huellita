@@ -143,7 +143,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.05, 900);
 const INTRO_FROM = new THREE.Vector3(16, 17, 31);
 const INTRO_LOOK = new THREE.Vector3(HALL_CENTER.x, 1, HALL_CENTER.z);
-const ENTRY_LOOK = new THREE.Vector3(EASEL_POS.x, 1.9, EASEL_POS.z);
+const ENTRY_LOOK = new THREE.Vector3(EASEL_POS.x, 2.6, EASEL_POS.z);
 camera.position.copy(INTRO_FROM);
 
 let world;
