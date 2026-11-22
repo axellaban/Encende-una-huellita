@@ -207,6 +207,7 @@
         <div class="glow-card" id="s-glow" hidden></div>
         <div class="gifts-row" id="s-gifts" hidden></div>
         <p class="msg" id="s-msg"></p>
+        <figure class="estampita" id="s-card" hidden><img alt="" /></figure>
         <button class="btn soft wide mine-btn" id="s-mine" hidden>🐾 Es mi mascota: que mis gestos la hagan brillar</button>
         <section class="family" id="s-family" hidden>
           <h3>🧡 Para la familia</h3>
@@ -263,8 +264,8 @@
     <!-- ---------- pisos ---------- -->
     <dialog class="modal small-modal" id="floors">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <h2>🛗 Pisos</h2>
-      <p class="sub">Cada piso tiene lugar para 90 huellitas.</p>
+      <h2>🛗 ¿A qué piso?</h2>
+      <p class="sub">Cada piso tiene lugar para 90 huellitas. El siguiente se abre cuando se llena el de abajo.</p>
       <div class="floor-list" id="floor-list"></div>
     </dialog>
 
@@ -436,6 +437,13 @@
       <button class="btn primary wide" id="share-image">📸 Compartir como imagen (historias)</button>
       <button class="btn soft wide" id="share-link">🔗 Enviar el enlace</button>
     </dialog>
+
+    <!-- transición del ascensor -->
+    <div class="lift" id="lift" hidden aria-hidden="true">
+      <div class="lift-door l"><span class="paw">🐾</span></div>
+      <div class="lift-door r"><span class="paw">🐾</span></div>
+      <div class="lift-panel"><span>Piso</span><b id="lift-num">1</b><i id="lift-arrow">▲</i></div>
+    </div>
 
     <div class="toast" id="toast" role="status" hidden></div>
 

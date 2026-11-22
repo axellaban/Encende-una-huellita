@@ -11,6 +11,7 @@ import { createControls } from './scene/controls.js';
 import { createLanterns } from './scene/lanterns.js';
 import { createCozy } from './scene/cozy.js';
 import { createAvatars } from './scene/avatars.js';
+import { createElevator } from './scene/elevator.js';
 import { createGame } from './game.js';
 import { GIFTS, SAYINGS, EMOTES, STAGES, stageOf } from '../server/glow.js';
 import { BACKGROUNDS } from '../server/plans.js';
@@ -32,7 +33,7 @@ import { papelPicadoTexture, backgroundTexture, PICADO_COLORS } from './scene/mu
   document.documentElement.style.setProperty('--picado-url', `url(${c.toDataURL()})`);
 }
 import { portraitCanvas } from './scene/textures.js';
-import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll } from './audio.js';
+import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding } from './audio.js';
 import { TIERS, pickTier, savedQuality, saveQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
 import { FEATURED } from '../server/seed.js';
 
@@ -108,6 +109,7 @@ let controls;
 let lanterns;
 let cozy;
 let avatars;
+let elevator;
 let composer = null;
 let adaptive = null;
 
@@ -164,6 +166,7 @@ async function buildScene() {
   lanterns = createLanterns(scene, tier);
   cozy = createCozy(scene, tier, world.colliders);
   avatars = createAvatars(scene);
+  elevator = createElevator(scene, world.colliders, Math.random);
   avatars.visible = store.get('huellita.quiet') !== '1';
   controls = createControls(camera, canvas, world.colliders, { reduced });
   scene.add(controls.marker);
@@ -172,9 +175,10 @@ async function buildScene() {
   controls.onTap((e) => {
     if (document.body.classList.contains('intro')) return skipIntro();
     if (!sheetEl.hidden) { closeSheet(); return; }
-    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, ...world.walkable]);
+    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, elevator.hit, ...world.walkable]);
     if (!hit) return;
     if (hit.object.userData.kind === 'jar') return openJar();
+    if (hit.object.userData.kind === 'elevator') return callElevator();
     if (hit.object.userData.kind === 'spirit') {
       const sp = cozy.spiritOf(hit.object);
       cozy.hop(sp);
@@ -198,7 +202,7 @@ async function buildScene() {
     hideHint();
   });
   controls.onHover((e) => {
-    const hit = cast(e, [...hall.pickables(), ...cozy.pickables]);
+    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, elevator.hit]);
     const key = hit && hit.distance < 16 ? slotKeyFromHit(hit.object) : null;
     hall.setHover(key);
     canvas.style.cursor = hit && hit.distance < 16 && (key !== null || hit.object.userData.kind) ? 'pointer' : '';
@@ -215,6 +219,7 @@ async function buildScene() {
     hall.animate(t);
     lanterns.update(dt, t);
     cozy.animate(t, dt);
+    elevator.animate(t, dt);
     avatars.animate(dt, t);
     if (composer) composer.render(dt);
     else renderer.render(scene, camera);
@@ -271,25 +276,87 @@ const floorOf = (m) => (m.slot < 0 ? -1 : Math.floor(m.slot / SLOTS_PER_FLOOR));
 const currentFloor = () => hall?.floor ?? 0;
 
 function renderFloors() {
-  const maxFloor = memorials.reduce((a, m) => Math.max(a, floorOf(m)), 0);
-  const total = maxFloor + 2; // siempre hay un piso nuevo con lugar
+  const count = (f) => memorials.filter((m) => floorOf(m) === f).length;
+  // Abiertos: hasta el primer piso que todavía tiene lugar (y los que ya tienen huellitas).
+  const maxUsed = memorials.reduce((a, m) => Math.max(a, floorOf(m)), 0);
+  let open = 0;
+  while (count(open) >= SLOTS_PER_FLOOR) open++;
+  open = Math.max(open, maxUsed);
   const list = $('#floor-list');
   list.innerHTML = '';
-  for (let f = 0; f < total; f++) {
-    const n = memorials.filter((m) => floorOf(m) === f).length;
+  for (let f = 0; f <= open + 1; f++) {
+    const n = count(f);
+    const locked = f > open;
     const b = document.createElement('button');
-    b.className = f === currentFloor() ? 'on' : '';
-    b.innerHTML = `<span>Piso ${f + 1}</span><span class="bar"><i style="width:${Math.round((n / SLOTS_PER_FLOOR) * 100)}%"></i></span><small>${n} / ${SLOTS_PER_FLOOR}</small>`;
-    b.onclick = () => { $('#floors').close(); goFloor(f); };
+    b.className = `${f === currentFloor() ? 'on' : ''} ${locked ? 'locked' : ''}`;
+    b.innerHTML = locked
+      ? `<span>🔒 Piso ${f + 1}</span><small>Se abre cuando se llene el piso ${f}</small>`
+      : `<span>Piso ${f + 1}</span><span class="bar"><i style="width:${Math.round((n / SLOTS_PER_FLOOR) * 100)}%"></i></span><small>${n} / ${SLOTS_PER_FLOOR}</small>`;
+    b.onclick = () => {
+      if (locked) return toast(`🔒 El piso ${f + 1} se abre cuando se llene el piso ${f}`);
+      $('#floors').close();
+      if (f === currentFloor()) return;
+      rideTo(f);
+    };
     list.append(b);
   }
   $$('.floor-num').forEach((el) => { el.textContent = currentFloor() + 1; });
+  elevator?.setFloor(currentFloor());
+}
+
+// Viaje en ascensor: se cierran las puertas, suena el "ding" y se abren en el piso nuevo.
+let riding = false;
+function rideTo(f) {
+  if (riding) return;
+  if (reduced) { goFloor(f); return; }
+  riding = true;
+  const lift = $('#lift');
+  const from = currentFloor();
+  const num = $('#lift-num');
+  num.textContent = from + 1;
+  $('#lift-arrow').textContent = f > from ? '▲' : '▼';
+  lift.hidden = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => lift.classList.add('closed')));
+  haptic(10);
+  let n = from;
+  const step = f > from ? 1 : -1;
+  setTimeout(() => {
+    goFloor(f, true);
+    const timer = setInterval(() => {
+      n += step;
+      num.textContent = n + 1;
+      tick();
+      if (n === f) {
+        clearInterval(timer);
+        setTimeout(() => {
+          ding();
+          haptic([10, 40, 10]);
+          lift.classList.remove('closed');
+          elevator?.setOpen(true);
+          setTimeout(() => { lift.hidden = true; riding = false; elevator?.setOpen(false); }, 900);
+          toast(`🛗 Piso ${f + 1}`);
+        }, 350);
+      }
+    }, Math.max(260, 900 / Math.abs(f - from)));
+  }, 750);
+}
+
+function callElevator() {
+  closeSheet();
+  hideHint();
+  const { stand, target } = elevator.standPoint();
+  controls.flyTo(stand, target, () => {
+    elevator.setOpen(true);
+    ding();
+    setTimeout(() => { renderFloors(); $('#floors').showModal(); }, 500);
+  });
 }
 
 function goFloor(f, quiet = false) {
   if (!hall || f === hall.floor) return;
   hall.setFloor(f, memorials);
   renderFloors();
+  elevator?.setFloor(f);
   if (!quiet) toast(`🛗 Llegaste al piso ${f + 1}`);
 }
 
@@ -820,6 +887,7 @@ $$('[data-featured]').forEach((b) => { b.onclick = visitFeatured; });
 
 // ---------- pisos, menú y modales ----------
 $('#floors-btn').onclick = () => { renderFloors(); $('#floors').showModal(); };
+$('#floors').addEventListener('close', () => { if (!riding) elevator?.setOpen(false); });
 $('#dock-menu').onclick = () => openMenu();
 $('#menu-btn').onclick = () => openMenu();
 
@@ -1412,10 +1480,19 @@ function fillExtras(m) {
     $('#s-ics').onclick = () => downloadIcs(m);
   }
   $('#s-family').hidden = !isMine(m);
+  const card = $('#s-card');
+  card.hidden = !m.card;
+  if (m.card) {
+    const img = card.querySelector('img');
+    if (img.getAttribute('src') !== m.card.src) { img.src = m.card.src; card.classList.remove('big'); }
+    img.alt = m.card.alt || '';
+  }
   renderDiary(m);
 }
 
 const escapeHtml = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+$('#s-card').onclick = () => $('#s-card').classList.toggle('big');
 
 $('#s-photo-box').onclick = () => {
   if (photoList.length < 2) return;

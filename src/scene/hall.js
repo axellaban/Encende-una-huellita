@@ -386,7 +386,7 @@ export function buildHall(scene, colliders, tier) {
       easel.add(pot);
     }
   }
-  [[-0.95, 0.7, -0.1, 330], [0.62, 0.7, -0.1, 190], [-0.6, 0.35, 0.45, 30]].forEach(([x, y, z, hue]) => {
+  [[0.62, 0.7, -0.1, 190], [-0.6, 0.35, 0.45, 30]].forEach(([x, y, z, hue]) => {
     const sk = sugarSkull(hue, 1.15);
     sk.position.set(x, y, z);
     sk.rotation.y = -x * 0.25;
@@ -410,6 +410,36 @@ export function buildHall(scene, colliders, tier) {
   spot.visible = false;
   easel.add(spot);
   pickables.push(spotPhoto);
+
+  // Estampita de la familia (si la huellita destacada tiene una), apoyada en el escalón.
+  const card = new THREE.Group();
+  card.position.set(-0.82, 0.7, -0.2);
+  card.rotation.set(-0.18, 0.28, 0);
+  card.visible = false;
+  easel.add(card);
+  const cardBorder = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.03), new THREE.MeshLambertMaterial({ color: '#fbf3e6', emissive: '#3a2a20' }));
+  const cardPhoto = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#f2ece4' }));
+  cardPhoto.userData = { kind: 'featured' };
+  card.add(cardBorder, cardPhoto);
+  pickables.push(cardPhoto);
+  let cardSrc = null;
+  function setCard(c) {
+    card.visible = !!c;
+    if (!c || c.src === cardSrc) return;
+    cardSrc = c.src;
+    const h = 0.62;
+    const w = h * (c.w / c.h);
+    cardBorder.scale.set(w + 0.05, h + 0.05, 1);
+    cardBorder.position.set(0, h / 2 + 0.03, 0);
+    cardPhoto.scale.set(w, h, 1);
+    cardPhoto.position.set(0, h / 2 + 0.03, 0.017);
+    new THREE.TextureLoader().load(c.src, (t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 4;
+      cardPhoto.material.map = t;
+      cardPhoto.material.needsUpdate = true;
+    });
+  }
 
   const fBorder = new THREE.Mesh(new THREE.BoxGeometry(1.36, 1.66, 0.08), goldMat);
   fBorder.position.set(0, 1.9, -0.6);
@@ -546,6 +576,7 @@ export function buildHall(scene, colliders, tier) {
     }
     featured = m;
     fPhoto.userData.id = m.id;
+    setCard(m.card);
     const lit = Math.min(clusterCandles.length, 3 + Math.ceil(m.candles * 0.8));
     clusterCandles.forEach((c, i) => { c.visible = i < lit; });
     showGifts(featuredGifts, m.lastGifts);

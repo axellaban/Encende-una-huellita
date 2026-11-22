@@ -212,6 +212,24 @@ export function sparkle() {
   });
 }
 
+// "Ding" del ascensor.
+export function ding() {
+  if (!ctx || !soundsOn) return;
+  [[1318.5, 0], [1046.5, 0.22]].forEach(([f, d]) => {
+    const t = ctx.currentTime + d;
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = f;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+    o.connect(g).connect(sfx);
+    o.start(t);
+    o.stop(t + 1.7);
+  });
+}
+
 // Toque suave para botones.
 export function tick() {
   if (!ctx || !soundsOn) return;

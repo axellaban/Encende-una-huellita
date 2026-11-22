@@ -42,6 +42,10 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
 - Pueblito de colores con las ventanas encendidas en las colinas, cielo violeta con aurora de fiesta,
   pétalos que flotan, alebrijes de colores neón y visitantes con cara de calaverita, corona de flores o sombrero.
 - Música: guitarra de cuerdas punteadas en vals (composición propia generada en el navegador).
+- **Ascensor** junto a la entrada del salón: indicador de piso con aguja, puertas de bronce y transición
+  de puertas con "ding" al cambiar de piso. Cada piso nuevo se abre cuando se llena el de abajo.
+- La huellita destacada puede tener una **estampita** (`card` en `server/seed.js`) apoyada en la
+  ofrenda y pegada con cintitas en su ficha.
 - Tipografías: Lobster (títulos), Caveat (escrito a mano) y Nunito.
 
 ### Para la familia (todo gratis por ahora, ver [MONETIZACION.md](MONETIZACION.md))
