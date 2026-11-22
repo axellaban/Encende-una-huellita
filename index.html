@@ -133,10 +133,10 @@
       <h2>Te damos la <em>bienvenida</em></h2>
       <p class="sub">Un jardín tranquilo para recordar a las mascotas que amamos.</p>
       <ul class="steps">
-        <li><span>👆</span><div><b>Caminá.</b> Tocá el piso para ir hasta ahí o usá la palanca. Deslizá para girar la cámara y pellizcá para acercarla.</div></li>
-        <li><span>🖼️</span><div><b>Dale un lugar.</b> Tocá un marco libre del muro para sumar a tu mascota.</div></li>
-        <li><span>🕯️</span><div><b>Encendé una vela.</b> Tocá cualquier foto para encender una vela, dejar flores o firmar su libro. Cada vela suelta un farolito al cielo.</div></li>
-        <li><span>🐾</span><div><b>Sacalo a pasear.</b> En el Prado de los espíritus juegan las huellitas. Desde su ficha podés sacar a pasear a tu mascota y tirarle la pelota.</div></li>
+        <li><span>👆</span><div><b>Caminá.</b> Tocá el piso o usá la palanca. Deslizá para girar la cámara.</div></li>
+        <li><span>🕯️</span><div><b>Encendé una vela.</b> Tocá una foto del muro: vela, flores y su libro de visitas.</div></li>
+        <li><span>🖼️</span><div><b>Dale un lugar.</b> Tocá un marco libre para sumar a tu mascota.</div></li>
+        <li><span>🐾</span><div><b>Sacalo a pasear.</b> Su espíritu te acompaña y juega en el Prado.</div></li>
       </ul>
       <button class="btn primary wide" data-close data-then="featured">🕯️ Conocer a <span class="featured-name">Luca</span></button>
       <button class="btn soft wide" data-close data-then="add">🐾 Darle un lugar a mi mascota</button>
@@ -215,6 +215,7 @@
             <button class="act" id="s-gift"><i>🎁</i><span>Regalito</span></button>
             <button class="act" id="s-hug"><i>🫂</i><span>Abrazo</span></button>
             <button class="act" id="s-share"><i>💌</i><span>Compartir</span></button>
+            <button class="act walk-act-btn" id="s-walk-act" hidden><i>🐾</i><span>Pasear</span></button>
           </div>
         </div>
         <div class="gathering" id="s-gathering" hidden></div>
@@ -303,6 +304,7 @@
           </div>
         </div>
         <label class="toggle"><span>🙈 Modo tranquilo (ocultar visitantes)</span><input type="checkbox" id="opt-quiet" /><i></i></label>
+        <button class="menu-item" data-then="meadow">🐾 Ir al Prado de los espíritus</button>
         <button class="menu-item" data-then="floors">🛗 Pisos</button>
         <button class="menu-item" data-guide>🕯️ La sexta etapa: crear significado</button>
         <button class="menu-item" data-jar>🫙 Frasco de gracias</button>

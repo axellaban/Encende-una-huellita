@@ -33,7 +33,7 @@ function withWind(material, key, glsl) {
     sh.uniforms.uTime = uTime;
     sh.vertexShader = `uniform float uTime;\n${sh.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>\n${glsl}`);
   };
-  material.customProgramCacheKey = () => key;
+  material.customProgramCacheKey = () => key + '2';
   return material;
 }
 
@@ -243,7 +243,10 @@ export function buildWorld(scene, tier) {
        float h = position.y;
        float bend = (sin(uTime * 1.5 + ip.x * 0.32 + ip.z * 0.21) * 0.55 + sin(uTime * 3.3 + ip.x * 1.3 - ip.z * 0.9) * 0.22 + 0.35) * h * h;
        transformed.x += bend * 0.22;
-       transformed.z += bend * 0.1;`);
+       transformed.z += bend * 0.1;
+       // Cerca de la cámara (tercera persona) las hojas se achican para no tapar la vista.
+       float camD = distance(ip.xz, cameraPosition.xz);
+       transformed *= mix(0.18, 1.0, smoothstep(1.2, 4.2, camD));`);
     const count = tier.grass;
     const grass = new THREE.InstancedMesh(geo, mat, count);
     const m = new THREE.Object3D();

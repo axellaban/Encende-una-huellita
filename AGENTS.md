@@ -40,13 +40,27 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
 ## Arquitectura en 1 minuto
 
 - **Frontend** (Vite + Three.js, sin framework): `index.html` + `src/`.
-  - `src/main.js` (≈2.200 líneas, el más grande): arranque, UI, ficha, modales, gamificación, guía,
-    ascensor, presencia. **Candidato a dividir** (ver PENDIENTES).
+  - `src/main.js` (≈2.400 líneas, el más grande): arranque, UI, ficha, modales, gamificación, guía,
+    ascensor, presencia, paseo. **Candidato a dividir** (ver PENDIENTES).
   - `src/scene/`: `world.js` (cielo, pasto, árboles, faroles, luciérnagas), `hall.js` (muro de
     marcos, pérgola, ofrenda central de Luca, estampita), `muertos.js` (papel picado, cempasúchil,
     calaveritas, pan de muerto, pueblito, fondos), `cozy.js` (camino de pétalos, puente, frasco,
-    alebrijes), `elevator.js`, `avatars.js` (otros visitantes), `lanterns.js` (farolitos),
-    `controls.js` (caminar/mirar/pellizcar/palanca), `textures.js`.
+    alebrijes, Prado de los espíritus), `elevator.js`, `avatars.js` (otros visitantes), `lanterns.js`
+    (farolitos), `textures.js`.
+  - **Tercera persona**: `controls.js` mueve a tu personaje (`player.pos`, `player.heading`) y maneja la
+    cámara en tres modos: `follow` (detrás del personaje; arrastrar orbita, pellizcar acerca),
+    `focus` (mira un punto fijo, p. ej. un marco: `flyTo(stand, target)`) y `fixed` (intro:
+    `teleportCamera`). `follow({ path, duration, done })` vuela de vuelta detrás del personaje.
+    La cámara se acorta si un muro (`colliders.segments`) o un poste/tronco (`colliders.circles`)
+    queda en el medio. `createBlocker(colliders)` es la colisión compartida con los espíritus.
+  - `character.js`: el personaje de cada visitante (vos y `avatars.js`): caminar, `wave()`, `throw()`, `pet()`.
+  - **Espíritus**: `petRig.js` arma un `SkinnedMesh` por mascota (una sola malla, colores por vértice,
+    brillo fresnel) y un animador que mezcla marchas (paso/trote/galope/saltitos) con acciones
+    (`want.sit/lie/bow/rear/sniff/carry/tilt` y `trigger('jump'|'roll'|'shake')`). `spirits.js` es el
+    cerebro: estados por espíritu (`idle`, `wander`, `zoomies`, `chase`, `bow`, `wrestle`, `ball`,
+    `carry`, `rest`, `roll`, `greet`, `follow`, `explore`…), la pelota con física, huellitas de luz y
+    chispitas. `setPack(memorials)` elige quiénes juegan en el Prado; `walk(m, from)` saca a pasear.
+    Cómo se ve cada uno sale de `m.look` (`server/looks.js`) o, si no hay, de un hash de su id.
   - `src/api.js`: cliente HTTP + **modo demo** (localStorage) si no hay base de datos.
   - `src/game.js` (gestos del día, racha, Glow guardado), `src/guide.js` (la sexta etapa),
     `src/quality.js` (calidad por dispositivo + resolución adaptativa), `src/audio.js` (todo sintetizado).
@@ -81,9 +95,14 @@ const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftsha
 const ctx = await b.newContext({ ...devices['iPhone 13'] }); // celular
 // localStorage: 'huellita.quality' = 'low' acelera; 'huellita.welcomed' = '1' salta la bienvenida.
 // Entrar: await p.click('#enter'), luego un clic en el canvas salta la intro.
-// Con ?debug en la URL: window.__huellita = { controls, camera, THREE } para teletransportar la cámara:
-//   H.controls.teleport(new H.THREE.Vector3(x, 1.6, z), new H.THREE.Vector3(tx, ty, tz))
+// Con ?debug en la URL: window.__huellita = { controls, camera, THREE, spirits, me, startWalk }:
+//   H.controls.placePlayer(new H.THREE.Vector3(x, 0, z), new H.THREE.Vector3(tx, 0, tz)); H.controls.snapFollow();
+//   H.startWalk('luca')   // sacar a pasear a Luca
 ```
+
+Para los espíritus sin entrar al jardín: `npm run dev` y `/lab/pets.html?t=1.5&pose=sit&side&d=0.55`
+(congela en t segundos) o `/lab/pets.html?mode=pack` con `window.__lab.advance(20)` (simula 20 s del
+Prado y deja en `__lab.log` qué hacía cada espíritu).
 
 Con swiftshader todo anda a pocos FPS: los vuelos de cámara tardan mucho más que en un teléfono real
 (esperar 8–10 s antes de sacar captura). Para probar el ascensor hace falta una huellita en el piso 2

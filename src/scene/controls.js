@@ -181,6 +181,22 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
       const t = segHit(from.x, from.z, from.x + o.x, from.z + o.z, s);
       if (t !== null) best = Math.min(best, Math.max(0.9, t * d - 0.35));
     }
+    // Postes, troncos y faroles: si quedan en la línea de la cámara, se acerca para no taparte.
+    const len = Math.hypot(o.x, o.z) || 1;
+    const ux = o.x / len;
+    const uz = o.z / len;
+    for (const c of colliders.circles) {
+      const cx = c.x - from.x;
+      const cz = c.z - from.z;
+      const along = cx * ux + cz * uz;
+      if (along < 0.4 || along > len + 0.5) continue;
+      const perp = Math.abs(cx * uz - cz * ux);
+      const rad = c.r + 0.22;
+      if (perp < rad) {
+        const hitAt = along - Math.sqrt(rad * rad - perp * perp);
+        best = Math.min(best, Math.max(1.0, (hitAt / len) * d - 0.1));
+      }
+    }
     for (let k = 0; k < 6; k++) {
       const x = from.x + (o.x * best) / d;
       const z = from.z + (o.z * best) / d;

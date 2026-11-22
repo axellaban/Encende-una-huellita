@@ -750,10 +750,10 @@ export function createSpirits(scene, { blocked, tier }) {
     if (ball.pos.y < ball.r) {
       ball.pos.y = ball.r;
       if (v.y < -1.2) {
+        if (v.y < -2.6 && dist2(ball.pos, camPos) < 14) listeners.event.forEach((fn) => fn('bounce'));
         v.y = -v.y * 0.55;
         v.x *= 0.82;
         v.z *= 0.82;
-        if (dist2(ball.pos, camPos) < 14) listeners.event.forEach((fn) => fn('bounce'));
       } else v.y = 0;
     }
     if (ball.pos.y <= ball.r + 0.001) { const f = Math.exp(-dt * 1.6); v.x *= f; v.z *= f; }
@@ -907,6 +907,14 @@ export function createSpirits(scene, { blocked, tier }) {
       if (!a || a.pet.anim.busy) return;
       if (a.state === 'carry' && ball.held === a) { dropBall(a, 0); }
       go(a, 'poked');
+    },
+    // Se sienta para que lo acaricies, te mira y mueve la cola.
+    cuddle(a) {
+      if (!a) return;
+      if (ball.held === a) dropBall(a, 0);
+      go(a, 'present', a.owner || player);
+      a.dur = 2.6;
+      fx.emit(tmp.copy(a.pos).setY(0.6 * a.s), a.rim, 10, { spread: 0.3, up: 0.6, speed: 0.3 });
     },
     call() {
       if (!companion) return;

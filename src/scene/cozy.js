@@ -60,10 +60,21 @@ export function createCozy(scene, tier, colliders) {
   }
 
   // ---------- papel picado cruzando el camino ----------
-  for (const [z, seed] of [[19, 1], [13.5, 4], [8, 9], [2.5, 13]]) {
-    const b = picadoBanner(new THREE.Vector3(-2.7, 3.25, z), new THREE.Vector3(2.7, 3.25, z - 0.2), { sag: 0.5, flags: 11, size: 0.4, seed });
-    scene.add(b);
-    animated.push((t) => b.userData.flutter(t));
+  // Van altas (con sus postes) para que la cámara en tercera persona pase por debajo.
+  {
+    const poleMat = new THREE.MeshLambertMaterial({ map: woodTexture('#5a3a28') });
+    const poleGeo = new THREE.CylinderGeometry(0.045, 0.06, 4.4, 7);
+    for (const [z, seed] of [[19.8, 1], [14.3, 4], [8.8, 9], [3.3, 13]]) {
+      const b = picadoBanner(new THREE.Vector3(-2.75, 4.3, z), new THREE.Vector3(2.75, 4.3, z - 0.2), { sag: 0.42, flags: 11, size: 0.4, seed });
+      scene.add(b);
+      animated.push((t) => b.userData.flutter(t));
+      for (const [x, zz] of [[-2.75, z], [2.75, z - 0.2]]) {
+        const pole = new THREE.Mesh(poleGeo, poleMat);
+        pole.position.set(x, 2.2, zz);
+        scene.add(pole);
+        if (!colliders.circles.some((c) => Math.hypot(c.x - x, c.z - zz) < 0.4)) colliders.circles.push({ x, z: zz, r: 0.12 });
+      }
+    }
   }
 
   // ---------- hongos que brillan ----------
@@ -346,6 +357,36 @@ export function createCozy(scene, tier, colliders) {
     scene.add(signPost);
   }
 
+  // ---------- cartel con flecha en la entrada: por acá al Prado ----------
+  {
+    const g = new THREE.Group();
+    g.position.set(PATH_HALF + 1.5, 0, SPAWN.z - 13.2);
+    const wood = new THREE.MeshLambertMaterial({ map: woodTexture('#6b4630') });
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.8, 0.08), wood);
+    post.position.y = 0.9;
+    g.add(post);
+    const dx = MEADOW.x - g.position.x;
+    const dz = MEADOW.z - g.position.z;
+    const arm = new THREE.Group();
+    arm.position.y = 1.5;
+    arm.rotation.y = Math.atan2(-dz, dx);
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.3, 0.05), new THREE.MeshLambertMaterial({ color: '#7a5236', emissive: '#2a160c' }));
+    plank.position.x = 0.62;
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0, 0.21, 0.05, 3), plank.material);
+    tip.rotation.set(Math.PI / 2, 0, -Math.PI / 2);
+    tip.position.x = 1.42;
+    const tex = (t) => labelTexture(t, { w: 600, h: 124, font: '700 62px Caveat, cursive', bg: 'rgba(0,0,0,0)', fg: '#f6e3c4' });
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.29), new THREE.MeshBasicMaterial({ map: tex('Prado de los espíritus 🐾'), transparent: true }));
+    front.position.set(0.62, 0, 0.027);
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.29), new THREE.MeshBasicMaterial({ map: tex('🐾 Prado de los espíritus'), transparent: true }));
+    back.position.set(0.62, 0, -0.027);
+    back.rotation.y = Math.PI;
+    arm.add(plank, tip, front, back);
+    g.add(arm);
+    scene.add(g);
+    colliders.circles.push({ x: g.position.x, z: g.position.z, r: 0.2 });
+  }
+
   // ---------- el Prado de los espíritus: cartel, cucha, cuenco y piedritas que brillan ----------
   {
     const wood = new THREE.MeshLambertMaterial({ map: woodTexture('#7a5236') });
@@ -388,7 +429,7 @@ export function createCozy(scene, tier, colliders) {
     colliders.circles.push({ x: house.position.x, z: house.position.z, r: 0.7 });
     // Piedritas que brillan marcando el borde del prado.
     const n = 26;
-    const glowStones = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.045, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 0.8, 0.9) }), n);
+    const glowStones = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.032, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 0.8, 0.9) }), n);
     const m = new THREE.Object3D();
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + r() * 0.1;

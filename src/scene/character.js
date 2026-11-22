@@ -156,6 +156,9 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
     handWorld(v = new THREE.Vector3()) { return arms[0].localToWorld(v.set(0, -0.36, 0.02)); },
     throw() { act = { kind: 'throw', t: 0, dur: 0.55 }; },
     wave() { act = { kind: 'wave', t: 0, dur: 1.6 }; },
+    // Agacharse a acariciar al espíritu.
+    pet() { act = { kind: 'pet', t: 0, dur: 1.8 }; },
+    get busy() { return !!act; },
     // `speed` en m/s; `turn` en rad/s.
     update(dt, { speed = 0, turn = 0 } = {}) {
       t += dt;
@@ -183,11 +186,19 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
           const a = p < 0.4 ? -2.6 * (p / 0.4) : -2.6 + 3.2 * ((p - 0.4) / 0.6);
           arms[0].rotation.x = a;
           torso.rotation.y = (p < 0.4 ? -0.3 : 0.25) * Math.sin(Math.PI * p);
+        } else if (act.kind === 'pet') {
+          const e = Math.sin(Math.PI * p);
+          torso.rotation.x = 0.55 * e;
+          hips.position.y = 0.46 - 0.14 * e;
+          legs[0].rotation.x = legs[1].rotation.x = -0.5 * e;
+          arms[0].rotation.x = -1.1 * e;
+          arms[0].rotation.z = -0.12 + Math.sin(act.t * 7) * 0.18 * e;
+          head.rotation.x = 0.3 * e;
         } else if (act.kind === 'wave') {
           arms[0].rotation.x = -2.7;
           arms[0].rotation.z = -0.4 + Math.sin(act.t * 12) * 0.35;
         }
-        if (p >= 1) { act = null; arms[0].rotation.z = -0.12; }
+        if (p >= 1) { act = null; arms[0].rotation.z = -0.12; hips.position.y = 0.46; head.rotation.x = 0; }
       } else arms[0].rotation.z = -0.12;
     },
     dispose() {

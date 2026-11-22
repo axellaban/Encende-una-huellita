@@ -594,6 +594,9 @@ function fillSheet(m) {
   sheetEl.dataset.id = m.id;
   $('#s-delete').hidden = !myTokens()[m.id];
   $('#s-walk').hidden = !canWalk(m);
+  $('#s-walk-act').hidden = !canWalk(m);
+  $('#s-walk-act').classList.toggle('on', walking?.id === m.id);
+  $('#s-walk-act span').textContent = walking?.id === m.id ? 'Soltar' : 'Pasear';
   $('#s-walk-label').textContent = walking?.id === m.id ? `Terminar el paseo con ${m.name}` : `Sacar a pasear a ${m.name}`;
   const lit = didToday('c', m.id);
   $('#s-candle').classList.toggle('lit', lit);
@@ -1009,6 +1012,7 @@ const THEN = {
   home: () => goHome(),
   floors: () => { renderFloors(); $('#floors').showModal(); },
   install: () => installPrompt?.prompt(),
+  meadow: () => goMeadow(),
 };
 $$('dialog [data-close]').forEach((b) => {
   b.onclick = () => {
@@ -2202,6 +2206,16 @@ function startWalk(m, { quiet = false } = {}) {
   if (!quiet) toast(`✨ ${m.name} viene a tu lado…`);
   heartbeat();
 }
+function goMeadow() {
+  if (!controls) return;
+  closeSheet();
+  closeModals();
+  goFloor(0, true);
+  const spot = new THREE.Vector3(MEADOW.x - 5.2, 0, MEADOW.z + 5.2);
+  teleportPlayer(spot, MEADOW);
+  controls.follow();
+  setTimeout(() => toast('🐾 El Prado de los espíritus: acá juegan las huellitas'), 700);
+}
 function stopWalk() {
   if (!walking) return;
   const name = walking.name;
@@ -2225,6 +2239,7 @@ $('#walk-ball').onclick = throwBall;
 $('#walk-call').onclick = () => { spirits?.call(); haptic(8); if (walking) toast(`📣 ¡${walking.name}, vení!`); };
 $('#walk-stop').onclick = stopWalk;
 $('#walk-who').onclick = () => { if (walking) visit(memorials.find((m) => m.id === walking.id) || walking); };
+$('#s-walk-act').onclick = () => $('#s-walk').click();
 $('#s-walk').onclick = () => {
   if (!current) return;
   if (walking?.id === current.id) stopWalk();
@@ -2245,10 +2260,21 @@ function updateBallPrompt() {
 const SPIRIT_LINES = ['mueve la cola de felicidad', 'te mira con ojitos brillantes', 'da un saltito de alegría', 'te quiere invitar a jugar'];
 function tapSpirit(a) {
   if (!a) return;
-  spirits.poke(a);
+  const P0 = controls.player;
+  const petting = a.role === 'companion' && P0.pos.distanceTo(a.pos) < 2.2 && !P0.moving;
+  if (petting) spirits.cuddle(a); else spirits.poke(a);
   haptic([8, 30, 8]);
   avatars?.floatAt('🤍', a.pos.clone().setY(0.9 * a.s + 0.3));
-  if (a.role === 'companion') return toast(`🐾 ${a.name} ${pick(SPIRIT_LINES)}`);
+  if (a.role === 'companion') {
+    // Si está cerca, tu personaje se agacha a acariciarlo.
+    const P = controls.player;
+    if (petting) {
+      P.heading = Math.atan2(a.pos.x - P.pos.x, a.pos.z - P.pos.z);
+      me.pet();
+      return toast(`🤍 Acariciaste a ${a.name}`);
+    }
+    return toast(`🐾 ${a.name} ${pick(SPIRIT_LINES)}`);
+  }
   if (a.role === 'remote') return toast(`🐾 ${a.name} pasea con su familia`);
   const m = a.memorialId && memorials.find((x) => x.id === a.memorialId);
   if (m) toast(`🐾 ${m.name} juega en el Prado de los espíritus`, { label: 'Visitar su lugar', fn: () => visit(m) });

@@ -11,12 +11,18 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
       fotos servidas con caché de CDN, y que sin Upstash la app caiga bien al **modo demo**.
 - [ ] **Teléfonos reales** (iPhone Safari y Android Chrome): rendimiento del 3D, calidad automática
       (`src/quality.js`), palanca, hoja deslizable, teclado sobre formularios, áreas seguras del notch.
+      Con la tercera persona: que la cámara no se meta en los muros, que la palanca se sienta natural
+      y cuántos espíritus aguanta un teléfono de gama baja (hoy 3 en "Ahorro", 4 en media, 5 en alta).
 - [ ] **Grabar la voz en iOS Safari** (MediaRecorder entrega `audio/mp4`; el servidor lo acepta,
       pero nunca se probó en un iPhone).
 - [ ] **Moderación mínima** antes de abrirlo al público: hoy cualquiera puede subir fotos y escribir en
       libros de visitas, diario, frasco y consuelo sin filtro ni forma de denunciar.
 
 ## P1 · Lo que más suma ahora
+
+- [ ] **Espíritus**: que tu espíritu juegue con los espíritus que pasean otros visitantes; más acciones
+      (tirar de una soga entre dos, cavar, perseguir mariposas de luz); ladridos/maullidos suaves.
+- [ ] **Tu personaje**: elegir su ropa (color del sarape, sombrero o corona) desde "Así te ven los demás".
 
 - [ ] **Palabras de Luca**: su mensaje sigue siendo el provisorio *"Siempre en nuestro corazón."*
       (`server/seed.js`). Pedírselas al dueño. En la foto principal aparece otro perro negro: preguntar
@@ -70,7 +76,6 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 ## Detalles visuales conocidos
 
 - [ ] `public/og.jpg` (imagen para compartir el link) tiene un anillito blanco de "caminar acá" sobre el camino.
-- [ ] Panel **Hoy** sin mascota: la tarjeta "Tu Glow te espera" tiene un brillo que lava parte del texto.
 - [ ] La ilustración de la estampita del Principito tiene firma de su autora: si el sitio es público,
       pedir permiso o darle crédito.
 - [ ] En teléfonos lentos, al abrir un link directo (`#h/luca`) la cámara puede tardar en llegar a la ofrenda.
