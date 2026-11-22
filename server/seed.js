@@ -9,6 +9,7 @@ export const FEATURED = [
     name: 'Luca',
     species: 'perro',
     photo: '/huellitas/luca.jpg', // archivo en public/huellitas/
+    extraPhotos: ['/huellitas/luca-2.jpg'],
     hue: 32,
     birthday: '10-22', // 'MM-DD'
     passedDay: '10-25', // 'MM-DD'

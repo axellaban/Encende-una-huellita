@@ -52,7 +52,7 @@ export function createStore(kv) {
       glow: Number(h.glow) || 0,
       guestbookCount: Number(h.gb) || 0,
       lastGifts: h.lastGifts ? JSON.parse(h.lastGifts) : [],
-      extraPhotos: Array.from({ length: Number(h.xp) || 0 }, (_, i) => `/api/photos/${id}/${i + 1}`),
+      extraPhotos: f?.extraPhotos || Array.from({ length: Number(h.xp) || 0 }, (_, i) => `/api/photos/${id}/${i + 1}`),
       voice: h.voice ? `/api/voices/${id}?v=${h.voice}` : null,
       eternal: h.eternal ? JSON.parse(h.eternal) : null,
       bg: h.bg || 'crema',
