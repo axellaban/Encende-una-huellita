@@ -249,7 +249,8 @@ export async function handleApi(req, store) {
       country: countryOf(req),
       pet: cleanPet(body.pet),
     };
-    return ok(await store.touch(cleanText(body.sid, 40), info));
+    const since = Number.isInteger(body.since) && body.since >= 0 ? body.since : null;
+    return ok(await store.touch(cleanText(body.sid, 40), info, since));
   }
 
   if (path === '/api/night' && method === 'GET') return ok(await store.night());

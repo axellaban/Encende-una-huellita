@@ -63,8 +63,10 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
       ascensor, presencia.
 - [ ] **Archivos fuera de Redis**: fotos (≈100–150 KB) y voces (hasta 600 KB) se guardan en base64 en
       Upstash; pasar a Vercel Blob/S3 y dejar sólo la URL.
-- [ ] **Presencia**: hoy es polling cada 4–10 s por visitante (costo de comandos en Upstash). Con más
-      tráfico, pasar a WebSockets/SSE o bajar la frecuencia.
+- [ ] **Presencia**: un solo latido (`POST /api/now` con `since`) cada 12 s (solo) o 5 s (con gente),
+      3 comandos de Redis cada uno; nada con la pestaña oculta. Una visita de 10 min gasta ≈150–400
+      comandos (el plan gratis de Upstash da 500.000/mes). Con mucho más tráfico: WebSockets/SSE
+      (Ably, Pusher, PartyKit) para que los demás se muevan en tiempo real y gastar todavía menos.
 - [ ] **Paquete JS de ~900 KB**: separar three/addons y cargar diferido lo que no hace falta al entrar.
 - [ ] **Tests de frontend**: sólo hay tests de API. Convertir los recorridos de Playwright (ver
       `AGENTS.md`) en una suite que se pueda correr.

@@ -34,6 +34,19 @@ function fromHash(arr) {
   return o;
 }
 
+// Separa la presencia en los que siguen acá y los que ya se fueron (sin latido hace más de PRESENCE_MS).
+function splitPresence(flat, now) {
+  const fresh = [];
+  const stale = [];
+  for (let i = 0; i < flat.length; i += 2) {
+    let o = null;
+    try { o = JSON.parse(flat[i + 1]); } catch { o = null; }
+    if (o && o.at && now - o.at <= PRESENCE_MS) fresh.push([flat[i], o]);
+    else stale.push(flat[i]);
+  }
+  return { fresh, stale };
+}
+
 export function createStore(kv) {
   const featuredById = new Map(FEATURED.map((f) => [f.id, f]));
 
@@ -75,7 +88,7 @@ export function createStore(kv) {
 
   async function event(type, m, visitor, extra = {}) {
     const seq = await kv.cmd('INCR', `${P}seq`);
-    const ev = { seq, type, memorialId: m.id, petName: m.name, visitor: visitor || 'Alguien', at: Date.now(), ...extra };
+    const ev = { seq, type, memorialId: m.id, petName: m.name, visitor: visitor || 'Alguien', at: Date.now(), c: m.candles, f: m.flowers, ...extra };
     await kv.pipeline([['LPUSH', `${P}ev`, JSON.stringify(ev)], ['LTRIM', `${P}ev`, '0', '199']]);
   }
 
@@ -398,11 +411,12 @@ export function createStore(kv) {
     },
 
     // Latido: guarda dónde está cada visitante y devuelve a los demás para dibujarlos en el jardín.
-    async touch(sid, info = {}) {
+    // Si viene `since`, también devuelve lo que pasó desde entonces (así hay un solo pedido periódico).
+    // Toda la presencia vive en un solo HASH (sid -> JSON con `at`): 3 comandos por latido.
+    async touch(sid, info = {}, since = null) {
       const now = Date.now();
-      const cmds = [['ZREMRANGEBYSCORE', `${P}now`, '-inf', String(now - PRESENCE_MS)]];
+      const cmds = [];
       if (sid) {
-        cmds.push(['ZADD', `${P}now`, String(now), sid]);
         const say = SAYINGS.includes(info.say) ? info.say : null;
         const emote = EMOTES.includes(info.emote) ? info.emote : null;
         const pos = {
@@ -416,20 +430,40 @@ export function createStore(kv) {
           gestureAt: say || emote ? now : 0,
           country: info.country || null,
           pet: info.pet || null,
+          at: now,
         };
-        cmds.push(['SET', `${P}p:${sid}`, JSON.stringify(pos), 'EX', '60']);
+        cmds.push(['HSET', `${P}pres`, sid, JSON.stringify(pos)]);
       }
-      cmds.push(['ZRANGEBYSCORE', `${P}now`, String(now - PRESENCE_MS), '+inf', 'LIMIT', '0', '40']);
+      cmds.push(['HGETALL', `${P}pres`]);
+      const withEvents = Number.isInteger(since) && since >= 0;
+      if (withEvents) cmds.push(['GET', `${P}seq`]);
       const r = await kv.pipeline(cmds);
-      const sids = r[r.length - 1].filter((s) => s !== sid);
-      const raw = sids.length ? await kv.cmd('MGET', ...sids.map((s) => `${P}p:${s}`)) : [];
-      const others = raw.map((x, i) => (x ? { sid: sids[i].slice(0, 8), ...JSON.parse(x) } : null)).filter(Boolean);
-      return { here: others.length + (sid ? 1 : 0), others };
+      const { fresh, stale } = splitPresence(r[sid ? 1 : 0], now);
+      const others = [];
+      for (const [k, o] of fresh) {
+        if (k === sid || others.length >= 40) continue;
+        const { at, ...rest } = o;
+        void at;
+        others.push({ sid: k.slice(0, 8), ...rest });
+      }
+      const out = { here: fresh.filter(([k]) => k !== sid).length + (sid ? 1 : 0), others };
+      // Limpieza de quienes se fueron y, sólo si hay novedades, los eventos.
+      const more = [];
+      if (stale.length) more.push(['HDEL', `${P}pres`, ...stale]);
+      const seq = withEvents ? Number(r[r.length - 1]) || 0 : 0;
+      if (withEvents && seq > since) more.push(['LRANGE', `${P}ev`, '0', '19']);
+      const x = more.length ? await kv.pipeline(more) : [];
+      if (withEvents) {
+        const list = seq > since ? x[x.length - 1] : [];
+        out.seq = seq;
+        out.events = list.map((e) => JSON.parse(e)).filter((e) => e.seq > since).reverse();
+      }
+      return out;
     },
 
     async here() {
-      const r = await kv.pipeline([['ZREMRANGEBYSCORE', `${P}now`, '-inf', String(Date.now() - PRESENCE_MS)], ['ZCARD', `${P}now`]]);
-      return r[1];
+      const { fresh } = splitPresence(await kv.cmd('HGETALL', `${P}pres`), Date.now());
+      return fresh.length;
     },
 
     async night() {

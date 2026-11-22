@@ -69,6 +69,11 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
   - Local: `server/index.js`. Vercel: `api/handler.js` (todas las `/api/*` llegan por el rewrite de `vercel.json`).
   - `server/seed.js`: huellitas destacadas (Luca) definidas en código; la base sólo guarda sus contadores.
   - `server/glow.js`: reglas del Glow, regalitos, frases y gestos. `server/plans.js`: funciones pagas y fondos.
+- **Presencia y novedades**: un solo pedido periódico, `POST /api/now` con `since` (posición del
+  personaje, gesto, espíritu que pasea) que devuelve a los demás visitantes y los eventos nuevos. La
+  presencia vive en un HASH `hu:pres` (sid → JSON con `at`) y cuesta 3 comandos por latido; hay un
+  test que lo controla. Los eventos traen los contadores (`c` velas, `f` flores) para actualizar la
+  huellita sin pedir la lista entera. No subas la frecuencia sin mirar el costo (PENDIENTES).
 - **Datos**: Upstash Redis (variables `KV_REST_API_URL`/`KV_REST_API_TOKEN` que pone la integración de
   Vercel). Fotos y voces van en base64 dentro de Redis (deuda técnica, ver PENDIENTES).
 - **Auth**: no hay cuentas. Quien crea una huellita recibe un `editToken` que queda en localStorage;

@@ -180,7 +180,7 @@ server/index.js         Servidor local
 | `GET /api/activity/:since` | Eventos nuevos + cuántos hay ahora |
 | `POST /api/memorials/:id/gift` | Deja un regalito (`gift` del catálogo) |
 | `POST /api/memorials/:id/hug` | Abrazo en silencio |
-| `POST /api/now` | Latido: posición y rumbo del personaje, gesto o frase, y `pet` (el espíritu que pasea); devuelve a los demás visitantes |
+| `POST /api/now` | Latido: posición y rumbo del personaje, gesto o frase, y `pet` (el espíritu que pasea); devuelve a los demás visitantes y, con `since`, los eventos nuevos (`events`, `seq`) |
 | `GET /api/night` | Velas y países de esta noche |
 | `POST /api/memorials/:id/eternal` | Luz eterna |
 | `POST /api/memorials/:id/altar` · `GET /api/altar` | Poner en la ofrenda de hoy / lista del día |

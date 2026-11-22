@@ -36,5 +36,7 @@ la verificación del plan dentro de `allowed()` y mostrar el aviso correspondien
 - **Fotos y voces en Upstash**: cada foto pesa ~100–150 KB y cada voz hasta 600 KB. El plan gratis
   de Upstash (256 MB) alcanza para unos cientos de huellitas con varias fotos. A escala conviene
   mover archivos a Vercel Blob o S3 y dejar en Redis sólo los datos.
-- **Presencia en vivo**: cada visitante consulta cada 4–10 s. Con mucho tráfico conviene pasar a
+- **Presencia en vivo**: un latido cada 12 s (solo) o 5 s (con más gente), 3 comandos de Redis cada
+  uno. Una visita de 10 minutos gasta unos 150–400 comandos, así que el plan gratis de Upstash
+  (500.000 comandos/mes) alcanza para miles de visitas por mes. Con mucho tráfico conviene pasar a
   WebSockets o al plan pago de Upstash.

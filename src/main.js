@@ -293,6 +293,7 @@ let seq = 0;
 
 async function refresh() {
   const r = await api.list();
+  lastFull = Date.now();
   memorials = r.memorials;
   hall?.render(memorials);
   spirits?.setPack(memorials, walking?.id);
@@ -1162,41 +1163,59 @@ function showTick(e) {
   tickerTimer = setTimeout(() => { box.innerHTML = ''; }, 12_000);
 }
 
+// Un solo pedido periódico (el "latido"): dice dónde está tu personaje y trae a los demás visitantes
+// y lo que pasó desde la última vez. Cada 12 s si estás solo y cada 5 s si hay más gente; nada si la
+// pestaña está oculta. Así la base de datos gasta 3 comandos por latido (ver server/store.js).
 let firstPoll = true;
-async function pollActivity() {
-  if (document.hidden || !api) return;
-  try {
-    const r = await api.activity(seq);
-    $('#here').textContent = Math.max(1, r.here);
-    if (firstPoll) {
-      firstPoll = false;
-      const last = r.events[r.events.length - 1];
-      if (last && Date.now() - last.at < 3 * 3600_000) showTick(last);
-    } else if (r.events.length) {
-      const others = r.events.filter((e) => e.visitor !== visitor.name);
-      others.forEach((e, i) => setTimeout(() => showTick(e), i * 2600));
-      if (others.length) {
-        await refresh();
-        for (const e of others) {
-          if (e.type !== 'candle' && e.type !== 'created') continue;
-          const m = memorials.find((x) => x.id === e.memorialId);
-          if (m) releaseLantern(m);
-        }
-        if (current) {
-          const m = memorials.find((x) => x.id === current.id);
-          if (m) updateMemorial(m);
-        }
-      }
-    }
-    seq = r.seq;
-  } catch { /* reintenta en el próximo ciclo */ }
+let lastFull = Date.now();
+
+// Aplica las novedades sin volver a pedir todas las huellitas (los eventos traen los contadores).
+async function applyEvents(list) {
+  const fresh = list.filter((e) => e.seq > seq);
+  if (!fresh.length) return;
+  if (firstPoll) {
+    firstPoll = false;
+    const last = fresh[fresh.length - 1];
+    if (last && Date.now() - last.at < 3 * 3600_000) showTick(last);
+    return;
+  }
+  const others = fresh.filter((e) => e.visitor !== visitor.name);
+  if (!others.length) return;
+  others.forEach((e, i) => setTimeout(() => showTick(e), i * 2600));
+  let needFull = false;
+  for (const e of others) {
+    const m = memorials.find((x) => x.id === e.memorialId);
+    if (!m) { needFull = needFull || e.type === 'created'; continue; }
+    if (Number.isFinite(e.c)) m.candles = e.c;
+    if (Number.isFinite(e.f)) m.flowers = e.f;
+    if (e.type === 'guestbook') m.guestbookCount = (m.guestbookCount || 0) + 1;
+    if (e.type === 'eternal' || e.type === 'diary') needFull = true;
+  }
+  if (needFull) await refresh().catch(() => {});
+  else {
+    hall?.render(memorials);
+    renderStats({ memorials: memorials.length, candles: memorials.reduce((a, m) => a + (m.candles || 0), 0), flowers: memorials.reduce((a, m) => a + (m.flowers || 0), 0) });
+    if (others.some((e) => e.type === 'altar')) api.altar().then(({ ids }) => hall?.setAltar(ids.map((id) => memorials.find((m) => m.id === id)).filter(Boolean))).catch(() => {});
+  }
+  for (const e of others) {
+    if (e.type !== 'candle' && e.type !== 'created') continue;
+    const m = memorials.find((x) => x.id === e.memorialId);
+    if (m) releaseLantern(m);
+  }
+  // Si tenés abierta la ficha de esa huellita, se actualiza entera (libro, regalitos).
+  if (current && others.some((e) => e.memorialId === current.id)) {
+    try {
+      const full = await api.get(current.id);
+      if (current?.id === full.id) { current = { ...current, ...full }; fillSheet(current); renderGuestbook(full.guestbook || []); }
+    } catch { /* se ve igual */ }
+  }
 }
 
 let pendingGesture = null;
 let hbTimer;
 async function heartbeat() {
   clearTimeout(hbTimer);
-  let next = 10_000;
+  let next = 12_000;
   if (!document.hidden && api) {
     try {
       const pos = controls?.player.pos || SPAWN;
@@ -1206,15 +1225,26 @@ async function heartbeat() {
         sid: visitor.sid, visitor: visitor.name, hue: visitorHue,
         x: pos.x, z: pos.z, ry: controls?.player.heading ?? 0, ...(g || {}),
         ...(walking ? { pet: { n: walking.name, sp: walking.species, ...(walking.look || {}) } } : {}),
+        since: seq,
       });
       $('#here').textContent = Math.max(1, r.here);
       avatars?.update(r.others || []);
       spirits?.setRemote(avatars?.list() || []);
-      if ((r.others || []).length) next = 4_000;
-    } catch { /* nada */ }
+      if ((r.others || []).length) next = 5_000;
+      if (r.events) await applyEvents(r.events);
+      if (Number.isFinite(r.seq)) seq = Math.max(seq, r.seq);
+      firstPoll = false;
+    } catch { /* reintenta en el próximo latido */ }
   }
   hbTimer = setTimeout(heartbeat, next);
 }
+// Una recarga completa cada tanto (por si alguien editó o quitó una huellita).
+setInterval(() => { if (!document.hidden && api && Date.now() - lastFull > 10 * 60_000) refresh().catch(() => {}); }, 60_000);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !api) return;
+  heartbeat();
+  if (Date.now() - lastFull > 3 * 60_000) refresh().catch(() => {});
+});
 
 // ---------- la hora de las velas (21 h) ----------
 const candleHourKey = () => `huellita.ch.${new Date().toDateString()}`;
@@ -2480,7 +2510,5 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheetEl.hidden &
     awayMsg = `🤍 Mientras no estabas, ${a.m.name} recibió ${bits.join(', ').replace(/, ([^,]*)$/, ' y $1')}.`;
   }
   try { cozy?.setJarCount((await api.jar()).count); } catch { /* nada */ }
-  setInterval(pollActivity, 8_000);
   setInterval(checkCandleHour, 60_000);
-  setTimeout(pollActivity, 1200);
 })();

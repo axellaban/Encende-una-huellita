@@ -272,7 +272,10 @@ function makeLocal() {
       return { entry: e, count: db.jar.length };
     },
     async activity(since) { return { events: db.events.filter((e) => e.seq > since), seq: db.seq, here: 1 }; },
-    async heartbeat() { return { here: 1, others: [] }; },
+    async heartbeat(info = {}) {
+      const since = Number.isInteger(info.since) ? info.since : null;
+      return since === null ? { here: 1, others: [] } : { here: 1, others: [], events: db.events.filter((e) => e.seq > since), seq: db.seq };
+    },
   };
 }
 
