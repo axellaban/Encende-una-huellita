@@ -38,6 +38,21 @@ export function parseDataUrl(s) {
   return { bytes, type: `image/${m[1]}` };
 }
 
+const countryOf = (req) => {
+  const c = (req.header('x-vercel-ip-country') || '').toUpperCase();
+  return /^[A-Z]{2}$/.test(c) ? c : null;
+};
+
+function whoFrom(body, req) {
+  return {
+    sid: cleanText(body.sid, 40) || null,
+    visitor: cleanText(body.visitor, 40) || 'Alguien',
+    glowTo: /^[\w-]{3,24}$/.test(body.glowTo || '') ? body.glowTo : null,
+    glowToken: typeof body.glowToken === 'string' ? body.glowToken.slice(0, 64) : null,
+    country: countryOf(req),
+  };
+}
+
 /**
  * @param {{method:string, path:string, ip:string, header:(n:string)=>string|null, json:()=>Promise<any>}} req
  * @param {ReturnType<import('./store.js').createStore>} store
@@ -60,7 +75,7 @@ export async function handleApi(req, store) {
   }
 
   if (path === '/api/memorials' && method === 'POST') {
-    if (await store.limited(`c:${ip}`, 5)) return fail(429, 'Demasiados intentos. Probá en un minuto.');
+    if (await store.limited(`c:${ip}`, 8)) return fail(429, 'Demasiados intentos. Probá en un minuto.');
     const body = await req.json();
     const input = validateMemorial(body);
     if (input.error) return fail(400, input.error);
@@ -70,7 +85,7 @@ export async function handleApi(req, store) {
       if (!photo) return fail(400, 'La foto tiene un formato no soportado (usá JPG, PNG o WebP).');
       if (photo.bytes.length > MAX_PHOTO) return fail(400, 'La foto es demasiado grande.');
     }
-    return ok(await store.create(input, photo, cleanText(body.visitor, 40)), 201);
+    return ok(await store.create(input, photo, cleanText(body.visitor, 40), body.pendingGlow), 201);
   }
 
   let m = path.match(/^\/api\/photos\/([\w-]{3,24})$/);
@@ -80,7 +95,7 @@ export async function handleApi(req, store) {
     return { status: 200, bytes: p.bytes, type: p.type, cache: 'public, max-age=31536000, s-maxage=31536000, immutable' };
   }
 
-  m = path.match(/^\/api\/memorials\/([\w-]{3,24})(?:\/(candle|flower|guestbook))?$/);
+  m = path.match(/^\/api\/memorials\/([\w-]{3,24})(?:\/(candle|flower|guestbook|gift|hug))?$/);
   if (m) {
     const [, id, action] = m;
     if (!action && method === 'GET') {
@@ -96,14 +111,16 @@ export async function handleApi(req, store) {
     if (action && method === 'POST') {
       if (await store.limited(`a:${ip}`, 40)) return fail(429, 'Más despacio, por favor 🤍');
       const body = await req.json();
-      const visitor = cleanText(body.visitor, 40) || 'Alguien';
+      const who = whoFrom(body, req);
       let r;
-      if (action === 'candle') r = await store.candle(id, cleanText(body.sid, 40), visitor);
-      if (action === 'flower') r = await store.flower(id, visitor);
+      if (action === 'candle') r = await store.candle(id, who);
+      if (action === 'flower') r = await store.flower(id, who);
+      if (action === 'hug') r = await store.hug(id, who);
+      if (action === 'gift') r = await store.gift(id, who, cleanText(body.gift, 40));
       if (action === 'guestbook') {
         const text = cleanText(body.text, 280);
         if (!text) return fail(400, 'Escribí unas palabras.');
-        r = await store.sign(id, { name: cleanText(body.name, 40) || visitor, text });
+        r = await store.sign(id, { name: cleanText(body.name, 40) || who.visitor, text }, who);
       }
       return r ? ok(r, action === 'guestbook' ? 201 : 200) : fail(404, 'No encontramos esa huellita.');
     }
@@ -117,7 +134,25 @@ export async function handleApi(req, store) {
 
   if (path === '/api/now' && method === 'POST') {
     const body = await req.json();
-    return ok({ here: await store.touch(cleanText(body.sid, 40)) });
+    const info = {
+      name: cleanText(body.visitor, 40),
+      x: Number(body.x), z: Number(body.z), ry: Number(body.ry), hue: Number(body.hue),
+      say: cleanText(body.say, 40) || null,
+      emote: cleanText(body.emote, 8) || null,
+      country: countryOf(req),
+    };
+    return ok(await store.touch(cleanText(body.sid, 40), info));
+  }
+
+  if (path === '/api/night' && method === 'GET') return ok(await store.night());
+
+  if (path === '/api/jar' && method === 'GET') return ok(await store.jar());
+  if (path === '/api/jar' && method === 'POST') {
+    if (await store.limited(`j:${ip}`, 4)) return fail(429, 'Más despacio, por favor 🤍');
+    const body = await req.json();
+    const text = cleanText(body.text, 140);
+    if (text.length < 3) return fail(400, 'Escribí por qué das las gracias.');
+    return ok(await store.jarAdd(text, cleanText(body.visitor, 40)), 201);
   }
 
   return fail(404, 'Ruta desconocida');

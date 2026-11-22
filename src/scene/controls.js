@@ -25,6 +25,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   let drag = null;
   let pinch = null;
   let enabled = true;
+  const joy = { x: 0, y: 0 };
   const listeners = { tap: [], hover: [], move: [] };
 
   const marker = new THREE.Mesh(
@@ -142,6 +143,8 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     onMove: (fn) => listeners.move.push(fn),
     set enabled(v) { enabled = v; if (!v) { drag = null; pinch = null; pointers.clear(); } },
     get flying() { return !!fly; },
+    get yaw() { return yaw; },
+    setJoystick(x, y) { joy.x = x; joy.y = y; if (x || y) { fly = null; walkTarget = null; marker.visible = false; } },
     walkTo(point) {
       fly = null;
       walkTarget = new THREE.Vector3(point.x, EYE, point.z);
@@ -216,11 +219,19 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
       if (keys.has('d')) fx += 1;
       if (keys.has('arrowleft') || keys.has('q')) { yaw += 1.8 * dt; apply(); }
       if (keys.has('arrowright') || keys.has('e')) { yaw -= 1.8 * dt; apply(); }
+      const jm = Math.hypot(joy.x, joy.y);
+      if (jm > 0.12) {
+        // Palanca: hacia arriba camina, a los costados gira suave y se corre un poco.
+        fz += joy.y * Math.min(1, jm * 1.2);
+        fx += joy.x * 0.55;
+        yaw -= joy.x * 1.5 * dt;
+        apply();
+      }
       let moving = false;
       if (fx || fz) {
         walkTarget = null;
         marker.visible = false;
-        const len = Math.hypot(fx, fz);
+        const len = Math.max(1, Math.hypot(fx, fz));
         const sin = Math.sin(yaw);
         const cos = Math.cos(yaw);
         const sp = 3.6 * run * dt;

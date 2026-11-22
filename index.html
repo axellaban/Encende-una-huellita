@@ -25,7 +25,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Nunito:wght@500;600;700;800;900&family=Young+Serif&display=swap" rel="stylesheet" />
   </head>
   <body class="intro">
     <canvas id="scene" aria-label="Jardín memorial en 3D. Usá el botón Huellitas para ver la lista."></canvas>
@@ -46,6 +46,7 @@
         </div>
         <nav class="chips filters desk" aria-label="Explorar">
           <button class="chip featured-chip" data-featured>🕯️ Visitar a <span class="featured-name">Luca</span></button>
+          <button class="chip today-chip" data-today>✨ Hoy <b class="today-count">0/4</b></button>
           <button class="chip" data-list="all">🐾 Todas las huellitas</button>
           <button class="chip" data-list="waiting">🌙 Esperando una vela</button>
           <button class="chip" data-list="birthday">🎂 Cumpleaños</button>
@@ -64,6 +65,16 @@
       </div>
     </header>
 
+    <!-- palanca para caminar (celular) y gestos -->
+    <div class="joy" id="joy" aria-hidden="true"><i></i></div>
+    <button class="emote-btn" id="emote-btn" aria-label="Gestos y frases">🤍</button>
+    <div class="emote-tray" id="emote-tray" hidden>
+      <div class="emotes" id="emotes"></div>
+      <div class="sayings" id="sayings"></div>
+    </div>
+    <div class="glow-toast" id="glow-toast" hidden></div>
+    <div class="confetti" id="confetti" aria-hidden="true"></div>
+
     <div class="hint" id="hint"><span class="hand">👆</span><span id="hint-text">Tocá el piso para caminar · Arrastrá para mirar</span></div>
 
     <!-- ---------- pie (compu) ---------- -->
@@ -78,7 +89,7 @@
       <button data-list="all"><span class="ic">🐾</span><span>Huellitas</span></button>
       <button data-featured><span class="ic">🕯️</span><span class="featured-name">Luca</span></button>
       <button class="dock-add" id="dock-add" aria-label="Sumar a mi mascota"><span>＋</span></button>
-      <button id="dock-floors"><span class="ic">🛗</span><span>Piso <b class="floor-num">1</b></span></button>
+      <button data-today class="dock-today"><span class="ic">✨<i class="badge today-count">0/4</i></span><span>Hoy</span></button>
       <button id="dock-menu"><span class="ic">☰</span><span>Más</span></button>
     </nav>
 
@@ -182,10 +193,17 @@
         </div>
         <div class="actions">
           <button class="btn primary candle-btn" id="s-candle"><span class="flame-ic">🕯️</span><span id="s-candle-label">Encender una vela</span></button>
-          <button class="btn soft" id="s-flower">🌸 Dejar una flor</button>
-          <button class="btn soft" id="s-share">💌 Compartir</button>
+          <div class="act-row">
+            <button class="act" id="s-flower"><i>🌸</i><span>Flor</span></button>
+            <button class="act" id="s-gift"><i>🎁</i><span>Regalito</span></button>
+            <button class="act" id="s-hug"><i>🫂</i><span>Abrazo</span></button>
+            <button class="act" id="s-share"><i>💌</i><span>Compartir</span></button>
+          </div>
         </div>
+        <div class="glow-card" id="s-glow" hidden></div>
+        <div class="gifts-row" id="s-gifts" hidden></div>
         <p class="msg" id="s-msg"></p>
+        <button class="btn soft wide mine-btn" id="s-mine" hidden>🐾 Es mi mascota: que mis gestos la hagan brillar</button>
         <section class="guestbook">
           <h3>Libro de visitas</h3>
           <form id="gb-form">
@@ -243,6 +261,9 @@
             <button data-q="low">Ahorro</button>
           </div>
         </div>
+        <label class="toggle"><span>🙈 Modo tranquilo (ocultar visitantes)</span><input type="checkbox" id="opt-quiet" /><i></i></label>
+        <button class="menu-item" data-then="floors">🛗 Pisos</button>
+        <button class="menu-item" data-jar>🫙 Frasco de gracias</button>
         <button class="menu-item" data-then="add">🐾 Sumar a mi mascota</button>
         <button class="menu-item" data-list="waiting">🌙 Esperando una vela</button>
         <button class="menu-item" data-list="birthday">🎂 Cumpleaños de hoy</button>
@@ -251,6 +272,48 @@
         <button class="menu-item" data-then="install" id="install-item" hidden>📲 Agregar a la pantalla de inicio</button>
       </div>
       <p class="menu-foot" id="menu-foot"></p>
+    </dialog>
+
+    <!-- ---------- hoy: glow, gestos del día, racha ---------- -->
+    <dialog class="modal full-mobile" id="today">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <div class="today-body">
+        <h2>✨ Hoy en el jardín</h2>
+        <p class="sub hand" id="today-sub">Cada gesto amable hace brillar un poco más el lugar de tu mascota.</p>
+        <div class="pet-glow" id="pet-glow"></div>
+        <div class="streak" id="streak"></div>
+        <h3>Gestos de hoy</h3>
+        <ul class="missions" id="missions"></ul>
+        <h3>Necesitan una luz 🕯️</h3>
+        <p class="tiny">Nadie les encendió una vela todavía. ¿Querés ser la primera persona?</p>
+        <div class="need-light" id="need-light"></div>
+        <button class="jar-cta" data-jar><span>🫙</span><div><b>Frasco de gracias</b><small id="jar-count">Dejá un "gracias por…" para tu mascota</small></div><i>›</i></button>
+        <p class="tiny center">El Glow nunca se apaga y no hay rankings: todas las huellitas son queridas por igual.</p>
+      </div>
+    </dialog>
+
+    <!-- ---------- regalitos ---------- -->
+    <dialog class="modal" id="gifts">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>Dejale un regalito</h2>
+      <p class="sub" id="gifts-sub">Elegí uno. Podés dejar uno por día.</p>
+      <div class="seg" id="gift-tabs"></div>
+      <div class="gift-grid" id="gift-grid"></div>
+    </dialog>
+
+    <!-- ---------- frasco de gracias ---------- -->
+    <dialog class="modal" id="jar">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>🫙 Frasco de gracias</h2>
+      <p class="sub">Cada estrellita es un “gracias” que alguien le dejó a su mascota.</p>
+      <div class="jar-notes" id="jar-notes"></div>
+      <form id="jar-form">
+        <label class="field">Gracias por…
+          <input name="text" maxlength="140" placeholder="…esperarme siempre en la puerta" required />
+        </label>
+        <div class="ideas" id="jar-ideas"></div>
+        <button class="btn primary wide" type="submit">＋ Ponerlo en el frasco</button>
+      </form>
     </dialog>
 
     <div class="toast" id="toast" role="status" hidden></div>

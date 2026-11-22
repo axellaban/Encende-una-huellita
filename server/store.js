@@ -1,25 +1,31 @@
 // Datos de las huellitas sobre una base tipo Redis (Upstash en producción, emulador en local).
 //
 // Claves (prefijo hu:):
-//   ids            ZSET  id -> createdAt
-//   m:<id>         HASH  data (JSON), candles, flowers, gb, tokenHash
-//   slots          HASH  slot -> id (HSETNX evita que dos personas tomen el mismo lugar)
-//   photo:<id>     STR   JSON { t: mime, d: base64 }
-//   gb:<id>        LIST  firmas del libro de visitas (JSON, la más nueva primero)
-//   ev / seq       LIST / INT  actividad reciente
-//   now            ZSET  sid -> último latido (presencia)
-//   cd:<sid>:<id>  STR   vela reciente (evita repetir en 10 min)
-//   rl:<k>:<min>   INT   límite de envíos por minuto
+//   ids              ZSET  id -> createdAt
+//   m:<id>           HASH  data (JSON), candles, flowers, gb, gifts, glow, tokenHash
+//   slots            HASH  slot -> id (HSETNX evita que dos personas tomen el mismo lugar)
+//   photo:<id>       STR   JSON { t: mime, d: base64 }
+//   gb:<id>          LIST  libro de visitas (JSON, lo más nuevo primero)
+//   gf:<id>          LIST  regalitos (JSON)
+//   ev / seq         LIST / INT  actividad reciente
+//   now              ZSET  sid -> último latido;  p:<sid> STR posición y gesto (expira solo)
+//   d:<acc>:<sid>:<id>:<día>  STR  gesto ya hecho hoy (una vela, una flor, un regalo... por día)
+//   night:<día> / nco:<día>   INT / SET  velas y países de la noche
+//   jar / jarn       LIST / INT  frasco de gracias
+//   rl:<k>:<min>     INT   límite de envíos por minuto
 import { randomBytes, createHash } from 'node:crypto';
 import { FEATURED, FEATURED_IDS } from './seed.js';
+import { GLOW, GIFT_SET, SAYINGS, EMOTES } from './glow.js';
 
 const P = 'hu:';
 export const SLOTS_PER_FLOOR = 90;
 const MAX_SLOT = SLOTS_PER_FLOOR * 200;
-const PRESENCE_MS = 60_000;
+const PRESENCE_MS = 25_000;
+const DAY_TTL = 30 * 3600;
 
 const newId = () => randomBytes(6).toString('base64url');
 const hashToken = (t) => createHash('sha256').update(String(t)).digest('hex');
+const today = () => new Date().toISOString().slice(0, 10);
 
 function fromHash(arr) {
   const o = {};
@@ -41,7 +47,10 @@ export function createStore(kv) {
       photo: f ? f.photo : d.hasPhoto ? `/api/photos/${id}` : null,
       candles: Number(h.candles) || 0,
       flowers: Number(h.flowers) || 0,
+      gifts: Number(h.gifts) || 0,
+      glow: Number(h.glow) || 0,
       guestbookCount: Number(h.gb) || 0,
+      lastGifts: h.lastGifts ? JSON.parse(h.lastGifts) : [],
     };
   }
 
@@ -57,14 +66,36 @@ export function createStore(kv) {
     featuredReady = true;
   }
 
-  async function event(type, m, visitor) {
+  async function event(type, m, visitor, extra = {}) {
     const seq = await kv.cmd('INCR', `${P}seq`);
-    const ev = { seq, type, memorialId: m.id, petName: m.name, visitor: visitor || 'Alguien', at: Date.now() };
+    const ev = { seq, type, memorialId: m.id, petName: m.name, visitor: visitor || 'Alguien', at: Date.now(), ...extra };
     await kv.pipeline([['LPUSH', `${P}ev`, JSON.stringify(ev)], ['LTRIM', `${P}ev`, '0', '199']]);
   }
 
-  async function getRaw(id) {
-    return fromHash(await kv.cmd('HGETALL', `${P}m:${id}`));
+  const getRaw = async (id) => fromHash(await kv.cmd('HGETALL', `${P}m:${id}`));
+
+  // true la primera vez del día; false si ya lo hizo hoy.
+  async function onceToday(action, sid, id) {
+    const r = await kv.cmd('SET', `${P}d:${action}:${sid || 'anon'}:${id}:${today()}`, '1', 'NX', 'EX', String(DAY_TTL));
+    return r === 'OK';
+  }
+
+  // Suma Glow a la mascota de quien hace el gesto (si demuestra que es suya con su token).
+  async function grantGlow(targetId, kind, who, bonus = 0) {
+    const toId = who.glowTo;
+    if (!toId || !who.glowToken) return { gained: 0, to: null };
+    const h = toId === targetId ? null : await getRaw(toId);
+    const own = toId === targetId;
+    const ownerHash = own ? (await getRaw(targetId)).tokenHash : h?.tokenHash;
+    if (!ownerHash || ownerHash !== hashToken(who.glowToken)) return { gained: 0, to: null };
+    if (own && kind !== 'candle') return { gained: 0, to: null }; // a la propia sólo cuenta la vela del día
+    const gained = own ? GLOW.ownCandle : GLOW[kind] + bonus;
+    const total = await kv.cmd('HINCRBY', `${P}m:${toId}`, 'glow', String(gained));
+    return { gained, total, to: toId };
+  }
+
+  async function country(code) {
+    return /^[A-Z]{2}$/.test(code || '') ? code : null;
   }
 
   const store = {
@@ -81,14 +112,13 @@ export function createStore(kv) {
       await ensureFeatured();
       const m = toPublic(await getRaw(id), id);
       if (!m) return null;
-      const gb = await kv.cmd('LRANGE', `${P}gb:${id}`, '0', '99');
-      return { ...m, guestbook: gb.map((x) => JSON.parse(x)) };
+      const [gb, gf] = await kv.pipeline([['LRANGE', `${P}gb:${id}`, '0', '99'], ['LRANGE', `${P}gf:${id}`, '0', '29']]);
+      return { ...m, guestbook: gb.map((x) => JSON.parse(x)), giftList: gf.map((x) => JSON.parse(x)) };
     },
 
-    async create(input, photo, visitor) {
+    async create(input, photo, visitor, pendingGlow = 0) {
       const id = newId();
       const token = randomBytes(18).toString('base64url');
-      // Reservar un lugar libre de forma atómica.
       let slot = null;
       if (Number.isInteger(input.slot) && input.slot >= 0 && input.slot < MAX_SLOT) {
         if (await kv.cmd('HSETNX', `${P}slots`, String(input.slot), id)) slot = input.slot;
@@ -100,7 +130,6 @@ export function createStore(kv) {
         if (await kv.cmd('HSETNX', `${P}slots`, String(s), id)) slot = s;
       }
       if (slot === null) throw Object.assign(new Error('El muro está muy concurrido. Probá de nuevo.'), { status: 409 });
-
       const data = {
         slot,
         name: input.name,
@@ -112,8 +141,10 @@ export function createStore(kv) {
         hasPhoto: !!photo,
         createdAt: Date.now(),
       };
+      // El Glow que la persona juntó antes de sumar a su mascota la estaba esperando (con tope).
+      const glow = Math.max(0, Math.min(60, Number(pendingGlow) || 0));
       const cmds = [
-        ['HSET', `${P}m:${id}`, 'data', JSON.stringify(data), 'candles', '1', 'flowers', '0', 'gb', '0', 'tokenHash', hashToken(token)],
+        ['HSET', `${P}m:${id}`, 'data', JSON.stringify(data), 'candles', '1', 'flowers', '0', 'gb', '0', 'gifts', '0', 'glow', String(glow), 'tokenHash', hashToken(token)],
         ['ZADD', `${P}ids`, String(data.createdAt), id],
       ];
       if (photo) cmds.push(['SET', `${P}photo:${id}`, JSON.stringify({ t: photo.type, d: photo.bytes.toString('base64') })]);
@@ -130,36 +161,75 @@ export function createStore(kv) {
       if (!h.tokenHash || h.tokenHash !== hashToken(token || '')) return 'forbidden';
       const { slot } = JSON.parse(h.data);
       await kv.pipeline([
-        ['DEL', `${P}m:${id}`, `${P}photo:${id}`, `${P}gb:${id}`],
+        ['DEL', `${P}m:${id}`, `${P}photo:${id}`, `${P}gb:${id}`, `${P}gf:${id}`],
         ['ZREM', `${P}ids`, id],
         ['HDEL', `${P}slots`, String(slot)],
       ]);
       return 'ok';
     },
 
-    async candle(id, sid, visitor) {
+    async candle(id, who) {
       await ensureFeatured();
       const h = await getRaw(id);
       if (!h.data) return null;
-      const fresh = await kv.cmd('SET', `${P}cd:${sid || 'anon'}:${id}`, '1', 'NX', 'EX', '600');
-      if (fresh !== 'OK') return { memorial: toPublic(h, id), already: true };
+      if (!(await onceToday('c', who.sid, id))) return { memorial: toPublic(h, id), already: true };
+      const first = (Number(h.candles) || 0) === 0;
       await kv.cmd('HINCRBY', `${P}m:${id}`, 'candles', '1');
+      const glow = await grantGlow(id, 'candle', who, first ? GLOW.firstLight : 0);
+      const code = await country(who.country);
+      const day = today();
+      const night = [['INCR', `${P}night:${day}`], ['EXPIRE', `${P}night:${day}`, String(DAY_TTL * 2)]];
+      if (code) night.push(['SADD', `${P}nco:${day}`, code], ['EXPIRE', `${P}nco:${day}`, String(DAY_TTL * 2)]);
+      await kv.pipeline(night);
       const memorial = toPublic(await getRaw(id), id);
-      await event('candle', memorial, visitor);
-      return { memorial };
+      await event('candle', memorial, who.visitor, code ? { country: code } : {});
+      return { memorial, glow, firstLight: first };
     },
 
-    async flower(id, visitor) {
+    async flower(id, who) {
       await ensureFeatured();
       const h = await getRaw(id);
       if (!h.data) return null;
+      if (!(await onceToday('f', who.sid, id))) return { memorial: toPublic(h, id), already: true };
       await kv.cmd('HINCRBY', `${P}m:${id}`, 'flowers', '1');
+      const glow = await grantGlow(id, 'flower', who);
       const memorial = toPublic(await getRaw(id), id);
-      await event('flower', memorial, visitor);
-      return { memorial };
+      await event('flower', memorial, who.visitor);
+      return { memorial, glow };
     },
 
-    async sign(id, entry) {
+    async gift(id, who, gift) {
+      await ensureFeatured();
+      if (!GIFT_SET.has(gift)) throw Object.assign(new Error('Ese regalito no existe.'), { status: 400 });
+      const h = await getRaw(id);
+      if (!h.data) return null;
+      if (!(await onceToday('g', who.sid, id))) return { memorial: toPublic(h, id), already: true };
+      const entry = { gift, who: who.visitor || 'Alguien', at: Date.now() };
+      const last = [gift.split(' ')[0], ...(h.lastGifts ? JSON.parse(h.lastGifts) : [])].slice(0, 3);
+      await kv.pipeline([
+        ['LPUSH', `${P}gf:${id}`, JSON.stringify(entry)],
+        ['LTRIM', `${P}gf:${id}`, '0', '49'],
+        ['HINCRBY', `${P}m:${id}`, 'gifts', '1'],
+        ['HSET', `${P}m:${id}`, 'lastGifts', JSON.stringify(last)],
+      ]);
+      const glow = await grantGlow(id, 'gift', who);
+      const memorial = toPublic(await getRaw(id), id);
+      await event('gift', memorial, who.visitor, { gift });
+      return { memorial, glow };
+    },
+
+    async hug(id, who) {
+      await ensureFeatured();
+      const h = await getRaw(id);
+      if (!h.data) return null;
+      if (!(await onceToday('h', who.sid, id))) return { memorial: toPublic(h, id), already: true };
+      const glow = await grantGlow(id, 'hug', who);
+      const memorial = toPublic(h, id);
+      await event('hug', memorial, who.visitor);
+      return { memorial, glow };
+    },
+
+    async sign(id, entry, who) {
       await ensureFeatured();
       const h = await getRaw(id);
       if (!h.data) return null;
@@ -169,8 +239,9 @@ export function createStore(kv) {
         ['LTRIM', `${P}gb:${id}`, '0', '499'],
         ['HINCRBY', `${P}m:${id}`, 'gb', '1'],
       ]);
+      const glow = (await onceToday('w', who.sid, id)) ? await grantGlow(id, 'words', who) : { gained: 0, to: null };
       await event('guestbook', toPublic(h, id), entry.name);
-      return e;
+      return { entry: e, glow };
     },
 
     async photo(id) {
@@ -185,17 +256,55 @@ export function createStore(kv) {
       return { events: list.map((x) => JSON.parse(x)).filter((e) => e.seq > since).reverse(), seq: Number(seq) || 0 };
     },
 
-    async touch(sid) {
+    // Latido: guarda dónde está cada visitante y devuelve a los demás para dibujarlos en el jardín.
+    async touch(sid, info = {}) {
       const now = Date.now();
       const cmds = [['ZREMRANGEBYSCORE', `${P}now`, '-inf', String(now - PRESENCE_MS)]];
-      if (sid) cmds.push(['ZADD', `${P}now`, String(now), sid]);
-      cmds.push(['ZCARD', `${P}now`]);
+      if (sid) {
+        cmds.push(['ZADD', `${P}now`, String(now), sid]);
+        const say = SAYINGS.includes(info.say) ? info.say : null;
+        const emote = EMOTES.includes(info.emote) ? info.emote : null;
+        const pos = {
+          name: info.name || 'Alguien',
+          x: Number.isFinite(info.x) ? Math.round(info.x * 100) / 100 : 0,
+          z: Number.isFinite(info.z) ? Math.round(info.z * 100) / 100 : 24,
+          ry: Number.isFinite(info.ry) ? Math.round(info.ry * 100) / 100 : 0,
+          hue: Number.isFinite(info.hue) ? Math.round(info.hue) % 360 : 30,
+          say,
+          emote,
+          gestureAt: say || emote ? now : 0,
+          country: info.country || null,
+        };
+        cmds.push(['SET', `${P}p:${sid}`, JSON.stringify(pos), 'EX', '60']);
+      }
+      cmds.push(['ZRANGEBYSCORE', `${P}now`, String(now - PRESENCE_MS), '+inf', 'LIMIT', '0', '40']);
       const r = await kv.pipeline(cmds);
-      return r[r.length - 1];
+      const sids = r[r.length - 1].filter((s) => s !== sid);
+      const raw = sids.length ? await kv.cmd('MGET', ...sids.map((s) => `${P}p:${s}`)) : [];
+      const others = raw.map((x, i) => (x ? { sid: sids[i].slice(0, 8), ...JSON.parse(x) } : null)).filter(Boolean);
+      return { here: others.length + (sid ? 1 : 0), others };
     },
 
     async here() {
-      return store.touch(null);
+      const r = await kv.pipeline([['ZREMRANGEBYSCORE', `${P}now`, '-inf', String(Date.now() - PRESENCE_MS)], ['ZCARD', `${P}now`]]);
+      return r[1];
+    },
+
+    async night() {
+      const day = today();
+      const [c, n] = await kv.pipeline([['GET', `${P}night:${day}`], ['SCARD', `${P}nco:${day}`]]);
+      return { candles: Number(c) || 0, countries: Number(n) || 0 };
+    },
+
+    async jarAdd(text, who) {
+      const e = { text, who: who || 'Alguien', at: Date.now() };
+      const [, , n] = await kv.pipeline([['LPUSH', `${P}jar`, JSON.stringify(e)], ['LTRIM', `${P}jar`, '0', '299'], ['INCR', `${P}jarn`]]);
+      return { entry: e, count: n };
+    },
+
+    async jar() {
+      const [list, n] = await kv.pipeline([['LRANGE', `${P}jar`, '0', '59'], ['GET', `${P}jarn`]]);
+      return { notes: list.map((x) => JSON.parse(x)), count: Number(n) || 0 };
     },
 
     // true si se pasó del límite de `max` envíos por minuto para esa clave.

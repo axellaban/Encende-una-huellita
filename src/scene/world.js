@@ -9,6 +9,9 @@ export const HALL_RADIUS = 11.5;
 export const GARDEN_RADIUS = 37;
 export const SPAWN = new THREE.Vector3(0, 1.6, 24);
 export const PATH_HALF = 1.6;
+export const CREEK_Z = -29.5;
+export const creekZ = (x) => CREEK_Z + Math.sin(x * 0.12) * 2.2;
+export const nearCreek = (x, z, pad = 0) => Math.abs(z - creekZ(x)) < 2.1 + pad;
 
 // Reloj compartido por todos los shaders animados (viento, luciérnagas, estrellas).
 export const uTime = { value: 0 };
@@ -244,7 +247,7 @@ export function buildWorld(scene, tier) {
       const a = r() * Math.PI * 2;
       const x = Math.sin(a) * rad;
       const z = Math.cos(a) * rad - 2;
-      if (onPath(x, z, 0.2) || insideHall(x, z, 0.1) || Math.hypot(x, z) > GARDEN_RADIUS - 0.4) continue;
+      if (onPath(x, z, 0.2) || insideHall(x, z, 0.1) || nearCreek(x, z) || Math.hypot(x, z) > GARDEN_RADIUS - 0.4) continue;
       m.position.set(x, 0, z);
       m.rotation.set((r() - 0.5) * 0.3, r() * Math.PI * 2, (r() - 0.5) * 0.3);
       const s = 0.22 + r() * 0.38;
@@ -278,7 +281,7 @@ export function buildWorld(scene, tier) {
     for (let i = 0; i < tier.flowers * 6 && placed < tier.flowers; i++) {
       const x = (r() - 0.5) * 2 * GARDEN_RADIUS;
       const z = (r() - 0.5) * 2 * GARDEN_RADIUS - 2;
-      if (onPath(x, z, 0.3) || insideHall(x, z, 0.2) || Math.hypot(x, z) > GARDEN_RADIUS - 1) continue;
+      if (onPath(x, z, 0.3) || insideHall(x, z, 0.2) || nearCreek(x, z, 0.3) || Math.hypot(x, z) > GARDEN_RADIUS - 1) continue;
       // Agrupadas en manchones.
       if (Math.sin(x * 0.35) * Math.cos(z * 0.3) < 0.15 && r() < 0.8) continue;
       m.position.set(x, 0.1 + r() * 0.18, z);
@@ -311,7 +314,7 @@ export function buildWorld(scene, tier) {
       const z = HALL_CENTER.z + Math.cos(a) * d;
       if (Math.abs(x) < 5 && z > -2) continue;
       if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 6) continue;
-      if (Math.hypot(x, z) > GARDEN_RADIUS - 2.5) continue;
+      if (Math.hypot(x, z) > GARDEN_RADIUS - 2.5 || nearCreek(x, z, 1.5)) continue;
       if (colliders.circles.some((c) => Math.hypot(c.x - x, c.z - z) < 4)) continue;
       const blossom = r() < 0.28;
       const h = 2.2 + r() * 1.8;

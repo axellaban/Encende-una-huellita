@@ -4,8 +4,45 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { HALL_CENTER, HALL_RADIUS, rand } from './world.js';
 import {
-  emptySlotTexture, portraitTexture, photoTexture, labelTexture, flameTexture, glowTexture, woodTexture, lightConeTexture,
+  emptySlotTexture, portraitTexture, photoTexture, labelTexture, flameTexture, glowTexture, woodTexture, lightConeTexture, emojiTexture, lanternTexture,
 } from './textures.js';
+import { stageOf } from '../../server/glow.js';
+
+// Brillo de cada lugar según su Glow: 🏮 farolito, ⭐ estrella, ✨ constelación.
+const starMatBase = new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+function makeGlowFx(fxList, scale = 1) {
+  const g = new THREE.Group();
+  const lantern = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.06, 0.16, 8), new THREE.MeshBasicMaterial({ map: lanternTexture(), color: new THREE.Color(1.8, 1.4, 1.0) }));
+  const string = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.22, 4), new THREE.MeshBasicMaterial({ color: '#2a1d16' }));
+  string.position.y = 0.19;
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.45 }));
+  halo.scale.setScalar(0.5);
+  lantern.add(body, string, halo);
+  lantern.position.set(0.62 * scale, 0.22 * scale, 0.14);
+  const star = new THREE.Sprite(starMatBase.clone());
+  star.material.map = emojiTexture('⭐', 96);
+  star.scale.setScalar(0.2 * scale);
+  star.position.set(0, 0.68 * scale, 0.12);
+  const cons = [];
+  for (let i = 0; i < 6; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(1.6, 1.4, 1.0) }));
+    sp.scale.setScalar(0.09 * scale);
+    g.add(sp);
+    cons.push(sp);
+  }
+  g.add(lantern, star);
+  const fx = { group: g, lantern, star, cons, stage: -1, scale, seed: Math.random() * 10 };
+  fxList.push(fx);
+  setStage(fx, 0);
+  return fx;
+}
+function setStage(fx, stage) {
+  fx.stage = stage;
+  fx.lantern.visible = stage >= 1;
+  fx.star.visible = stage >= 2;
+  fx.cons.forEach((c) => { c.visible = stage >= 3; });
+}
 
 export const PANELS = 10;
 export const PER_PANEL = 9; // 3 x 3
@@ -53,6 +90,7 @@ export function buildHall(scene, colliders, tier) {
 
   const slots = [];
   const flames = [];
+  const glowFx = [];
   const panelLabels = [];
   const pickables = [];
 
@@ -123,12 +161,22 @@ export function buildHall(scene, colliders, tier) {
           shelf.add(f);
           return f;
         });
+        const gifts = [0, 1, 2].map((i) => {
+          const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+          sp.scale.setScalar(0.11);
+          sp.position.set(-0.05 + i * 0.13, 0.08, 0.06);
+          sp.visible = false;
+          shelf.add(sp);
+          return sp;
+        });
         shelf.visible = false;
+        const fx = makeGlowFx(glowFx);
+        fx.group.visible = false;
 
-        g.add(border, mat, photo, name, shelf);
+        g.add(border, mat, photo, name, shelf, fx.group);
         photo.userData = { kind: 'slot', local };
         pickables.push(photo);
-        slots.push({ group: g, border, mat, photo, name, shelf, candles, flowers, memorial: null, textures: [] });
+        slots.push({ group: g, border, mat, photo, name, shelf, candles, flowers, gifts, fx, memorial: null, textures: [] });
       }
     }
   }
@@ -165,7 +213,7 @@ export function buildHall(scene, colliders, tier) {
     const a = posts[0];
     const b = posts[posts.length - 1];
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.55), new THREE.MeshBasicMaterial({
-      map: labelTexture('Jardín de las huellitas', { w: 1024, h: 166, font: '600 76px Lora, Georgia, serif', bg: 'rgba(74,48,34,0.96)', fg: '#f6e3c4' }),
+      map: labelTexture('Jardín de las huellitas', { w: 1024, h: 166, font: '400 70px "Young Serif", Georgia, serif', bg: 'rgba(74,48,34,0.96)', fg: '#f6e3c4' }),
       side: THREE.DoubleSide,
     }));
     sign.position.set((a.x + b.x) / 2, POST_H - 0.55, (a.z + b.z) / 2);
@@ -307,6 +355,17 @@ export function buildHall(scene, colliders, tier) {
     f.position.set(Math.sin(a) * 0.55, 0.22, 0.45 + Math.cos(a) * 0.1);
     easel.add(f);
   }
+  const featuredFx = makeGlowFx(glowFx, 1.6);
+  featuredFx.group.position.set(0, 1.82, 0.1);
+  easel.add(featuredFx.group);
+  const featuredGifts = [0, 1, 2].map((i) => {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+    sp.scale.setScalar(0.16);
+    sp.position.set(-0.45 + i * 0.45, 1.06, 0.12);
+    sp.visible = false;
+    easel.add(sp);
+    return sp;
+  });
   const easelLight = new THREE.SpotLight('#ffd6a0', 9, 9, 0.5, 0.6, 1.4);
   easelLight.position.set(EASEL_POS.x, 4.6, EASEL_POS.z + 2.6);
   easelLight.target.position.set(EASEL_POS.x, 1.8, EASEL_POS.z);
@@ -331,6 +390,7 @@ export function buildHall(scene, colliders, tier) {
     s.mat.visible = false;
     s.name.visible = false;
     s.shelf.visible = false;
+    s.fx.group.visible = false;
   }
 
   function fillSlot(s, m) {
@@ -343,7 +403,7 @@ export function buildHall(scene, colliders, tier) {
       s.photo.material.opacity = 1;
       s.photo.material.needsUpdate = true;
       if (m.photo) {
-        const lt = labelTexture(m.name, { w: 384, h: 72, font: '600 40px Lora, Georgia, serif' });
+        const lt = labelTexture(m.name, { w: 384, h: 72, font: '700 50px Caveat, cursive' });
         s.textures.push(lt);
         s.name.material.map = lt;
         s.name.material.needsUpdate = true;
@@ -358,14 +418,29 @@ export function buildHall(scene, colliders, tier) {
     const lvl = candleLevel(m.candles);
     s.candles.forEach((c, i) => { c.visible = i < lvl; });
     const fl = Math.min(4, Math.ceil(m.flowers / 2));
-    s.flowers.forEach((f, i) => { f.visible = i < fl; });
+    s.flowers.forEach((f, i) => { f.visible = i < fl && i < 4 - (m.lastGifts?.length || 0); });
+    showGifts(s.gifts, m.lastGifts);
+    s.fx.group.visible = true;
+    setStage(s.fx, stageOf(m.glow).index);
+  }
+
+  function showGifts(sprites, list = []) {
+    sprites.forEach((sp, i) => {
+      const ch = list[i];
+      sp.visible = !!ch;
+      if (ch && sp.userData.ch !== ch) {
+        sp.material.map = emojiTexture(ch, 96);
+        sp.material.needsUpdate = true;
+        sp.userData.ch = ch;
+      }
+    });
   }
 
   function setFeatured(m) {
     if (!(featured && featured.photo === m.photo && featured.name === m.name)) {
       featuredTex.forEach((t) => t.dispose());
       const tex = m.photo ? photoTexture(m.photo) : portraitTexture(m);
-      const lt = labelTexture(m.name, { w: 512, h: 104, font: '600 58px Lora, Georgia, serif', bg: 'rgba(74,48,34,0.95)', fg: '#f6e3c4' });
+      const lt = labelTexture(m.name, { w: 512, h: 104, font: '700 72px Caveat, cursive', bg: 'rgba(74,48,34,0.95)', fg: '#f6e3c4' });
       featuredTex = [tex, lt];
       fPhoto.material.map = tex;
       fPhoto.material.needsUpdate = true;
@@ -376,6 +451,9 @@ export function buildHall(scene, colliders, tier) {
     fPhoto.userData.id = m.id;
     const lit = Math.min(clusterCandles.length, 3 + Math.ceil(m.candles * 0.8));
     clusterCandles.forEach((c, i) => { c.visible = i < lit; });
+    showGifts(featuredGifts, m.lastGifts);
+    // La destacada brilla con el cariño que recibe.
+    setStage(featuredFx, stageOf((m.glow || 0) + m.candles * 3 + m.flowers * 2 + (m.gifts || 0) * 2).index);
   }
 
   function render(memorials) {
@@ -426,6 +504,11 @@ export function buildHall(scene, colliders, tier) {
       target.y = (target.y + 1.6) / 2 + 0.15;
       return { stand, target, frame };
     },
+    // Para encuadrar o soltar efectos desde un memorial.
+    memorialKey(m) {
+      if (m.slot < 0) return 'featured';
+      return Math.floor(m.slot / SLOTS_PER_FLOOR) === floor ? m.slot % SLOTS_PER_FLOOR : null;
+    },
     worldPos(key) {
       const v = new THREE.Vector3();
       if (key === 'featured') return fPhoto.getWorldPosition(v);
@@ -456,6 +539,21 @@ export function buildHall(scene, colliders, tier) {
         const n = Math.sin(t * 9 + f.seed) * 0.5 + Math.sin(t * 17 + f.seed * 3) * 0.5;
         f.flame.scale.set(0.06 + n * 0.006, 0.12 + n * 0.02, 1);
         f.glow.material.opacity = f.base + n * 0.06;
+      }
+      for (const fx of glowFx) {
+        if (fx.stage < 1 || !fx.group.parent?.visible) continue;
+        fx.lantern.rotation.z = Math.sin(t * 1.3 + fx.seed) * 0.08;
+        if (fx.stage >= 2) {
+          const k = 1 + Math.sin(t * 2.2 + fx.seed) * 0.12;
+          fx.star.scale.setScalar(0.2 * fx.scale * k);
+        }
+        if (fx.stage >= 3) {
+          fx.cons.forEach((c, i) => {
+            const a = t * 0.35 + (i / fx.cons.length) * Math.PI * 2 + fx.seed;
+            c.position.set(Math.cos(a) * 0.62 * fx.scale, Math.sin(a) * 0.72 * fx.scale, 0.14);
+            c.material.opacity = 0.6 + Math.sin(t * 3 + i) * 0.4;
+          });
+        }
       }
       // Guirnaldas que titilan suave.
       for (let i = 0; i < bulbs.length; i++) {

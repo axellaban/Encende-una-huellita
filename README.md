@@ -28,9 +28,22 @@ poné su foto en el muro, encendé una vela, dejá flores y firmá su libro de v
   búsqueda**, **links para compartir** (`/#h/luca`) e imagen para WhatsApp/redes.
 - **Sonido** generado en el navegador: música suave, grillos y efectos.
 
+### La parte "juego" (amable)
+
+- **Glow**: cada gesto con otras huellitas (vela, flor, regalito, abrazo, palabras) hace brillar el
+  lugar de *tu* mascota: 🕯️ Llamita → 🏮 Farolito → ⭐ Estrella → ✨ Constelación. Sin rankings.
+- **✨ Hoy**: gestos del día con checklist, racha de noches, "Necesitan una luz" y celebración al completar.
+- **Regalitos** (🦴🎾🧶…), **abrazo en silencio** y una vela/flor por día por huellita ("volvé mañana").
+- **Otros visitantes** como personajitos con su nombre, gestos (🤍🕯️🐾🌸🫂✨) y frases amables;
+  **modo tranquilo** para ocultarlos.
+- **Frasco de gracias**, **"mientras no estabas…"** y la **hora de las velas** con velas y países.
+- Detalles: huellitas en el camino, hongos que brillan, pétalos, farolitos de papel, pizarrón de
+  bienvenida, el **Puente del Arcoíris** con su arroyo, y un perrito y un gatito de luz que pasean
+  (tocalos 🤍).
+
 ### Pensado para el celular
 
-- Barra inferior al alcance del pulgar: Huellitas · Luca · ＋ · Pisos · Más.
+- Barra inferior al alcance del pulgar: Huellitas · Luca · ＋ · Hoy · Más, y **palanca** para caminar.
 - La ficha de cada huellita es una hoja que se desliza: a media altura se ve el marco en 3D arriba;
   la arrastrás para abrirla entera o hacia abajo para cerrarla.
 - Formularios a pantalla completa con el botón siempre visible, campos de 16 px (sin zoom en iPhone),
@@ -106,7 +119,13 @@ server/index.js         Servidor local
 | `POST /api/memorials/:id/guestbook` | Firma el libro (`text`, `name`) |
 | `GET /api/photos/:id` | La foto (cacheada en el CDN) |
 | `GET /api/activity/:since` | Eventos nuevos + cuántos hay ahora |
-| `POST /api/now` | Latido de presencia (`sid`) |
+| `POST /api/memorials/:id/gift` | Deja un regalito (`gift` del catálogo) |
+| `POST /api/memorials/:id/hug` | Abrazo en silencio |
+| `POST /api/now` | Latido: posición, gesto o frase; devuelve a los demás visitantes |
+| `GET /api/night` | Velas y países de esta noche |
+| `GET/POST /api/jar` | Frasco de gracias |
+
+Los gestos aceptan `glowTo` + `glowToken` (el token de edición de tu mascota) para sumarle Glow.
 
 La investigación inicial, hecha con [REA](https://github.com/morluto/rea), está en
 [`docs/investigacion-rea.md`](docs/investigacion-rea.md).

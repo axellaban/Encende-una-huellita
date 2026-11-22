@@ -9,6 +9,10 @@ import { buildWorld, SPAWN, HALL_CENTER, uTime } from './scene/world.js';
 import { buildHall, SLOTS_PER_FLOOR, EASEL_POS } from './scene/hall.js';
 import { createControls } from './scene/controls.js';
 import { createLanterns } from './scene/lanterns.js';
+import { createCozy } from './scene/cozy.js';
+import { createAvatars } from './scene/avatars.js';
+import { createGame } from './game.js';
+import { GIFTS, SAYINGS, EMOTES, STAGES, stageOf } from '../server/glow.js';
 import { portraitCanvas } from './scene/textures.js';
 import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll } from './audio.js';
 import { TIERS, pickTier, savedQuality, saveQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
@@ -43,7 +47,20 @@ const visitor = {
 };
 $('#me-name').textContent = visitor.name;
 $('#me-initial').textContent = visitor.name[0];
-const who = () => ({ visitor: visitor.name, sid: visitor.sid });
+const visitorHue = Number(remember('huellita.hue', () => String(Math.floor(Math.random() * 360))));
+const game = createGame();
+// Mi mascota: la que recibe el Glow de mis gestos (tengo que ser quien la creó).
+function myPet() {
+  const tokens = myTokens();
+  const chosen = store.get('huellita.myPet');
+  const mine = memorials.filter((m) => tokens[m.id] && !m.featured);
+  return mine.find((m) => m.id === chosen) || mine[0] || null;
+}
+const myMemorials = () => memorials.filter((m) => myTokens()[m.id] && !m.featured);
+const who = () => {
+  const pet = myPet();
+  return { visitor: visitor.name, sid: visitor.sid, ...(pet ? { glowTo: pet.id, glowToken: myTokens()[pet.id] } : {}) };
+};
 
 const featuredDef = FEATURED[0];
 $$('.featured-name').forEach((el) => { el.textContent = featuredDef?.name || 'Destacada'; });
@@ -71,6 +88,8 @@ let world;
 let hall;
 let controls;
 let lanterns;
+let cozy;
+let avatars;
 let composer = null;
 let adaptive = null;
 
@@ -116,11 +135,17 @@ function slotKeyFromHit(obj) {
 
 async function buildScene() {
   // Esperar la tipografía para que los carteles del jardín se dibujen con ella.
-  await Promise.race([document.fonts?.load('600 40px Lora').catch(() => {}), new Promise((r) => setTimeout(r, 2500))]);
+  await Promise.race([
+    Promise.all(['700 40px Caveat', '400 40px "Young Serif"', '800 30px Nunito'].map((f) => document.fonts?.load(f))).catch(() => {}),
+    new Promise((r) => setTimeout(r, 2500)),
+  ]);
   setupRenderer();
   world = buildWorld(scene, tier);
   hall = buildHall(scene, world.colliders, tier);
   lanterns = createLanterns(scene, tier);
+  cozy = createCozy(scene, tier, world.colliders);
+  avatars = createAvatars(scene);
+  avatars.visible = store.get('huellita.quiet') !== '1';
   controls = createControls(camera, canvas, world.colliders, { reduced });
   scene.add(controls.marker);
   controls.teleport(INTRO_FROM, INTRO_LOOK);
@@ -128,8 +153,16 @@ async function buildScene() {
   controls.onTap((e) => {
     if (document.body.classList.contains('intro')) return skipIntro();
     if (!sheetEl.hidden) { closeSheet(); return; }
-    const hit = cast(e, [...hall.pickables(), ...world.walkable]);
+    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, ...world.walkable]);
     if (!hit) return;
+    if (hit.object.userData.kind === 'jar') return openJar();
+    if (hit.object.userData.kind === 'spirit') {
+      const sp = cozy.spiritOf(hit.object);
+      cozy.hop(sp);
+      avatars.floatAt('🤍', sp.group.position.clone().setY(1));
+      haptic(10);
+      return toast(sp.kind === 'gato' ? '🐱 Un gatito de luz te saluda. Corré libre 🌈' : '🐶 Un perrito de luz mueve la cola. Corré libre 🌈');
+    }
     const key = slotKeyFromHit(hit.object);
     if (key === 'featured') return hall.featured && visit(hall.featured);
     if (key !== null) {
@@ -142,12 +175,13 @@ async function buildScene() {
     hideHint();
   });
   controls.onHover((e) => {
-    const hit = cast(e, hall.pickables());
+    const hit = cast(e, [...hall.pickables(), ...cozy.pickables]);
     const key = hit && hit.distance < 16 ? slotKeyFromHit(hit.object) : null;
     hall.setHover(key);
-    canvas.style.cursor = key !== null ? 'pointer' : '';
+    canvas.style.cursor = hit && hit.distance < 16 && (key !== null || hit.object.userData.kind) ? 'pointer' : '';
   });
   controls.onMove(hideHint);
+  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, THREE };
 
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
@@ -157,6 +191,8 @@ async function buildScene() {
     controls.update(dt);
     hall.animate(t);
     lanterns.update(dt, t);
+    cozy.animate(t, dt);
+    avatars.animate(dt, t);
     if (composer) composer.render(dt);
     else renderer.render(scene, camera);
     adaptive.tick(dt);
@@ -177,6 +213,7 @@ async function refresh() {
   renderStats(r.stats);
   renderBirthdays();
   renderFloors();
+  updateTodayBadge();
   return r;
 }
 
@@ -382,10 +419,42 @@ function fillSheet(m) {
   setCount('#s-gb', m.guestbookCount ?? 0, same);
   sheetEl.dataset.id = m.id;
   $('#s-delete').hidden = !myTokens()[m.id];
-  const lit = litRecently(m.id);
+  const lit = didToday('c', m.id);
   $('#s-candle').classList.toggle('lit', lit);
-  $('#s-candle-label').textContent = lit ? 'Tu vela está encendida' : 'Encender una vela';
+  $('#s-candle-label').textContent = lit ? 'Tu vela está encendida · volvé mañana' : 'Encender una vela';
+  $('#s-flower').classList.toggle('done', didToday('f', m.id));
+  $('#s-gift').classList.toggle('done', didToday('g', m.id));
+  $('#s-hug').classList.toggle('done', didToday('h', m.id));
+  // Glow: sólo en mis mascotas.
+  const mine = !!myTokens()[m.id] && !m.featured;
+  const pet = myPet();
+  $('#s-glow').hidden = !mine;
+  if (mine) $('#s-glow').innerHTML = glowCardHTML(m);
+  $('#s-mine').hidden = !(mine && pet && pet.id !== m.id);
+  const gl = m.giftList || [];
+  $('#s-gifts').hidden = !gl.length;
+  $('#s-gifts').innerHTML = '';
+  for (const g of gl.slice(0, 8)) {
+    const sp = document.createElement('span');
+    const [emo, ...rest] = g.gift.split(' ');
+    sp.innerHTML = '<i></i>';
+    sp.querySelector('i').textContent = emo;
+    sp.append(`${rest.join(' ')} · ${g.who}`);
+    sp.title = timeAgo(g.at);
+    $('#s-gifts').append(sp);
+  }
 }
+
+function glowCardHTML(m) {
+  const st = stageOf(m.glow || 0);
+  const pct = st.next ? Math.round(((m.glow - st.min) / (st.next.min - st.min)) * 100) : 100;
+  const next = st.next ? `Faltan ${st.toNext} para ${st.next.icon} ${st.next.name}` : 'Brilla como una constelación ✨';
+  return `<span class="big">${st.icon}</span><div style="flex:1"><b>${st.name} · ${m.glow || 0} de Glow</b><small>${next}</small><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+}
+
+const dayStamp = () => new Date().toISOString().slice(0, 10);
+const didToday = (a, id) => store.get(`huellita.did.${a}.${id}`) === dayStamp();
+const markToday = (a, id) => store.set(`huellita.did.${a}.${id}`, dayStamp());
 
 function setCount(sel, n, animate) {
   const el = $(sel);
@@ -398,7 +467,6 @@ function setCount(sel, n, animate) {
   }
 }
 
-const litRecently = (id) => Date.now() - Number(store.get(`huellita.lit.${id}`) || 0) < 10 * 60_000;
 
 function renderGuestbook(list) {
   const ul = $('#gb-list');
@@ -450,14 +518,16 @@ $('#s-candle').onclick = async () => {
   btn.disabled = true;
   try {
     const r = await api.candle(current.id, who());
-    if (!r.already) store.set(`huellita.lit.${r.memorial.id}`, String(Date.now()));
+    markToday('c', r.memorial.id);
     updateMemorial(r.memorial);
     if (!r.already) {
       releaseLantern(r.memorial, { burst: true });
       sparkle();
       haptic([10, 40, 16]);
-      toast(`🕯️ Encendiste una vela por ${r.memorial.name}. Mirá el farolito subir.`);
-    } else toast('🕯️ Tu vela sigue encendida');
+      const own = myPet()?.id === r.memorial.id;
+      toast(own ? `🕯️ Encendiste la vela de hoy para ${r.memorial.name}` : `🕯️ Tu luz ya acompaña a ${r.memorial.name}. Mirá el farolito subir.`);
+      afterGesture('candle', r, { bonus: r.firstLight ? 5 : 0 });
+    } else toast(`🕯️ Tu vela para ${r.memorial.name} sigue encendida. Volvé mañana.`);
   } catch (err) { toast(err.message); }
   btn.disabled = false;
 };
@@ -466,10 +536,14 @@ $('#s-flower').onclick = async () => {
   if (!current) return;
   try {
     const r = await api.flower(current.id, who());
+    markToday('f', r.memorial.id);
     updateMemorial(r.memorial);
+    if (r.already) return toast(`🌸 ${r.memorial.name} ya tiene tus flores hoy. Volvé mañana.`);
     tick();
     haptic(10);
-    toast(`🌸 Dejaste una flor para ${r.memorial.name}`);
+    floatFromCurrent('🌸');
+    toast(`🌸 ${r.memorial.name} ya tiene tus flores`);
+    afterGesture('flower', r);
   } catch (err) { toast(err.message); }
 };
 
@@ -525,7 +599,8 @@ $('#gb-form').onsubmit = async (e) => {
   const btn = f.querySelector('button[type=submit]');
   btn.disabled = true;
   try {
-    await api.sign(current.id, { ...who(), name: name || visitor.name, text });
+    const res = await api.sign(current.id, { ...who(), name: name || visitor.name, text });
+    afterGesture('words', res);
     f.text.value = '';
     f.text.blur();
     renderIdeas();
@@ -629,7 +704,13 @@ $('#add-form').onsubmit = async (e) => {
       photo: photoData,
       slot: addSlot ?? undefined,
       visitor: visitor.name,
+      pendingGlow: game.pendingGlow,
     });
+    if (game.pendingGlow) setTimeout(() => showGlowToast(`✨ +${game.pendingGlow} Glow · tu Glow guardado ya hace brillar a ${m.name}`), 2600);
+    game.clearBank();
+    if (!store.get('huellita.myPet')) store.set('huellita.myPet', m.id);
+    // Al ponerla en el muro le encendemos su primera vela: cuenta como la vela de hoy.
+    setTimeout(() => { game.record('candle', { memorialId: m.id, isOwn: myPet()?.id === m.id, hasPet: true }); updateTodayBadge(); }, 100);
     f.reset();
     photoData = null;
     $('#photo-preview').hidden = true;
@@ -638,7 +719,7 @@ $('#add-form').onsubmit = async (e) => {
     $('#add').close();
     await refresh();
     const fresh = memorials.find((x) => x.id === m.id) || m;
-    store.set(`huellita.lit.${fresh.id}`, String(Date.now()));
+    markToday('c', fresh.id);
     visit(fresh);
     setTimeout(() => releaseLantern(fresh, { burst: true }), reduced ? 100 : 1600);
     sparkle();
@@ -712,7 +793,6 @@ $$('[data-featured]').forEach((b) => { b.onclick = visitFeatured; });
 
 // ---------- pisos, menú y modales ----------
 $('#floors-btn').onclick = () => { renderFloors(); $('#floors').showModal(); };
-$('#dock-floors').onclick = () => { renderFloors(); $('#floors').showModal(); };
 $('#dock-menu').onclick = () => openMenu();
 $('#menu-btn').onclick = () => openMenu();
 
@@ -743,6 +823,7 @@ const THEN = {
   featured: visitFeatured,
   help: () => $('#help').showModal(),
   home: () => goHome(),
+  floors: () => { renderFloors(); $('#floors').showModal(); },
   install: () => installPrompt?.prompt(),
 };
 $$('dialog [data-close]').forEach((b) => {
@@ -807,14 +888,17 @@ const VERBS = {
   candle: (e) => `🕯️ ${e.visitor} encendió una vela por ${e.petName}`,
   flower: (e) => `🌸 ${e.visitor} dejó una flor para ${e.petName}`,
   guestbook: (e) => `📖 ${e.visitor} firmó el libro de ${e.petName}`,
+  gift: (e) => `🎁 ${e.visitor} le dejó ${e.gift?.split(' ')[0] || 'un regalito'} a ${e.petName}`,
+  hug: (e) => `🫂 ${e.visitor} le mandó un abrazo a la familia de ${e.petName}`,
 };
+const flag = (cc) => (cc && /^[A-Z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc].map((c) => 127397 + c.charCodeAt(0))) : '');
 let tickerTimer;
 function showTick(e) {
   const box = $('#ticker');
   box.innerHTML = '';
   const b = document.createElement('button');
   b.className = 'tick';
-  b.textContent = `${VERBS[e.type]?.(e) || ''} `;
+  b.textContent = `${VERBS[e.type]?.({ ...e, visitor: `${e.visitor}${e.country ? ` ${flag(e.country)}` : ''}` }) || ''} `;
   const small = document.createElement('small');
   small.textContent = `· ${timeAgo(e.at)}`;
   b.append(small);
@@ -857,19 +941,41 @@ async function pollActivity() {
   } catch { /* reintenta en el próximo ciclo */ }
 }
 
+let pendingGesture = null;
+let hbTimer;
 async function heartbeat() {
-  if (document.hidden || !api) return;
-  try {
-    const r = await api.heartbeat(who());
-    $('#here').textContent = Math.max(1, r.here);
-  } catch { /* nada */ }
+  clearTimeout(hbTimer);
+  let next = 10_000;
+  if (!document.hidden && api) {
+    try {
+      const pos = camera.position;
+      const g = pendingGesture;
+      pendingGesture = null;
+      const r = await api.heartbeat({
+        sid: visitor.sid, visitor: visitor.name, hue: visitorHue,
+        x: pos.x, z: pos.z, ry: controls?.yaw ?? 0, ...(g || {}),
+      });
+      $('#here').textContent = Math.max(1, r.here);
+      avatars?.update(r.others || []);
+      if ((r.others || []).length) next = 4_000;
+    } catch { /* nada */ }
+  }
+  hbTimer = setTimeout(heartbeat, next);
 }
 
 // ---------- la hora de las velas (21 h) ----------
 const candleHourKey = () => `huellita.ch.${new Date().toDateString()}`;
 function checkCandleHour() {
   const d = new Date();
-  $('#candle-hour').hidden = !(d.getHours() === 21 && d.getMinutes() < 30 && !store.get(candleHourKey()));
+  const show = d.getHours() === 21 && d.getMinutes() < 30 && !store.get(candleHourKey());
+  $('#candle-hour').hidden = !show;
+  if (show && api) {
+    api.night().then((n) => {
+      const el = $('#candle-hour > div');
+      const extra = n.candles ? ` <b>${n.candles} ${n.candles === 1 ? 'vela' : 'velas'}${n.countries > 1 ? ` de ${n.countries} países` : ''} esta noche.</b>` : '';
+      el.innerHTML = `<b>🕯️ La hora de las velas.</b> Cada noche a las 21, quienes visitan el jardín encienden una vela al mismo tiempo.${extra}`;
+    }).catch(() => {});
+  }
 }
 function dismissCandleHour() {
   $('#candle-hour').hidden = true;
@@ -891,6 +997,356 @@ addEventListener('beforeinstallprompt', (e) => {
   $('#install-item').hidden = false;
 });
 
+// ---------- Glow, gestos del día y celebraciones ----------
+function showGlowToast(text) {
+  const el = $('#glow-toast');
+  el.hidden = true;
+  void el.offsetWidth;
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(showGlowToast.t);
+  showGlowToast.t = setTimeout(() => { el.hidden = true; }, 2700);
+}
+
+function floatFromCurrent(ch) {
+  if (!avatars || !current || !hall) return;
+  const key = hall.memorialKey(current);
+  const at = key !== null ? hall.worldPos(key) : camera.position.clone();
+  avatars.floatAt(ch, at.clone().add(new THREE.Vector3(0, -0.2, 0)));
+}
+
+function afterGesture(kind, r, { bonus = 0 } = {}) {
+  const target = r.memorial || current;
+  const pet = myPet();
+  const isOwn = !!pet && target?.id === pet.id;
+  const g = r.glow;
+  if (g?.gained) {
+    const pm = memorials.find((x) => x.id === g.to);
+    const before = stageOf((g.total || 0) - g.gained).index;
+    if (pm) { pm.glow = g.total; hall?.render(memorials); }
+    const after = stageOf(g.total || 0);
+    const msg = r.firstLight ? `✨ +${g.gained} Glow · fuiste su primera luz 🤍` : `✨ +${g.gained} Glow · ${pm?.name || 'tu mascota'} brilla un poco más`;
+    setTimeout(() => showGlowToast(msg), 700);
+    if (after.index > before) {
+      setTimeout(() => { confetti(['✨', '⭐', '🤍']); toast(`${after.icon} ¡${pm?.name || 'Tu mascota'} ahora es ${after.name}!`); }, 1500);
+    }
+  } else if (!pet) {
+    const n = game.bank(kind, bonus);
+    if (n) setTimeout(() => showGlowToast(`✨ +${n} Glow · guardado para tu mascota`), 700);
+  }
+  const done = game.record(kind, { memorialId: target?.id, isOwn, isFeatured: !!target?.featured, hasPet: !!pet });
+  updateTodayBadge();
+  if (done) {
+    setTimeout(() => {
+      confetti(['🌸', '✨', '🤍', '🕯️', '🐾']);
+      haptic([20, 60, 20, 60, 40]);
+      sparkle();
+      toast('🤍 Completaste los gestos de hoy. Gracias por tanto cariño.');
+    }, 1800);
+  }
+}
+
+function confetti(chars) {
+  const box = $('#confetti');
+  for (let i = 0; i < 26; i++) {
+    const sp = document.createElement('span');
+    sp.textContent = pick(chars);
+    sp.style.setProperty('--x', `${Math.random() * 100}vw`);
+    sp.style.setProperty('--dx', `${(Math.random() - 0.5) * 120}px`);
+    sp.style.setProperty('--r', `${(Math.random() - 0.5) * 540}deg`);
+    sp.style.setProperty('--s', `${16 + Math.random() * 18}px`);
+    sp.style.setProperty('--d', `${2.4 + Math.random() * 1.6}s`);
+    sp.style.setProperty('--delay', `${Math.random() * 0.5}s`);
+    box.append(sp);
+    setTimeout(() => sp.remove(), 4800);
+  }
+}
+
+const todayCtx = () => ({ hasPet: !!myPet(), featuredName: featuredDef?.name || 'Luca' });
+function updateTodayBadge() {
+  const p = game.progress(todayCtx());
+  $$('.today-count').forEach((el) => {
+    el.textContent = `${p.done}/${p.total}`;
+    el.classList.toggle('full', p.done === p.total);
+  });
+}
+
+function renderToday() {
+  const pet = myPet();
+  const box = $('#pet-glow');
+  if (pet) {
+    const st = stageOf(pet.glow || 0);
+    const pct = st.next ? Math.round(((pet.glow - st.min) / (st.next.min - st.min)) * 100) : 100;
+    box.innerHTML = `<img alt="" /><div><div class="stage">${st.icon} ${''}</div><small></small><div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="stages">${STAGES.map((x, i) => `<span class="${i <= st.index ? 'on' : ''}" title="${x.name}">${x.icon}</span>`).join('')}</div></div>
+      <button class="btn soft small" data-go-pet>Visitar a mi mascota</button>`;
+    box.querySelector('img').src = photoSrc(pet);
+    box.querySelector('.stage').textContent = `${st.icon} ${pet.name} · ${st.name}`;
+    box.querySelector('small').textContent = st.next ? `${pet.glow || 0} de Glow · faltan ${st.toNext} para ${st.next.icon} ${st.next.name}` : `${pet.glow} de Glow · brilla como una constelación`;
+    box.querySelector('[data-go-pet]').onclick = () => visit(pet);
+  } else {
+    box.innerHTML = `<div style="font-size:40px;text-align:center">🏮</div><div><div class="stage">Tu Glow te espera</div>
+      <small>Tenés ${game.pendingGlow} de Glow guardado. Cuando sumes a tu mascota, la va a hacer brillar.</small></div>
+      <button class="btn primary small" data-add-pet>🐾 Sumar a mi mascota</button>`;
+    box.querySelector('[data-add-pet]').onclick = () => openAdd(null);
+  }
+  const st = game.streak;
+  const n = st.last ? st.n : 0;
+  $('#streak').innerHTML = `<span>🌙</span><span>${n <= 1 ? 'Primera noche en el jardín' : `${n} noches seguidas`}</span><span class="moons">${'●'.repeat(Math.min(7, n))}${'○'.repeat(Math.max(0, 7 - n))}</span>`;
+  const ul = $('#missions');
+  ul.innerHTML = '';
+  for (const mi of game.missions(todayCtx())) {
+    const li = document.createElement('li');
+    li.className = mi.done ? 'done' : '';
+    li.innerHTML = `<span class="ic">${mi.icon}</span><div><b></b>${mi.sub ? '<small></small>' : ''}</div><span class="check">${mi.done ? '✓' : ''}</span>`;
+    li.querySelector('b').textContent = mi.label;
+    if (mi.sub) li.querySelector('small').textContent = mi.sub;
+    if (!mi.done) {
+      li.style.cursor = 'pointer';
+      li.onclick = () => goMission(mi.id);
+    }
+    ul.append(li);
+  }
+  const need = $('#need-light');
+  need.innerHTML = '';
+  const waiting = needLight();
+  if (!waiting.length) {
+    need.innerHTML = '<p class="empty-light">Todas las huellitas tienen su vela esta noche 🤍</p>';
+  }
+  for (const m of waiting) {
+    const b = document.createElement('button');
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = photoSrc(m);
+    const nm = document.createElement('b');
+    nm.textContent = m.name;
+    b.append(img, nm);
+    b.onclick = () => visit(m);
+    need.append(b);
+  }
+}
+
+function needLight() {
+  const mine = new Set(myMemorials().map((m) => m.id));
+  return memorials.filter((m) => !mine.has(m.id) && !didToday('c', m.id))
+    .sort((a, b) => a.candles - b.candles || b.createdAt - a.createdAt).slice(0, 12);
+}
+
+function goMission(id) {
+  $('#today').close();
+  const pet = myPet();
+  const others = needLight();
+  if (id === 'own') return visit(pet || memorials.find((m) => m.featured));
+  const target = others[0] || memorials.find((m) => m.featured);
+  if (target) visit(target);
+  if (id === 'gift') setTimeout(() => openGifts(), 900);
+}
+
+$$('[data-today]').forEach((b) => { b.onclick = () => { closeModals(); closeSheet(); renderToday(); $('#today').showModal(); }; });
+
+// ---------- regalitos ----------
+let giftTab = 'Comida';
+function openGifts() {
+  if (!current) return;
+  if (didToday('g', current.id)) return toast(`🎁 Ya le dejaste un regalito a ${current.name} hoy. Volvé mañana 🤍`);
+  $('#gifts-sub').textContent = `Elegí uno para ${current.name}. Podés dejarle uno por día.`;
+  const tabs = $('#gift-tabs');
+  tabs.innerHTML = '';
+  for (const t of Object.keys(GIFTS)) {
+    const b = document.createElement('button');
+    b.textContent = t;
+    b.className = t === giftTab ? 'on' : '';
+    b.onclick = () => { giftTab = t; openGifts(); };
+    tabs.append(b);
+  }
+  const grid = $('#gift-grid');
+  grid.innerHTML = '';
+  for (const gft of GIFTS[giftTab]) {
+    const [emo, ...rest] = gft.split(' ');
+    const b = document.createElement('button');
+    b.innerHTML = '<i></i><span></span>';
+    b.querySelector('i').textContent = emo;
+    b.querySelector('span').textContent = rest.join(' ').replace(/^(Un|Una|Unos|Unas) /, '');
+    b.onclick = () => leaveGift(gft);
+    grid.append(b);
+  }
+  if (!$('#gifts').open) $('#gifts').showModal();
+}
+async function leaveGift(gft) {
+  $('#gifts').close();
+  if (!current) return;
+  try {
+    const r = await api.gift(current.id, who(), gft);
+    markToday('g', r.memorial.id);
+    if (r.already) return toast(`🎁 Ya le dejaste un regalito a ${r.memorial.name} hoy. Volvé mañana 🤍`);
+    updateMemorial(r.memorial);
+    const full = await api.get(r.memorial.id).catch(() => null);
+    if (full && current?.id === full.id) { current = { ...current, ...full }; fillSheet(current); }
+    floatFromCurrent(gft.split(' ')[0]);
+    tick();
+    haptic(12);
+    toast(`🎁 ${r.memorial.name} ya tiene tu ${gft.split(' ').slice(2).join(' ') || 'regalito'} 🤍`);
+    afterGesture('gift', r);
+  } catch (err) { toast(err.message); }
+}
+$('#s-gift').onclick = openGifts;
+
+$('#s-hug').onclick = async () => {
+  if (!current) return;
+  try {
+    const r = await api.hug(current.id, who());
+    markToday('h', r.memorial.id);
+    fillSheet(current);
+    if (r.already) return toast(`🫂 Ya le mandaste un abrazo a la familia de ${r.memorial.name} hoy 🤍`);
+    floatFromCurrent('🫂');
+    haptic([8, 30, 8]);
+    toast(`🫂 Tu abrazo en silencio llegó a la familia de ${r.memorial.name}`);
+    afterGesture('hug', r);
+  } catch (err) { toast(err.message); }
+};
+
+$('#s-mine').onclick = () => {
+  if (!current) return;
+  store.set('huellita.myPet', current.id);
+  fillSheet(current);
+  updateTodayBadge();
+  toast(`🐾 Ahora tus gestos hacen brillar a ${current.name}`);
+};
+
+// ---------- frasco de gracias ----------
+const JAR_IDEAS = ['esperarme siempre en la puerta', 'cada siesta juntos', 'enseñarme a querer sin condiciones', 'los paseos de la tarde', 'acompañarme en los días tristes'];
+async function openJar() {
+  closeModals();
+  closeSheet();
+  const box = $('#jar-notes');
+  box.innerHTML = '<p>…</p>';
+  const ideas = $('#jar-ideas');
+  ideas.innerHTML = '';
+  [...JAR_IDEAS].sort(() => Math.random() - 0.5).slice(0, 3).forEach((t) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = `…${t}`;
+    b.onclick = () => { $('#jar-form').text.value = t; };
+    ideas.append(b);
+  });
+  $('#jar').showModal();
+  try {
+    const j = await api.jar();
+    cozy?.setJarCount(j.count);
+    renderJar(j);
+  } catch { box.innerHTML = ''; }
+}
+function renderJar(j) {
+  const box = $('#jar-notes');
+  box.innerHTML = '';
+  if (!j.notes.length) box.innerHTML = '<p>Todavía está vacío. ¿Ponés la primera estrellita?<small>— el jardín</small></p>';
+  for (const n of j.notes.slice(0, 30)) {
+    const p = document.createElement('p');
+    p.textContent = `Gracias por ${n.text}`;
+    const sm = document.createElement('small');
+    sm.textContent = `— ${n.who} · ${timeAgo(n.at)}`;
+    p.append(sm);
+    box.append(p);
+  }
+  $('#jar-count').textContent = `${j.count} ${j.count === 1 ? 'estrellita' : 'estrellitas'} de gracias`;
+}
+$('#jar-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const text = e.target.text.value.trim().replace(/^gracias por\s*/i, '').replace(/^…/, '');
+  if (text.length < 3) return;
+  try {
+    const r = await api.jarAdd(text, visitor.name);
+    e.target.reset();
+    cozy?.setJarCount(r.count);
+    renderJar(await api.jar());
+    if (lanterns && cozy) lanterns.burst(cozy.jarWorldPos());
+    sparkle();
+    haptic(12);
+    toast('🫙 Tu gracias ya brilla en el frasco 🤍');
+  } catch (err) { toast(err.message); }
+};
+$$('[data-jar]').forEach((b) => { b.onclick = () => { b.closest('dialog')?.close(); openJar(); }; });
+
+// ---------- gestos y frases en el jardín ----------
+{
+  const tray = $('#emote-tray');
+  const em = $('#emotes');
+  for (const e of EMOTES) {
+    const b = document.createElement('button');
+    b.textContent = e;
+    b.onclick = () => gesture({ emote: e });
+    em.append(b);
+  }
+  const sy = $('#sayings');
+  for (const t of SAYINGS.filter((x) => x.length > 2)) {
+    const b = document.createElement('button');
+    b.textContent = t;
+    b.onclick = () => gesture({ say: t });
+    sy.append(b);
+  }
+  $('#emote-btn').onclick = () => { tray.hidden = !tray.hidden; haptic(6); };
+  canvas.addEventListener('pointerdown', () => { tray.hidden = true; });
+}
+function gesture(g) {
+  $('#emote-tray').hidden = true;
+  pendingGesture = g;
+  heartbeat();
+  haptic(8);
+  if (g.emote && avatars) {
+    const fwd = new THREE.Vector3(0, -0.3, -2.2).applyQuaternion(camera.quaternion).add(camera.position);
+    avatars.floatAt(g.emote, fwd);
+  }
+  if (g.say) {
+    const d = document.createElement('div');
+    d.className = 'self-say';
+    d.textContent = `💬 ${g.say}`;
+    document.body.append(d);
+    setTimeout(() => d.remove(), 3100);
+  }
+}
+$('#opt-quiet').checked = store.get('huellita.quiet') === '1';
+$('#opt-quiet').onchange = (e) => {
+  store.set('huellita.quiet', e.target.checked ? '1' : '0');
+  if (avatars) avatars.visible = !e.target.checked;
+  toast(e.target.checked ? '🙈 Modo tranquilo: ahora sólo estás vos.' : 'Volvés a ver a los demás visitantes.');
+};
+
+// ---------- palanca para caminar (celular) ----------
+{
+  const joy = $('#joy');
+  const knob = joy.querySelector('i');
+  let id = null;
+  const R = 40;
+  const setKnob = (x, y) => { knob.style.setProperty('--jx', `${x}px`); knob.style.setProperty('--jy', `${y}px`); };
+  const move = (e) => {
+    const r = joy.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    const d = Math.hypot(dx, dy);
+    if (d > R) { dx = (dx / d) * R; dy = (dy / d) * R; }
+    setKnob(dx, dy);
+    controls?.setJoystick(dx / R, dy / R);
+  };
+  joy.addEventListener('pointerdown', (e) => {
+    id = e.pointerId;
+    joy.setPointerCapture(id);
+    joy.classList.add('active');
+    hideHint();
+    haptic(5);
+    move(e);
+  });
+  joy.addEventListener('pointermove', (e) => { if (e.pointerId === id) move(e); });
+  const end = (e) => {
+    if (e.pointerId !== id) return;
+    id = null;
+    joy.classList.remove('active');
+    setKnob(0, 0);
+    controls?.setJoystick(0, 0);
+  };
+  joy.addEventListener('pointerup', end);
+  joy.addEventListener('pointercancel', end);
+}
+
 // ---------- arranque ----------
 function openFromHash() {
   const m = location.hash.match(/^#h\/([\w-]+)/);
@@ -901,6 +1357,7 @@ function openFromHash() {
 }
 
 let introDone = false;
+let awayMsg = null;
 function finishIntro() {
   if (introDone) return;
   introDone = true;
@@ -912,6 +1369,11 @@ function finishIntro() {
     setTimeout(() => $('#help').showModal(), 250);
   }
   hintTimer = setTimeout(hideHint, 14_000);
+  const st = game.visit();
+  setTimeout(() => {
+    if (awayMsg) toast(awayMsg);
+    else if (st.isNew && st.n > 1) toast(`🌙 ${st.n} noches seguidas visitando el jardín`);
+  }, 1200);
 }
 function skipIntro() {
   if (introDone || !controls) return;
@@ -962,7 +1424,17 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheetEl.hidden &
   label.textContent = 'Entrar al jardín 🕯️';
   $('#enter').disabled = false;
   heartbeat();
-  setInterval(heartbeat, 25_000);
+  const away = game.whileAway(myMemorials());
+  if (away.length) {
+    const a = away[0];
+    const bits = [];
+    if (a.dc) bits.push(`${a.dc} ${a.dc === 1 ? 'vela' : 'velas'}`);
+    if (a.df) bits.push(`${a.df} ${a.df === 1 ? 'flor' : 'flores'}`);
+    if (a.dg) bits.push(`${a.dg} ${a.dg === 1 ? 'regalito' : 'regalitos'}`);
+    if (a.dw) bits.push(`${a.dw} ${a.dw === 1 ? 'palabra amable' : 'palabras amables'}`);
+    awayMsg = `🤍 Mientras no estabas, ${a.m.name} recibió ${bits.join(', ').replace(/, ([^,]*)$/, ' y $1')}.`;
+  }
+  try { cozy?.setJarCount((await api.jar()).count); } catch { /* nada */ }
   setInterval(pollActivity, 8_000);
   setInterval(checkCandleHour, 60_000);
   setTimeout(pollActivity, 1200);

@@ -123,10 +123,60 @@ for (const name of ['local', 'vercel']) {
     assert.ok(r.memorial.candles >= 1);
   });
 
-  test(`[${name}] presencia`, async () => {
-    await post('/api/now', { sid: 'a' });
-    const j = await (await post('/api/now', { sid: 'b' })).json();
+  test(`[${name}] presencia: los demás visitantes con su posición y gestos`, async () => {
+    await post('/api/now', { sid: 'a', visitor: 'Nube Clara', x: 1.234, z: 5, ry: 0.5, hue: 200, say: 'Estoy con vos' });
+    const j = await (await post('/api/now', { sid: 'b', visitor: 'Luz', x: 0, z: 20, emote: '🤍' })).json();
     assert.ok(j.here >= 2);
+    const a = j.others.find((o) => o.name === 'Nube Clara');
+    assert.equal(a.x, 1.23);
+    assert.equal(a.say, 'Estoy con vos');
+    assert.ok(!j.others.some((o) => o.name === 'Luz'), 'no me devuelve a mí');
+    // Las frases libres no se aceptan: sólo las del catálogo.
+    const k = await (await post('/api/now', { sid: 'c', visitor: 'X', say: 'cualquier cosa' })).json();
+    assert.equal(k.others.find((o) => o.name === 'Luz').emote, '🤍');
+    const again = await (await post('/api/now', { sid: 'b', visitor: 'Luz' })).json();
+    assert.equal(again.others.find((o) => o.name === 'X').say, null);
+  });
+
+  test(`[${name}] Glow, regalitos, abrazos, frasco y noche de velas`, async () => {
+    const mine = await (await post('/api/memorials', { name: 'Mía', species: 'perro', pendingGlow: 500 })).json();
+    assert.equal(mine.memorial.glow, 60, 'el Glow guardado tiene tope');
+    const who = { sid: 'g1', visitor: 'Brisa', glowTo: mine.memorial.id, glowToken: mine.editToken };
+    const other = (await (await post('/api/memorials', { name: 'Otra', species: 'gato' })).json()).memorial;
+
+    let r = await (await post(`/api/memorials/${other.id}/candle`, who)).json();
+    assert.equal(r.glow.gained, 3);
+    assert.equal(r.glow.total, 63);
+    r = await (await post(`/api/memorials/${other.id}/flower`, who)).json();
+    assert.equal(r.glow.gained, 2);
+    assert.equal((await (await post(`/api/memorials/${other.id}/flower`, who)).json()).already, true);
+    r = await (await post(`/api/memorials/${other.id}/gift`, { ...who, gift: '🎾 Una pelota' })).json();
+    assert.equal(r.memorial.gifts, 1);
+    assert.deepEqual(r.memorial.lastGifts, ['🎾']);
+    assert.equal((await post(`/api/memorials/${other.id}/gift`, { ...who, sid: 'g2', gift: '💣 Bomba' })).status, 400);
+    r = await (await post(`/api/memorials/${other.id}/hug`, who)).json();
+    assert.equal(r.glow.gained, 1);
+    r = await (await post(`/api/memorials/${other.id}/guestbook`, { ...who, text: 'Hola' })).json();
+    assert.equal(r.glow.gained, 4);
+    // Token falso: no suma Glow.
+    r = await (await post(`/api/memorials/${other.id}/candle`, { ...who, sid: 'g3', glowToken: 'falso' })).json();
+    assert.equal(r.glow.gained, 0);
+    // La vela de hoy para la propia mascota suma poquito.
+    r = await (await post(`/api/memorials/${mine.memorial.id}/candle`, who)).json();
+    assert.equal(r.glow.gained, 2);
+    const full = await (await call(`/api/memorials/${mine.memorial.id}`)).json();
+    assert.equal(full.glow, 63 + 2 + 2 + 1 + 4 + 2);
+    const det = await (await call(`/api/memorials/${other.id}`)).json();
+    assert.equal(det.giftList[0].gift, '🎾 Una pelota');
+
+    const night = await (await call('/api/night')).json();
+    assert.ok(night.candles >= 2);
+
+    assert.equal((await post('/api/jar', { text: 'x' })).status, 400);
+    const j = await (await post('/api/jar', { text: 'esperarme siempre en la puerta', visitor: 'Ana' })).json();
+    assert.ok(j.count >= 1);
+    const jar = await (await call('/api/jar')).json();
+    assert.equal(jar.notes[0].text, 'esperarme siempre en la puerta');
   });
 
   test(`[${name}] errores`, async () => {

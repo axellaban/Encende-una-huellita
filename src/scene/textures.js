@@ -41,7 +41,7 @@ export function portraitCanvas(m, size = 384) {
   g.font = `${Math.round(size * 0.45)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
   g.fillText(EMOJI[m.species] || '🐾', c.width / 2, c.height * 0.43);
   g.fillStyle = 'rgba(40,28,24,0.85)';
-  g.font = `600 ${Math.round(size * 0.12)}px Lora, Georgia, serif`;
+  g.font = `700 ${Math.round(size * 0.15)}px Caveat, cursive`;
   g.fillText(m.name, c.width / 2, c.height * 0.82, c.width * 0.9);
   return c;
 }
@@ -91,7 +91,7 @@ export function emptySlotTexture() {
   return emptyTex;
 }
 
-export function labelTexture(text, { w = 512, h = 96, bg = 'rgba(250,240,226,0.95)', fg = '#4a3428', font = '600 44px Lora, Georgia, serif' } = {}) {
+export function labelTexture(text, { w = 512, h = 96, bg = 'rgba(250,240,226,0.95)', fg = '#4a3428', font = '700 50px Caveat, cursive' } = {}) {
   const [c, g] = canvas(w, h);
   g.fillStyle = bg;
   roundRect(g, 4, 4, w - 8, h - 8, 18);
@@ -280,4 +280,84 @@ export function lanternTexture() {
   for (let x = 0; x < 64; x += 16) g.fillRect(x, 0, 2, 128);
   paperTex = toTexture(c);
   return paperTex;
+}
+
+const emojiCache = new Map();
+// Un emoji como textura (para regalitos, gestos y burbujas).
+export function emojiTexture(ch, size = 128) {
+  const k = `${ch}:${size}`;
+  if (emojiCache.has(k)) return emojiCache.get(k);
+  const [c, g] = canvas(size, size);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = `${Math.round(size * 0.78)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  g.fillText(ch, size / 2, size / 2 + size * 0.05);
+  const t = toTexture(c);
+  emojiCache.set(k, t);
+  return t;
+}
+
+// Globito de texto o cartelito de nombre sobre la cabeza.
+export function bubbleTexture(text, { bg = 'rgba(251,244,234,0.96)', fg = '#3b2a22', font = '800 34px Nunito, sans-serif', tail = true } = {}) {
+  const [m, mg] = canvas(8, 8);
+  mg.font = font;
+  const w = Math.min(560, Math.ceil(mg.measureText(text).width) + 44);
+  void m;
+  const h = tail ? 76 : 60;
+  const [c, g] = canvas(w, h);
+  g.fillStyle = bg;
+  roundRect(g, 2, 2, w - 4, 56, 26);
+  g.fill();
+  if (tail) {
+    g.beginPath();
+    g.moveTo(w / 2 - 10, 56);
+    g.lineTo(w / 2, 72);
+    g.lineTo(w / 2 + 10, 56);
+    g.fill();
+  }
+  g.fillStyle = fg;
+  g.font = font;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, w / 2, 31, w - 24);
+  const t = toTexture(c);
+  t.userData = { aspect: w / h };
+  return t;
+}
+
+// Pizarrón de bienvenida escrito con tiza.
+export function chalkboardTexture(lines) {
+  const [c, g] = canvas(512, 384);
+  g.fillStyle = '#2f3a33';
+  g.fillRect(0, 0, 512, 384);
+  for (let i = 0; i < 400; i++) {
+    g.fillStyle = `rgba(255,255,255,${Math.random() * 0.04})`;
+    g.fillRect(Math.random() * 512, Math.random() * 384, 30 * Math.random(), 2);
+  }
+  g.strokeStyle = '#7a5434';
+  g.lineWidth = 22;
+  g.strokeRect(0, 0, 512, 384);
+  g.fillStyle = 'rgba(250,244,230,0.92)';
+  g.textAlign = 'center';
+  lines.forEach(([text, size, y]) => {
+    g.font = `700 ${size}px Caveat, cursive`;
+    g.fillText(text, 256, y);
+  });
+  return toTexture(c);
+}
+
+let pawTex;
+// Huellita para el camino.
+export function pawTexture() {
+  if (pawTex) return pawTex;
+  const [c, g] = canvas(128, 128);
+  g.fillStyle = 'rgba(60,40,30,0.55)';
+  const blob = (x, y, rx, ry, rot = 0) => { g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fill(); };
+  blob(64, 82, 26, 21);
+  blob(30, 52, 10, 13, -0.3);
+  blob(98, 52, 10, 13, 0.3);
+  blob(48, 32, 10, 13, -0.1);
+  blob(80, 32, 10, 13, 0.1);
+  pawTex = toTexture(c);
+  return pawTex;
 }

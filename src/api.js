@@ -1,6 +1,7 @@
 // Cliente de la API. Si no hay servidor con base de datos (por ejemplo, un deploy en Vercel sin Upstash
 // conectado), usa un modo local con localStorage para que el jardín siga funcionando en este navegador.
 import { FEATURED } from '../server/seed.js';
+import { GLOW } from '../server/glow.js';
 
 const LS_KEY = 'huellita.local.v2';
 const TOKENS_KEY = 'huellita.tokens';
@@ -46,17 +47,42 @@ const remote = {
   },
   candle: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/candle`, { method: 'POST', body: who }),
   flower: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/flower`, { method: 'POST', body: who }),
+  gift: (id, who, gift) => req(`/api/memorials/${encodeURIComponent(id)}/gift`, { method: 'POST', body: { ...who, gift } }),
+  hug: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/hug`, { method: 'POST', body: who }),
   sign: (id, entry) => req(`/api/memorials/${encodeURIComponent(id)}/guestbook`, { method: 'POST', body: entry }),
   activity: (since) => req(`/api/activity/${Math.max(0, since | 0)}`),
-  heartbeat: (who) => req('/api/now', { method: 'POST', body: who }),
+  heartbeat: (info) => req('/api/now', { method: 'POST', body: info }),
+  night: () => req('/api/night'),
+  jar: () => req('/api/jar'),
+  jarAdd: (text, visitor) => req('/api/jar', { method: 'POST', body: { text, visitor } }),
 };
 
 function makeLocal() {
   let db;
   try { db = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch { db = null; }
   if (!db) db = { seq: 0, events: [], guestbook: {}, memorials: [], counters: {} };
+  db.gifts ||= {};
+  db.jar ||= [];
+  db.done ||= {};
+  db.night ||= {};
+  const day = () => new Date().toISOString().slice(0, 10);
+  const onceToday = (action, id) => {
+    const k = `${action}:${id}:${day()}`;
+    if (db.done[k]) return false;
+    db.done[k] = 1;
+    return true;
+  };
+  const grant = (targetId, kind, who, bonus = 0) => {
+    const mine = db.memorials.find((m) => m.id === who.glowTo);
+    if (!mine) return { gained: 0, to: null };
+    const own = mine.id === targetId;
+    if (own && kind !== 'candle') return { gained: 0, to: null };
+    const gained = own ? GLOW.ownCandle : GLOW[kind] + bonus;
+    mine.glow = (mine.glow || 0) + gained;
+    return { gained, total: mine.glow, to: mine.id };
+  };
   // Las destacadas siempre vienen del código; acá sólo guardamos sus contadores.
-  const featured = () => FEATURED.map((f) => ({ ...f, candles: 0, flowers: 0, createdAt: 0, ...(db.counters[f.id] || {}) }));
+  const featured = () => FEATURED.map((f) => ({ ...f, candles: 0, flowers: 0, gifts: 0, glow: 0, lastGifts: [], createdAt: 0, ...(db.counters[f.id] || {}) }));
   const all = () => [...featured(), ...db.memorials];
   const persist = () => {
     try { localStorage.setItem(LS_KEY, JSON.stringify(db)); } catch { /* lleno */ }
@@ -64,16 +90,16 @@ function makeLocal() {
   const find = (id) => all().find((m) => m.id === id);
   const bump = (id, field) => {
     const own = db.memorials.find((m) => m.id === id);
-    if (own) own[field] += 1;
+    if (own) own[field] = (own[field] || 0) + 1;
     else {
-      const c = (db.counters[id] ||= { candles: 0, flowers: 0 });
-      c[field] += 1;
+      const c = (db.counters[id] ||= { candles: 0, flowers: 0, gifts: 0, lastGifts: [] });
+      c[field] = (c[field] || 0) + 1;
     }
   };
   const pub = (m) => ({ ...m, guestbookCount: (db.guestbook[m.id] || []).length });
-  const ev = (type, m, visitor) => {
+  const ev = (type, m, visitor, extra = {}) => {
     db.seq += 1;
-    db.events.push({ seq: db.seq, type, memorialId: m.id, petName: m.name, visitor: visitor || 'Alguien', at: Date.now() });
+    db.events.push({ seq: db.seq, type, memorialId: m.id, petName: m.name, visitor: visitor || 'Alguien', at: Date.now(), ...extra });
     db.events = db.events.slice(-100);
   };
   const lit = new Map();
@@ -86,11 +112,6 @@ function makeLocal() {
         stats: { memorials: memorials.length, candles: memorials.reduce((a, m) => a + m.candles, 0), flowers: memorials.reduce((a, m) => a + m.flowers, 0) },
       };
     },
-    async get(id) {
-      const m = find(id);
-      if (!m) throw new Error('No encontramos esa huellita.');
-      return { ...pub(m), guestbook: (db.guestbook[id] || []).slice().reverse() };
-    },
     async create(data) {
       const used = new Set(db.memorials.map((m) => m.slot));
       let slot = Number.isInteger(data.slot) && data.slot >= 0 && !used.has(data.slot) ? data.slot : 0;
@@ -98,12 +119,13 @@ function makeLocal() {
       const m = {
         id: Math.random().toString(36).slice(2, 10), slot, name: data.name.trim().slice(0, 30), species: data.species,
         message: (data.message || '').slice(0, 200), birthday: data.birthday || null, passedDay: data.passedDay || null,
-        photo: data.photo || null, hue: Math.floor(Math.random() * 360), candles: 1, flowers: 0, createdAt: Date.now(),
+        photo: data.photo || null, hue: Math.floor(Math.random() * 360), candles: 1, flowers: 0, gifts: 0, lastGifts: [],
+        glow: Math.max(0, Math.min(60, Number(data.pendingGlow) || 0)), createdAt: Date.now(),
       };
       db.memorials.push(m);
       ev('created', m, data.visitor);
       persist();
-      setToken(m.id, 'local');
+      setToken(m.id, `local-${m.id}`);
       return pub(m);
     },
     async remove(id) {
@@ -112,32 +134,71 @@ function makeLocal() {
       persist();
       setToken(id, null);
     },
+    async get(id) {
+      const m = find(id);
+      if (!m) throw new Error('No encontramos esa huellita.');
+      return { ...pub(m), guestbook: (db.guestbook[id] || []).slice().reverse(), giftList: (db.gifts[id] || []).slice().reverse() };
+    },
     async candle(id, who) {
-      if (Date.now() - (lit.get(id) || 0) < 10 * 60_000) return { memorial: pub(find(id)), already: true };
-      lit.set(id, Date.now());
+      if (!onceToday('c', id)) { persist(); return { memorial: pub(find(id)), already: true }; }
+      const first = (find(id).candles || 0) === 0;
       bump(id, 'candles');
+      const glow = grant(id, 'candle', who, first ? GLOW.firstLight : 0);
+      db.night[day()] = (db.night[day()] || 0) + 1;
       const m = find(id);
       ev('candle', m, who.visitor);
       persist();
-      return { memorial: pub(m) };
+      return { memorial: pub(m), glow, firstLight: first };
     },
     async flower(id, who) {
+      if (!onceToday('f', id)) { persist(); return { memorial: pub(find(id)), already: true }; }
       bump(id, 'flowers');
+      const glow = grant(id, 'flower', who);
       const m = find(id);
       ev('flower', m, who.visitor);
       persist();
-      return { memorial: pub(m) };
+      return { memorial: pub(m), glow };
+    },
+    async gift(id, who, gift) {
+      if (!onceToday('g', id)) { persist(); return { memorial: pub(find(id)), already: true }; }
+      bump(id, 'gifts');
+      (db.gifts[id] ||= []).push({ gift, who: who.visitor, at: Date.now() });
+      const own = db.memorials.find((m) => m.id === id);
+      const holder = own || db.counters[id];
+      holder.lastGifts = [gift.split(' ')[0], ...(holder.lastGifts || [])].slice(0, 3);
+      const glow = grant(id, 'gift', who);
+      const m = find(id);
+      ev('gift', m, who.visitor, { gift });
+      persist();
+      return { memorial: pub(m), glow };
+    },
+    async hug(id, who) {
+      if (!onceToday('h', id)) { persist(); return { memorial: pub(find(id)), already: true }; }
+      const glow = grant(id, 'hug', who);
+      const m = find(id);
+      ev('hug', m, who.visitor);
+      persist();
+      return { memorial: pub(m), glow };
     },
     async sign(id, entry) {
       const m = find(id);
       const e = { id: Math.random().toString(36).slice(2), name: entry.name || entry.visitor, text: entry.text.slice(0, 280), at: Date.now() };
       (db.guestbook[id] ||= []).push(e);
+      const glow = onceToday('w', id) ? grant(id, 'words', entry) : { gained: 0, to: null };
       ev('guestbook', m, e.name);
       persist();
-      return e;
+      return { entry: e, glow };
+    },
+    async night() { return { candles: db.night[day()] || 0, countries: 1 }; },
+    async jar() { return { notes: db.jar.slice().reverse().slice(0, 60), count: db.jar.length }; },
+    async jarAdd(text, visitor) {
+      const e = { text: text.slice(0, 140), who: visitor, at: Date.now() };
+      db.jar.push(e);
+      persist();
+      return { entry: e, count: db.jar.length };
     },
     async activity(since) { return { events: db.events.filter((e) => e.seq > since), seq: db.seq, here: 1 }; },
-    async heartbeat() { return { here: 1 }; },
+    async heartbeat() { return { here: 1, others: [] }; },
   };
 }
 

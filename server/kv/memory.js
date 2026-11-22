@@ -53,7 +53,7 @@ export function createMemoryKv({ file } = {}) {
   const idx = (i, n) => (i < 0 ? n + i : i);
   const zsorted = (e) => [...e.v].sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : 1));
 
-  const WRITES = new Set(['SET', 'DEL', 'INCR', 'EXPIRE', 'HSET', 'HSETNX', 'HINCRBY', 'HDEL', 'ZADD', 'ZREM', 'ZREMRANGEBYSCORE', 'LPUSH', 'LTRIM']);
+  const WRITES = new Set(['SET', 'DEL', 'INCR', 'INCRBY', 'EXPIRE', 'HSET', 'HSETNX', 'HINCRBY', 'HDEL', 'ZADD', 'ZREM', 'ZREMRANGEBYSCORE', 'LPUSH', 'LTRIM', 'SADD']);
 
   function exec(cmd) {
     const [name, ...a] = cmd.map(String);
@@ -87,6 +87,31 @@ export function createMemoryKv({ file } = {}) {
         const e = of(a[0], 's', true);
         e.v = String((Number(e.v) || 0) + 1);
         return Number(e.v);
+      }
+      case 'INCRBY': {
+        const e = of(a[0], 's', true);
+        e.v = String((Number(e.v) || 0) + Number(a[1]));
+        return Number(e.v);
+      }
+      case 'MGET':
+        return a.map((k) => { const e = live(k); return e && e.t === 's' ? e.v : null; });
+      case 'SADD': {
+        const e = of(a[0], 'h', true);
+        let n = 0;
+        for (const m of a.slice(1)) if (!e.v.has(m)) { e.v.set(m, '1'); n++; }
+        return n;
+      }
+      case 'SCARD':
+        return of(a[0], 'h')?.v.size ?? 0;
+      case 'ZRANGEBYSCORE': {
+        const e = of(a[0], 'z');
+        if (!e) return [];
+        const min = a[1] === '-inf' ? -Infinity : Number(a[1]);
+        const max = a[2] === '+inf' ? Infinity : Number(a[2]);
+        let out = zsorted(e).filter(([, sc]) => sc >= min && sc <= max).map((x) => x[0]);
+        const li = a.findIndex((x) => x.toUpperCase() === 'LIMIT');
+        if (li > 0) out = out.slice(Number(a[li + 1]), Number(a[li + 1]) + Number(a[li + 2]));
+        return out;
       }
       case 'EXPIRE': {
         const e = live(a[0]);
