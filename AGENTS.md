@@ -115,6 +115,9 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
 - Cambios de API: agregar el test en `server/api.test.js` (corre contra local y contra la función de Vercel).
 - Colores HDR (>1) en materiales emisivos para que el *bloom* los haga brillar; cuidado con valores
   enormes (ya hubo un bug de pantalla blanca por luciérnagas gigantes cerca de la cámara).
+- El cempasúchil (`marigoldGeometry` en `muertos.js`) son pétalos sueltos en capas: cualquier material
+  que lo use tiene que ser `side: THREE.DoubleSide` (si no, de atrás desaparecen pétalos). Las guirnaldas
+  y arcos van sobre un carrizo (un tubo) para que las flores no parezcan flotar.
 - Todo lo visible se genera en canvas/geometría: no hay modelos ni imágenes externas salvo las fotos
   de `public/huellitas/` y los íconos de `public/`.
 - CSS: tema vino en paneles (`dialog.modal`, `.sheet`) vía variables; los "papeles" (notas, libro,

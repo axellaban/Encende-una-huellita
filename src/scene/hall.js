@@ -139,7 +139,7 @@ export function buildHall(scene, colliders, tier) {
   const waxMat = new THREE.MeshLambertMaterial({ color: '#fff3e0', emissive: '#7a5226', emissiveIntensity: 0.45 });
   const postMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture('#b5307a') });
   const marigoldGeo = marigoldGeometry(0.04, '#ffffff', r);
-  const flowerMats = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a'].map((c) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, color: c, emissive: c, emissiveIntensity: 0.25 }));
+  const flowerMats = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a'].map((c) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, color: c, emissive: c, emissiveIntensity: 0.25 }));
   const tileMat = new THREE.MeshLambertMaterial({ map: talaveraTexture() });
   const animators = [];
   // Jarrito de barro de la repisa (geometrías compartidas por todos los marcos).
@@ -347,14 +347,18 @@ export function buildHall(scene, colliders, tier) {
     const a = posts[0];
     const b = posts[posts.length - 1];
     const pts = [];
+    const gatePts = [];
     for (let i = 0; i <= 64; i++) {
       const t = i / 64;
       const x = THREE.MathUtils.lerp(a.x, b.x, t);
       const z = THREE.MathUtils.lerp(a.z, b.z, t);
       const y = 0.3 + Math.sin(t * Math.PI) * (POST_H + 0.9) * (0.65 + 0.35 * Math.sin(t * Math.PI));
-      for (let k = 0; k < 2; k++) pts.push([x + (r() - 0.5) * 0.18, y + (r() - 0.5) * 0.18, z + (r() - 0.5) * 0.18, 0.9 + r() * 0.6]);
+      for (let k = 0; k < 3; k++) pts.push([x + (r() - 0.5) * 0.16, y + (r() - 0.5) * 0.16, z + (r() - 0.5) * 0.16, 0.9 + r() * 0.5]);
+      gatePts.push(new THREE.Vector3(x, y, z));
     }
     scene.add(marigoldCluster(pts, { r: 0.11, rnd: r }));
+    // El carrizo que sostiene las flores (para que no parezcan flotar).
+    scene.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(gatePts), 90, 0.06, 6, false), new THREE.MeshLambertMaterial({ color: '#4a6a2e', emissive: '#14200a' })));
   }
   scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(wire), new THREE.LineBasicMaterial({ color: '#1b1512', transparent: true, opacity: 0.7 })));
   const bulbMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial(), bulbs.length);
@@ -435,13 +439,19 @@ export function buildHall(scene, colliders, tier) {
       for (let i = 0; i < 26; i++) pts.push([s * (1.3 + (r() - 0.5) * 0.25), 0.4 + r() * 0.45, 0.45 + (r() - 0.5) * 0.3, 0.8 + r() * 0.6]);
       for (let i = 0; i < 12; i++) pts.push([s * (1.0 + r() * 0.15), 0.76 + r() * 0.2, -0.2 + (r() - 0.5) * 0.2, 0.7 + r() * 0.5]);
     }
-    // Arco de flores sobre la ofrenda.
-    for (let i = 0; i <= 50; i++) {
-      const t = i / 50;
+    // Arco de flores sobre la ofrenda: un arco de carrizo forrado de cempasúchil bien tupido.
+    const archPts = [];
+    for (let i = 0; i <= 80; i++) {
+      const t = i / 80;
       const a = Math.PI * t;
-      pts.push([-Math.cos(a) * 1.55 + (r() - 0.5) * 0.1, Math.sin(a) * 3.0 + (r() - 0.5) * 0.1, -0.95 + (r() - 0.5) * 0.1, 1 + r() * 0.4]);
+      archPts.push(new THREE.Vector3(-Math.cos(a) * 1.55, Math.sin(a) * 3.0, -0.95));
+      for (let k = 0; k < 3; k++) {
+        const sp = (k / 3) * Math.PI * 2 + r();
+        pts.push([-Math.cos(a) * 1.55 + Math.cos(sp) * 0.06 * Math.cos(a), Math.sin(a) * 3.0 + Math.sin(sp) * 0.06, -0.95 + Math.cos(sp) * 0.07, 0.85 + r() * 0.4]);
+      }
     }
-    easel.add(marigoldCluster(pts, { r: 0.09, rnd: r }));
+    const reed = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(archPts), 60, 0.045, 6, false), new THREE.MeshLambertMaterial({ color: '#4a6a2e', emissive: '#14200a' }));
+    easel.add(reed, marigoldCluster(pts, { r: 0.09, rnd: r }));
     for (const s of [-1, 1]) {
       const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.34, 14), new THREE.MeshLambertMaterial({ map: talaveraTexture() }));
       pot.position.set(s * 1.3, 0.17, 0.45);

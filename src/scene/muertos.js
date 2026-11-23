@@ -2,7 +2,7 @@
 // calaveritas de azúcar, pan de muerto, veladoras, camino de pétalos y un pueblito iluminado.
 // Todo dibujado/generado acá, sin modelos ni imágenes de terceros.
 import * as THREE from 'three';
-import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export const PALETTE = {
   cempasuchil: '#ff9a1f',
@@ -213,32 +213,64 @@ export function paintedWallTexture(color) {
 }
 
 // ---------- geometrías ----------
-// Flor de cempasúchil: una bola de pétalos (low-poly) con color variado.
+// Flor de cempasúchil: un pompón de pétalos en capas (los de afuera abiertos, los de adentro
+// parados), oscuros en la base y claros en la punta. Antes era una bola facetada y de cerca parecía
+// una piedra. Pocas caras (≈115): se usa por miles.
+const MARIGOLD_LAYERS = [
+  // [pétalos, largo, elevación (rad), radio de la base, altura de la base]
+  [12, 0.88, 0.22, 0.18, -0.2],
+  [11, 0.8, 0.6, 0.14, -0.06],
+  [9, 0.66, 0.98, 0.09, 0.08],
+  [6, 0.46, 1.35, 0.03, 0.22],
+];
 export function marigoldGeometry(r = 0.1, color = PALETTE.cempasuchil, rnd = Math.random) {
-  let g = new THREE.IcosahedronGeometry(r, 1);
-  g.deleteAttribute('normal');
-  g.deleteAttribute('uv');
-  g = mergeVertices(g);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const k = 1 + (rnd() - 0.5) * 0.35;
-    p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.8, p.getZ(i) * k);
-  }
-  g = g.toNonIndexed();
-  g.computeVertexNormals();
+  const pos = [];
+  const col = [];
   const base = new THREE.Color(color);
-  const cols = new Float32Array(g.attributes.position.count * 3);
-  const tmp = new THREE.Color();
-  for (let i = 0; i < g.attributes.position.count; i += 3) {
-    tmp.copy(base).offsetHSL((rnd() - 0.5) * 0.03, 0, (rnd() - 0.5) * 0.12);
-    for (let k = 0; k < 3; k++) tmp.toArray(cols, (i + k) * 3);
+  const push = (p, k) => {
+    pos.push(p[0], p[1], p[2]);
+    col.push(base.r * k, base.g * k, base.b * k);
+  };
+  for (const [n, len, elev, b0, y0] of MARIGOLD_LAYERS) {
+    const off = rnd() * Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      const a = off + (i / n) * Math.PI * 2 + (rnd() - 0.5) * 0.35;
+      const e = elev + (rnd() - 0.5) * 0.35;
+      const L = r * len * (0.85 + rnd() * 0.3);
+      const w = L * 0.78;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const dx = ca * Math.cos(e);
+      const dy = Math.sin(e);
+      const dz = sa * Math.cos(e);
+      const ox = ca * r * b0;
+      const oy = r * y0;
+      const oz = sa * r * b0;
+      // Un punto del pétalo: t a lo largo, s de costado, curl hacia abajo (la punta rizada).
+      const P = (t, s, curl = 0) => [ox + dx * L * t - sa * w * s, oy + dy * L * t - curl * r, oz + dz * L * t + ca * w * s];
+      const bl = P(0, -0.2);
+      const br = P(0, 0.2);
+      const ml = P(0.6, -0.5, -0.04);
+      const mr = P(0.6, 0.5, -0.04);
+      const tip = P(1, (rnd() - 0.5) * 0.3, 0.06);
+      const j = 0.9 + rnd() * 0.2;
+      const kb = 0.4 * j;
+      const km = 0.82 * j;
+      const kt = 1.08 * j;
+      push(bl, kb); push(br, kb); push(mr, km);
+      push(bl, kb); push(mr, km); push(ml, km);
+      push(ml, km); push(mr, km); push(tip, kt);
+    }
   }
-  g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
   return g;
 }
 
 export function marigoldMaterial() {
-  return new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, emissive: '#5a2400', emissiveIntensity: 0.55 });
+  return new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, emissive: '#6a2800', emissiveIntensity: 0.6 });
 }
 
 // Muchas flores en un solo dibujo (para guirnaldas, arcos y macetas).

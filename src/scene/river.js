@@ -407,29 +407,48 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
   }
 
   // ---------- el arcoíris sobre el puente ----------
+  // Una cinta plana con los colores fundidos y un destello que la recorre. Como un arcoíris de
+  // verdad, sólo se ve de frente: de canto se apaga (si no, desde la orilla quedaba una franja
+  // de luz vertical en el cielo). Las puntas se pierden en la bruma del agua.
   {
-    const colors = ['#ff6f6f', '#ffa95c', '#ffe27a', '#8fdc84', '#7cc0ff', '#9c8cff', '#d99cff'];
-    const rainbow = new THREE.Group();
-    colors.forEach((c, i) => {
-      const arc = new THREE.Mesh(
-        new THREE.TorusGeometry(7.6 - i * 0.32, 0.17, 6, 72, Math.PI),
-        new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
-      );
-      rainbow.add(arc);
-    });
+    const R0 = 5.6;
+    const R1 = 7.9;
+    const rainbow = new THREE.Mesh(
+      new THREE.RingGeometry(R0, R1, 120, 1, 0, Math.PI),
+      new THREE.ShaderMaterial({
+        uniforms: { uTime },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        vertexShader: 'varying vec2 vP; varying vec3 vW; varying vec3 vN; void main(){ vP = position.xy; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * vec3(0.0, 0.0, 1.0)); gl_Position = projectionMatrix * viewMatrix * w; }',
+        fragmentShader: `uniform float uTime; varying vec2 vP; varying vec3 vW; varying vec3 vN;
+          vec3 band(float k){
+            vec3 c = mix(vec3(0.55, 0.32, 1.0), vec3(0.28, 0.55, 1.0), smoothstep(0.0, 0.2, k));
+            c = mix(c, vec3(0.4, 0.9, 0.5), smoothstep(0.2, 0.4, k));
+            c = mix(c, vec3(1.0, 0.92, 0.38), smoothstep(0.4, 0.6, k));
+            c = mix(c, vec3(1.0, 0.58, 0.26), smoothstep(0.6, 0.8, k));
+            return mix(c, vec3(1.0, 0.36, 0.42), smoothstep(0.8, 1.0, k));
+          }
+          void main(){
+            float r = length(vP);
+            float k = (r - ${R0.toFixed(2)}) / ${(R1 - R0).toFixed(2)};
+            float edge = smoothstep(0.0, 0.14, k) * smoothstep(1.0, 0.86, k);
+            vec3 V = normalize(cameraPosition - vW);
+            float face = smoothstep(0.25, 0.7, abs(dot(V, vN)));
+            float foot = smoothstep(-0.3, 1.8, vW.y);
+            // Un destello que baja por el arco, de un lado al otro.
+            float th = atan(vP.y, vP.x);
+            float ts = 3.14159 * (1.0 - fract(uTime * 0.07));
+            float spark = exp(-pow((th - ts) * r * 1.6, 2.0)) * exp(-pow((k - 0.5) * 3.0, 2.0));
+            float a = edge * (0.22 + 0.05 * sin(uTime * 0.6 + k * 3.0)) + spark * 0.9;
+            gl_FragColor = vec4(band(k) + spark * vec3(0.6), a * face * foot);
+          }`,
+      }),
+    );
     rainbow.position.set(BRIDGE.x, -0.6, BRIDGE.z);
+    rainbow.renderOrder = 2;
     ground.add(rainbow);
-    animated.push((t) => rainbow.children.forEach((a, i) => { a.material.opacity = 0.13 + Math.sin(t * 0.6 + i * 0.5) * 0.04; }));
-    // Destellos que bajan por el arcoíris.
-    const sparkle = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.8, color: new THREE.Color(1.3, 1.2, 1.0) }));
-    sparkle.scale.setScalar(0.8);
-    ground.add(sparkle);
-    animated.push((t) => {
-      const k = (t * 0.08) % 1;
-      const a = Math.PI * (1 - k);
-      sparkle.position.set(BRIDGE.x + Math.cos(a) * 6.6, -0.6 + Math.sin(a) * 6.6, BRIDGE.z);
-      sparkle.material.opacity = Math.sin(Math.PI * k) * 0.9;
-    });
   }
 
   // Cartel del puente (del lado de afuera).
