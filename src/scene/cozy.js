@@ -1,6 +1,7 @@
 // Detalles pequeños que hacen el jardín acogedor: huellitas en el camino, hongos que brillan,
 // el cuenco y la pelota de Luca, farolitos de papel, pétalos que caen, pizarrón de bienvenida,
-// el Puente del Arcoíris con su arroyo, el Prado de los espíritus y el frasco de gracias.
+// las huellitas que llevan al Puente del Arcoíris (el río y el puente están en river.js), el Prado
+// de los espíritus y el frasco de gracias.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, GARDEN_RADIUS, BRIDGE, outside, MEADOW, MEADOW_R, nearCreek, insideHall, uTime, rand } from './world.js';
