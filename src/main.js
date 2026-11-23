@@ -178,6 +178,8 @@ const watercolorOn = () => store.get('huellita.watercolor') === '1';
 
 function setupRenderer() {
   renderer.setSize(innerWidth, innerHeight);
+  lastW = innerWidth;
+  lastH = innerHeight;
   // Si el celular se queda sin memoria gráfica, el lienzo queda negro: recargamos un escalón más abajo.
   renderer.domElement.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
@@ -221,16 +223,41 @@ function sizeWatercolor() {
   watercolor.setSize(Math.max(1, innerWidth * pr), Math.max(1, innerHeight * pr), pr);
 }
 
+// Cambiar el tamaño del lienzo lo borra: si pasa fuera del cuadro (en el evento 'resize'), el
+// navegador puede mostrarlo vacío, en negro, hasta el próximo dibujo. Por eso el evento sólo avisa y
+// el cambio se hace al empezar el cuadro, justo antes de dibujar. Y si el tamaño no cambió (en el
+// celular 'resize' salta seguido: barra del navegador, teclado), no se toca nada.
+let sizeDirty = false;
+let lastW = 0;
+let lastH = 0;
 function resize() {
   // Al cambiar de app o rotar, a veces el tamaño llega en 0 por un instante: no achicar todo a nada.
   if (!innerWidth || !innerHeight) return;
+  if (innerWidth === lastW && innerHeight === lastH) return;
+  lastW = innerWidth;
+  lastH = innerHeight;
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer?.setSize(innerWidth, innerHeight);
   composer?.setSize(innerWidth, innerHeight);
   sizeWatercolor();
 }
-addEventListener('resize', resize);
+addEventListener('resize', () => {
+  if (renderer) sizeDirty = true;
+  else resize();
+});
+// Lo que haya que cambiar de tamaño o resolución, al principio del cuadro (antes de dibujar).
+let pendingRatio = null;
+function frameStart() {
+  if (sizeDirty) { sizeDirty = false; resize(); }
+  if (pendingRatio !== null) {
+    const r = pendingRatio;
+    pendingRatio = null;
+    renderer.setPixelRatio(r);
+    composer?.setPixelRatio(r);
+  }
+  adaptive?.apply();
+}
 
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
@@ -327,6 +354,7 @@ async function buildScene() {
   let hudAway = false;
   setupStick();
   renderer.setAnimationLoop(() => {
+    frameStart();
     const dt = Math.min(clock.getDelta(), 0.1);
     const t = clock.elapsedTime;
     uTime.value = t;
@@ -2697,9 +2725,9 @@ function grabFrame() {
     // Un cuadro con más resolución para que la foto se vea nítida.
     const prev = renderer.getPixelRatio();
     const want = Math.min(2, Math.max(prev, devicePixelRatio || 1));
-    if (want !== prev) { renderer.setPixelRatio(want); composer?.setPixelRatio(want); }
+    if (want !== prev) pendingRatio = want;
     captureNext = (url) => {
-      if (want !== prev) { renderer.setPixelRatio(prev); composer?.setPixelRatio(prev); }
+      if (want !== prev) pendingRatio = prev;
       res(url);
     };
   });

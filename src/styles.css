@@ -755,6 +755,12 @@ body.sheet-open .walk-hud, body.intro .walk-hud { opacity: 0; pointer-events: no
 @keyframes ghostKnob { 0%, 100% { transform: translate(0, 0); } 40% { transform: translate(0, -22px); } 70% { transform: translate(14px, -10px); } }
 @media (pointer: fine) { .joy-ghost { display: none; } }
 
+/* Sin desenfoque de fondo en lo que se desvanece al caminar: en iPhone, backdrop-filter encima del
+   lienzo 3D mientras cambia la opacidad puede hacer parpadear la pantalla. Fondo un poco más opaco. */
+.hub-btn, .emote-btn, .walk-hud, .tick, .top .chip { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.hub-btn, .emote-btn { background: rgba(34, 14, 44, .88); }
+.walk-hud { background: rgba(34, 14, 44, .9); }
+.tick, .top .chip { background: rgba(34, 14, 44, .78); }
 /* Al caminar (o mientras vuela la cámara) se desvanece; vuelve al frenar. */
 .top, .act-btn, .emote-btn, .walk-hud, .joy-ghost { transition: opacity .45s, transform .3s var(--ease); }
 body.moving .top { opacity: 0; pointer-events: none; }

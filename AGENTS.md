@@ -133,6 +133,9 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
 - Cambios de API: agregar el test en `server/api.test.js` (corre contra local y contra la función de Vercel).
 - Colores HDR (>1) en materiales emisivos para que el *bloom* los haga brillar; cuidado con valores
   enormes (ya hubo un bug de pantalla blanca por luciérnagas gigantes cerca de la cámara).
+- **Nunca cambies el tamaño del lienzo fuera del cuadro**: `renderer.setSize`/`setPixelRatio` lo borran y, si
+  pasa después de dibujar (o en un evento), se ve un cuadro negro (era el parpadeo del 23/11). Usá
+  `sizeDirty`, `pendingRatio` o `adaptive.apply()`, que se aplican en `frameStart()` antes de dibujar.
 - **Nada de NaN en el ciclo**: un `NaN` en un espíritu o en la correa hace que el cuadro tire un error y el 3D
   se congele (pasó con `reappear()` en `spirits.js`). Si algo puede dividir por cero o quedar sin un
   campo (p. ej. un `goal` sin `speed`), poné un valor por defecto.

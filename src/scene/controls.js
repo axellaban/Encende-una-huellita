@@ -71,6 +71,8 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   const STICK_R = 46;
   let stick = null;
   let stickZone = null;
+  // Mientras una escena mueve al personaje (entrar y salir del ascensor), ni la palanca ni el suelo lo tocan.
+  let held = false;
   const setJoy = (x, y) => {
     joy.x = x;
     joy.y = y;
@@ -296,6 +298,8 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     // (x, y) en pantalla → true si ahí arranca la palanca invisible.
     set stickZone(fn) { stickZone = fn; },
     get sticking() { return !!stick?.moved; },
+    get held() { return held; },
+    set held(v) { held = !!v; if (held) { walkTarget = null; marker.visible = false; joy.x = 0; joy.y = 0; } },
     set enabled(v) {
       enabled = v;
       if (!v) {
@@ -361,6 +365,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     update(dt) {
       now += dt;
       // ---------- personaje ----------
+      if (!held) {
       let mx = 0;
       let mz = 0;
       let run = keys.has('shift') ? 1.6 : 1;
@@ -437,6 +442,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         marker.scale.set(s, s, s);
       }
 
+      }
       // ---------- cámara ----------
       if (mode === 'fixed' && !fly) return;
       if (!drag && (Math.abs(vYaw) > 0.01 || Math.abs(vPitch) > 0.01)) {

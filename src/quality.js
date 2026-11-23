@@ -38,37 +38,56 @@ export function pickTier() {
 }
 
 // Baja la resolución si la escena va lenta y la sube de a poco si sobra rendimiento.
+//
+// Ojo: cambiar la resolución cambia el tamaño del lienzo y eso lo BORRA. Si pasa después de dibujar,
+// ese cuadro se ve negro (era el parpadeo que veía el dueño en el celular). Por eso tick() sólo decide
+// y apply() lo aplica al empezar el cuadro siguiente, antes de dibujar. Y para que no suba y baje en
+// ciclo (40 → 60 → 40 cuadros por segundo), si al subir se pone lenta, ése pasa a ser el techo.
 export function createAdaptiveResolution(renderer, onChange, { max, min = 0.75 }) {
   let ratio = Math.min(window.devicePixelRatio || 1, max);
+  let ceiling = ratio;
   let frames = 0;
   let acc = 0;
   let calm = 0;
+  let pending = null;
+  let raisedAt = -1e9;
+  let clock = 0;
   renderer.setPixelRatio(ratio);
+  const want = (r) => { pending = Math.round(r * 100) / 100; };
   return {
-    get ratio() { return ratio; },
+    get ratio() { return pending ?? ratio; },
     tick(dt) {
       frames++;
       acc += dt;
+      clock += dt;
       if (acc < 1.5) return;
       const fps = frames / acc;
       frames = 0;
       acc = 0;
       if (document.hidden) return;
       if (fps < 42 && ratio > min) {
-        ratio = Math.max(min, ratio - (fps < 28 ? 0.3 : 0.15));
+        // Si recién habíamos subido y ya no da, no volver a intentar más arriba de esto.
+        if (clock - raisedAt < 6) ceiling = Math.max(min, ratio - 0.1);
+        want(Math.max(min, ratio - (fps < 28 ? 0.3 : 0.15)));
         calm = 0;
-        renderer.setPixelRatio(ratio);
-        onChange(ratio);
       } else if (fps > 58) {
         calm++;
-        const target = Math.min(window.devicePixelRatio || 1, max);
-        if (calm >= 4 && ratio < target) {
-          ratio = Math.min(target, ratio + 0.1);
+        const target = Math.min(window.devicePixelRatio || 1, max, ceiling);
+        if (calm >= 5 && ratio + 0.05 < target) {
+          want(Math.min(target, ratio + 0.1));
+          raisedAt = clock;
           calm = 0;
-          renderer.setPixelRatio(ratio);
-          onChange(ratio);
         }
       } else calm = 0;
+    },
+    // Llamar al principio del cuadro, antes de dibujar.
+    apply() {
+      if (pending === null) return false;
+      ratio = pending;
+      pending = null;
+      renderer.setPixelRatio(ratio);
+      onChange(ratio);
+      return true;
     },
   };
 }

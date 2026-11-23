@@ -15,7 +15,13 @@ en celular (iPhone 13 y SE) y el recorrido de punta a punta (ver AGENTS).
       punta a punta dio 35/35 en celular, iPhone SE y compu. Ojo al probar: no correr dos recorridos a la
       vez contra el mismo servidor (se pisan los datos y fallan vela, búsqueda y quitar) y empezar con
       `data/` limpio.
-- [ ] Preguntarle al dueño si vuelve a ver la pantalla negra en su celular (con captura y dónde estaba).
+- [x] **Parpadeo en negro de a ratos** (el dueño, 23/11 a la noche): la resolución automática cambiaba el
+      tamaño del lienzo *después* de dibujar (ese cuadro salía vacío) y en el celular sube y baja seguido;
+      también los eventos `resize` (barra del navegador, teclado) y el modo foto. Ahora todo se aplica
+      al empezar el cuadro (`frameStart()` en `main.js`), se ignoran los `resize` que no cambian nada y
+      la resolución no sube y baja en ciclo (techo en `quality.js`). Verificado: 0 cambios de tamaño
+      fuera del cuadro. Además, sin `backdrop-filter` en lo que se desvanece al caminar (iPhone).
+- [ ] Preguntarle al dueño si vuelve a ver el parpadeo o la pantalla negra (con captura y dónde estaba).
 
 ### 2. Que se vea limpio en el celular
 - [x] **Acuarela apagada por defecto** (`watercolorOn()` en `main.js`, hecho el 23/11). En el iPhone del
