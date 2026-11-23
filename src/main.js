@@ -298,6 +298,7 @@ async function buildScene() {
   let kickT = 0;
   let stepT = 0;
   let moodT = 0;
+  let greetT = 3;
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
     const t = clock.elapsedTime;
@@ -324,6 +325,12 @@ async function buildScene() {
         const z = P.pos.z;
         step(world.colliders.up ? 'cloud' : onBridge(x, z, 0.1) ? 'wood' : onPath(x, z, 0.1) || insideHall(x, z) ? 'stone' : 'grass');
       }
+    }
+    // Si otro visitante pasa cerca, se saludan.
+    greetT -= dt;
+    if (greetT < 0) {
+      greetT = 1;
+      if (introDone && !P.moving && avatars.greetNear(P.pos) && !me.busy) me.wave();
     }
     // La música cambia con el lugar: jardín, salón o cielo.
     moodT -= dt;
