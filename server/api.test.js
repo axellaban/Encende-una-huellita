@@ -342,3 +342,13 @@ test('los encabezados de seguridad del servidor local y de Vercel coinciden', as
   const r = await targets.local('/');
   assert.equal(r.headers.get('content-security-policy'), CSP);
 });
+
+test('la vista previa de Luca no depende de la base de datos', async () => {
+  const { pageMeta, injectMeta } = await import('./page.js');
+  const meta = await pageMeta(null, 'luca', { origin: 'https://x.test', de: 'Axel' });
+  assert.equal(meta.image, 'https://x.test/huellitas/luca-og.jpg');
+  assert.match(meta.description, /Axel encendió una vela por Luca/);
+  assert.equal(await pageMeta(null, 'otra', { origin: 'https://x.test' }), null);
+  const html = injectMeta('<title>x</title><meta property="og:title" content="y" />', meta);
+  assert.match(html, /<title>Luca · Encendé una huellita<\/title>/);
+});

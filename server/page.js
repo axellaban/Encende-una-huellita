@@ -11,7 +11,10 @@ const clean = (t, max) => String(t ?? '').replace(/[\u0000-\u001f\u007f<>]/g, ' 
 
 // Qué dice la vista previa de una huellita. `de`: quién invita (viene en el link compartido).
 export async function pageMeta(store, id, { origin, de = '' } = {}) {
-  const m = /^[\w-]{3,24}$/.test(id || '') ? await store.get(id).catch(() => null) : null;
+  if (!/^[\w-]{3,24}$/.test(id || '')) return null;
+  // Sin base de datos (o si falla) las destacadas igual tienen su vista previa: viven en el código.
+  let m = store ? await store.get(id).catch(() => null) : null;
+  if (!m && featuredById.has(id)) m = { ...featuredById.get(id), candles: 0 };
   if (!m) return null;
   const f = featuredById.get(id);
   const abs = (p) => (/^https?:/.test(p) ? p : `${origin}${p}`);
