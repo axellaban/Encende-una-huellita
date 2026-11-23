@@ -14,6 +14,13 @@ export const EARS = [
   { id: 'up', name: 'Paradas' },
   { id: 'tip', name: 'Dobladas' },
   { id: 'down', name: 'Caídas' },
+  { id: 'big', name: 'Grandotas' },
+];
+// El hocico (para los perros): largo como un galgo, mediano o chato como un pug.
+export const SNOUTS = [
+  { id: 'long', name: 'Largo' },
+  { id: 'mid', name: 'Mediano' },
+  { id: 'flat', name: 'Chato' },
 ];
 // Bien distintos: de un chihuahua a un gran danés (los gatos van en una escala más chica).
 export const SIZES = [
@@ -33,6 +40,7 @@ const FUR_IDS = ids(FURS);
 const EAR_IDS = ids(EARS);
 const SIZE_IDS = ids(SIZES);
 const PATTERN_IDS = ids(PATTERNS);
+const SNOUT_IDS = ids(SNOUTS);
 
 // Deja sólo valores conocidos; devuelve null si no queda nada.
 export function cleanLook(v) {
@@ -42,5 +50,6 @@ export function cleanLook(v) {
   if (EAR_IDS.has(v.ears)) out.ears = v.ears;
   if (SIZE_IDS.has(v.size)) out.size = v.size;
   if (PATTERN_IDS.has(v.pattern)) out.pattern = v.pattern;
+  if (SNOUT_IDS.has(v.snout)) out.snout = v.snout;
   return Object.keys(out).length ? out : null;
 }

@@ -120,6 +120,41 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
   const hairMat = new THREE.MeshLambertMaterial({ color: ['#2a1a14', '#3b2418', '#1c1418', '#5a3a22'][Math.round(hue) % 4], emissive: '#0e0806' });
   head.add(new THREE.Mesh(G.hairBack, hairMat), new THREE.Mesh(G.hairTop, hairMat));
   const useHat = hat ?? Math.round(hue) % 2 === 1;
+  // El peinado viaja escondido en el color (hue % 8: el bit 0 es el sombrero, los bits 1-2 el
+  // peinado), así los demás te ven igual sin tocar el servidor.
+  const hairStyle = Math.floor((Math.round(hue) % 8) / 2);
+  const ribbon = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((hue + 150) % 360) / 360, 0.75, 0.55), emissive: '#2a0a1a' });
+  if (hairStyle === 1) {
+    // Trenzas que caen detrás de los hombros, con moñitos.
+    for (const sd of [-1, 1]) {
+      const pts = [new THREE.Vector3(sd * 0.17, 0.02, -0.08), new THREE.Vector3(sd * 0.21, -0.14, -0.1), new THREE.Vector3(sd * 0.2, -0.3, -0.07), new THREE.Vector3(sd * 0.19, -0.42, -0.04)];
+      const curve = new THREE.CatmullRomCurve3(pts);
+      head.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.038, 7, false), hairMat));
+      for (let k = 1; k < 4; k++) {
+        const knot = new THREE.Mesh(new THREE.SphereGeometry(0.044, 8, 6), hairMat);
+        knot.position.copy(curve.getPoint(k / 4));
+        head.add(knot);
+      }
+      const bow = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6).scale(1.5, 0.7, 0.6), ribbon);
+      bow.position.copy(pts[3]);
+      head.add(bow);
+    }
+  } else if (hairStyle === 2 && !useHat) {
+    // Chongo arriba con una flor.
+    const bun = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), hairMat);
+    bun.position.set(0, 0.2, -0.12);
+    const fl = new THREE.Mesh(G.flower, marigoldMaterial());
+    fl.position.set(0.08, 0.22, -0.05);
+    head.add(bun, fl);
+  } else if (hairStyle === 3) {
+    // Colita atada atrás.
+    const pts = [new THREE.Vector3(0, 0.1, -0.22), new THREE.Vector3(0, 0.0, -0.32), new THREE.Vector3(0.02, -0.18, -0.33), new THREE.Vector3(0, -0.32, -0.28)];
+    head.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 14, 0.05, 8, false), hairMat));
+    const tie = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.016, 6, 12), ribbon);
+    tie.position.copy(pts[0]).add(new THREE.Vector3(0, -0.02, -0.02));
+    tie.rotation.x = 1.2;
+    head.add(tie);
+  }
   if (useHat) {
     const hatMat = new THREE.MeshLambertMaterial({ color: '#2a1d2e', emissive: '#120a14' });
     const bandMat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((hue + 150) % 360) / 360, 0.75, 0.5), emissive: '#3a0a1a' });

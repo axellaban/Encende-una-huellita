@@ -27,7 +27,7 @@ export function lookFor(m) {
   const kind = m.species === 'gato' ? 'gato' : m.species === 'otro' ? 'otro' : 'perro';
   const l = m.look || {};
   const fur = FURS.find((f) => f.id === l.fur)?.hex || FURS[Math.floor(r() * FURS.length)].hex;
-  const ears = ['up', 'down', 'tip'].includes(l.ears) ? l.ears : kind === 'perro' ? ['down', 'up', 'tip'][Math.floor(r() * 3)] : 'up';
+  const ears = ['up', 'down', 'tip', 'big'].includes(l.ears) ? l.ears : kind === 'perro' ? ['down', 'up', 'tip'][Math.floor(r() * 3)] : 'up';
   // Tamaños bien distintos (de un perrito mini a uno gigante); los gatos y los otros, más chicos.
   const SIZE_SCALE = {
     perro: { xs: 0.5, s: 0.68, m: 0.9, l: 1.15, xl: 1.42 },
@@ -42,7 +42,7 @@ export function lookFor(m) {
     size,
     tail: kind === 'gato' ? 'thin' : r() < 0.45 ? 'fluffy' : r() < 0.5 ? 'curl' : 'thin',
     pattern: l.pattern || (r() < 0.35 ? 'tuxedo' : r() < 0.3 ? 'socks' : 'solid'),
-    snout: kind === 'perro' ? 0.85 + r() * 0.45 : 0.4,
+    snout: kind === 'perro' ? ({ long: 1.45, mid: 1.0, flat: 0.45 }[l.snout] ?? 0.85 + r() * 0.45) : 0.4,
     rim: RIMS[Math.floor(r() * RIMS.length)],
     seed: r(),
   };
@@ -218,7 +218,7 @@ export function createPet(look) {
     if (bunny) add(place(sphere(0.045, 0.5, 2.6, 0.32), at(eb, sd * 0.0, 0.1, 0), 0, 0, -sd * 0.12), eb, innerEar);
     else if (look.ears === 'down') add(place(sphere(0.052, 0.34, 1.55, 0.85), at(eb, sd * 0.02, -0.062, -0.005), 0.12, 0, sd * 0.14), eb, F.clone().multiplyScalar(0.8));
     else {
-      const big = cat ? 1.05 : 1;
+      const big = cat ? 1.05 : look.ears === 'big' ? 1.55 : 1;
       const g = new THREE.ConeGeometry(0.048 * s * big, 0.12 * s * big, 4, 1);
       g.scale(1, 1, 0.45);
       add(place(g, at(eb, 0, 0.05, 0), look.ears === 'tip' ? 0.5 : 0, Math.PI / 4, -sd * 0.22), eb, innerEar);

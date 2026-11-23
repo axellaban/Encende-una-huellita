@@ -19,7 +19,7 @@ import { createHeaven, FLOORS } from './scene/heaven.js';
 import { createCharacter } from './scene/character.js';
 import { createOfferFx } from './scene/gifts3d.js';
 import { createSparkles } from './scene/sparkles.js';
-import { FURS, EARS, SIZES } from '../server/looks.js';
+import { FURS, EARS, SIZES, SNOUTS } from '../server/looks.js';
 import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard, drawKeepsake } from './share.js';
 import { polaroid } from './photo.js';
 // Cómo llegó esta persona (link de una huellita, invitación de alguien). Se lee antes de tocar la URL.
@@ -1252,6 +1252,10 @@ function timeAgo(at) {
   const HUE_NAMES = ['Rojo', 'Naranja', 'Amarillo', 'Verde', 'Turquesa', 'Azul', 'Violeta', 'Rosa'];
   const box = $('#me-hues');
   const hatOf = (h) => Math.round(h) % 2 === 1;
+  // hue % 8: el bit 0 es el sombrero y los bits 1-2 el peinado (ver character.js).
+  const styleOf = (h) => Math.round(h) % 8;
+  const hairOf = (h) => Math.floor(styleOf(h) / 2);
+  const withStyle = (h, st) => (((Math.round(h) - styleOf(h) + st) % 360) + 360) % 360;
   const swapCharacter = (h) => {
     const old = me;
     me = createCharacter({ hue: h, light: tierName !== 'low' });
@@ -1284,16 +1288,20 @@ function timeAgo(at) {
     sp.setAttribute('aria-label', HUE_NAMES[HUES.indexOf(h)]);
     sp.title = HUE_NAMES[HUES.indexOf(h)];
     l.append(i, sp);
-    i.onchange = () => setHue(h + (hatOf(h) === hatOf(visitorHue) ? 0 : 1));
+    i.onchange = () => setHue(withStyle(h, styleOf(visitorHue)));
     box.append(l);
   }
   $$('input[name="me-head"]').forEach((i) => {
-    i.onchange = () => setHue(hatOf(visitorHue) === (i.value === 'hat') ? visitorHue : visitorHue >= 358 ? visitorHue - 1 : visitorHue + 1);
+    i.onchange = () => setHue(withStyle(visitorHue, hairOf(visitorHue) * 2 + (i.value === 'hat' ? 1 : 0)));
+  });
+  $$('input[name="me-hair"]').forEach((i) => {
+    i.onchange = () => setHue(withStyle(visitorHue, Number(i.value) * 2 + (hatOf(visitorHue) ? 1 : 0)));
   });
   $('#me-chip').onclick = () => {
     $('#me-dialog-name').textContent = visitor.name;
-    $$('input[name="me-hue"]').forEach((i) => { i.checked = Math.abs(Number(i.value) - visitorHue) <= 1; });
+    $$('input[name="me-hue"]').forEach((i) => { i.checked = Math.abs(Number(i.value) - (visitorHue - styleOf(visitorHue))) <= 8; });
     $$('input[name="me-head"]').forEach((i) => { i.checked = (i.value === 'hat') === hatOf(visitorHue); });
+    $$('input[name="me-hair"]').forEach((i) => { i.checked = Number(i.value) === hairOf(visitorHue); });
     $('#me-dialog').showModal();
   };
 }
@@ -2804,10 +2812,11 @@ function lookPicker(box, value = {}) {
   make('Su pelaje', 'fur', FURS, true);
   make('Sus orejas', 'ears', EARS);
   make('Su tamaño', 'size', SIZES);
+  make('Su hocico (perros)', 'snout', SNOUTS);
 }
 function readLook(box) {
   const v = (n) => box.querySelector(`input[name="look-${n}"]:checked`)?.value;
-  const out = { fur: v('fur'), ears: v('ears'), size: v('size') };
+  const out = { fur: v('fur'), ears: v('ears'), size: v('size'), snout: v('snout') };
   return Object.values(out).some(Boolean) ? out : null;
 }
 lookPicker($('#add-look'));

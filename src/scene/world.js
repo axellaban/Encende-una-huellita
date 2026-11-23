@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { grassTexture, stoneTexture, woodTexture, floorTexture, glowTexture, blobShadowTexture, moonTexture, lanternTexture } from './textures.js';
 import { marigoldGeometry, marigoldMaterial, buildPueblo, PALETTE } from './muertos.js';
+import { paperLantern, flickerLantern } from './lanterns.js';
 
 // Plano del jardín (en metros). Todo lo demás se ubica a partir de estos números.
 export const HALL_CENTER = new THREE.Vector3(0, 0, -14);
@@ -190,6 +191,18 @@ export function buildWorld(scene, tier) {
             float neb2 = fbm3(d * 3.1 + vec3(-2.0, 5.0, 1.0));
             c += vec3(0.42, 0.1, 0.32) * smoothstep(0.55, 0.85, neb) * 0.35 * alt * night;
             c += vec3(0.06, 0.28, 0.32) * smoothstep(0.58, 0.88, neb2) * 0.3 * alt * night;
+          }
+          // Auroras en los pisos del medio: cortinas de luz verde, turquesa y rosa que ondulan.
+          float midf = smoothstep(0.06, 0.22, uK) * (1.0 - smoothstep(0.5, 0.72, uK));
+          if (midf > 0.0) {
+            float az = atan(d.z, d.x);
+            float wave = sin(az * 3.0 + uTime * 0.05 + sin(az * 7.0 + uTime * 0.11) * 0.6);
+            float yb = 0.3 + wave * 0.07;
+            float base = exp(-pow((h - yb) * 10.0, 2.0));
+            float up = smoothstep(yb - 0.01, yb + 0.05, h) * (1.0 - smoothstep(yb + 0.05, yb + 0.32, h));
+            float curtains = 0.5 + 0.5 * sin(az * 38.0 + uTime * 0.25 + sin(az * 11.0 + uTime * 0.07) * 2.5);
+            vec3 ac = mix(vec3(0.25, 1.0, 0.65), vec3(0.95, 0.45, 1.0), smoothstep(0.0, 1.0, (h - yb) * 3.5));
+            c += ac * (base * 0.55 + up * 0.3) * curtains * midf * 0.6;
           }
           if (day > 0.0) {
             // Cirros: velos blancos estirados que se mueven despacio.
@@ -473,6 +486,8 @@ export function buildWorld(scene, tier) {
     const leafParts = [];
     const greens = ['#3d5a33', '#4b6b3b', '#56733f', '#35502f'];
     const blossoms = ['#e7a7bd', '#f0bfcf', '#d98fac'];
+    // Jacarandás en flor: copas lila.
+    const jacaranda = ['#9b72d6', '#a884e0', '#8a63c9', '#b597ea'];
     let placed = 0;
     for (let i = 0; i < 1200 && placed < 64; i++) {
       const a = r() * Math.PI * 2;
@@ -505,7 +520,7 @@ export function buildWorld(scene, tier) {
         const s = 1.0 + r() * 0.9;
         const g = lumpy(s, 1, r, 0.16);
         g.translate(x + (r() - 0.5) * 1.8, h + 0.3 + r() * 1.3, z + (r() - 0.5) * 1.8);
-        const pal = blossom ? blossoms : greens;
+        const pal = blossom ? (placed % 2 ? jacaranda : blossoms) : greens;
         leafParts.push(paint(g, pal[Math.floor(r() * pal.length)]));
       }
       colliders.circles.push({ x, z, r: 0.5, ground: true });
@@ -715,6 +730,92 @@ export function buildWorld(scene, tier) {
   }
 
   const fog = scene.fog;
+  // ---------- el ahuehuete: un árbol enorme y viejo, con la copa que cae ----------
+  {
+    const AX = -24;
+    const AZ = 8;
+    const parts = [];
+    const trunk = new THREE.CylinderGeometry(0.55, 1.1, 6.5, 9, 3);
+    const tp = trunk.attributes.position;
+    for (let i = 0; i < tp.count; i++) {
+      const y = tp.getY(i);
+      const k = 1 + Math.sin(y * 2.1 + Math.atan2(tp.getZ(i), tp.getX(i)) * 3) * 0.12;
+      tp.setXYZ(i, tp.getX(i) * k, y, tp.getZ(i) * k);
+    }
+    trunk.computeVertexNormals();
+    trunk.translate(AX, 3.25, AZ);
+    parts.push(trunk.toNonIndexed());
+    // Raíces que asoman.
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.3;
+      const root = new THREE.CylinderGeometry(0.08, 0.32, 2.2, 6);
+      root.rotateZ(Math.PI / 2 - 0.25);
+      root.rotateY(-a);
+      root.translate(AX + Math.cos(a) * 1.1, 0.2, AZ + Math.sin(a) * 1.1);
+      parts.push(root.toNonIndexed());
+    }
+    groundRoot.add(new THREE.Mesh(mergeGeometries(parts.map((g) => { g.deleteAttribute('uv'); return g; })), new THREE.MeshLambertMaterial({ color: '#4a3527', flatShading: true })));
+    // Copa ancha y caída, en capas.
+    const crown = [];
+    const cg = ['#2f4a2c', '#36552f', '#2a4228', '#3d5c34'];
+    for (let i = 0; i < 26; i++) {
+      const a = r() * Math.PI * 2;
+      const d = Math.sqrt(r()) * 4.2;
+      const s = 1.4 + r() * 1.2;
+      const g = new THREE.IcosahedronGeometry(s, 1).toNonIndexed();
+      g.deleteAttribute('uv');
+      g.scale(1.2, 0.75 + (d / 4.2) * 0.6, 1.2);
+      g.translate(AX + Math.cos(a) * d, 7.4 - (d / 4.2) * 2.2 + r() * 0.8, AZ + Math.sin(a) * d);
+      const c = new THREE.Color(cg[i % cg.length]);
+      const arr = new Float32Array(g.attributes.position.count * 3);
+      for (let v = 0; v < g.attributes.position.count; v++) c.toArray(arr, v * 3);
+      g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+      crown.push(g);
+    }
+    groundRoot.add(new THREE.Mesh(mergeGeometries(crown), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
+    colliders.circles.push({ x: AX, z: AZ, r: 1.3, ground: true });
+    // Farolitos colgando de las ramas (el ahuehuete se ve desde lejos de noche).
+    const TINTS = [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [0.8, 1.8, 1.6], [2.2, 1.7, 0.6], [1.3, 0.9, 2.0]];
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + 0.4;
+      const d = 2.6 + (i % 2) * 1.1;
+      const hang = new THREE.Group();
+      hang.position.set(AX + Math.cos(a) * d, 5.3 - (i % 3) * 0.5, AZ + Math.sin(a) * d);
+      const string = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.7, 4), new THREE.MeshBasicMaterial({ color: '#2a1d16' }));
+      string.position.y = -0.35;
+      const l = paperLantern({ scale: 1.6, tint: TINTS[i % TINTS.length], glow: 1.8 });
+      l.position.y = -0.95;
+      hang.add(string, l);
+      groundRoot.add(hang);
+      animated.push((t) => { hang.rotation.z = Math.sin(t * 0.8 + i) * 0.05; flickerLantern(l, t); });
+    }
+  }
+
+  // ---------- caminitos de piedras hasta los canteros y el estanque ----------
+  {
+    const stones = [];
+    const trail = (ax, az, bx, bz) => {
+      const len = Math.hypot(bx - ax, bz - az);
+      const n = Math.floor(len / 0.75);
+      for (let i = 1; i < n; i++) {
+        const t = i / n;
+        const g = new THREE.CylinderGeometry(0.28 + r() * 0.08, 0.3 + r() * 0.08, 0.06, 7);
+        g.scale(1 + r() * 0.25, 1, 0.8 + r() * 0.2);
+        g.rotateY(r() * 3);
+        g.translate(ax + (bx - ax) * t + (r() - 0.5) * 0.18, 0.03, az + (bz - az) * t + (r() - 0.5) * 0.18);
+        stones.push(g.toNonIndexed());
+      }
+    };
+    trail(-PATH_HALF, 27.3, -6.8 + 1.9, 27.2);
+    trail(-6.8 - 1.9, 27.4, POND.x + POND.r + 0.5, POND.z);
+    trail(PATH_HALF, 31.2, 6.6 - 1.8, 31.4);
+    trail(6.6 + 1.8, 31.9, 11.5 - 1.6, 33.1);
+    trail(PATH_HALF, 13.0, 7.2 - 2.0, 12.8);
+    trail(-PATH_HALF, 19.5, -14.5 + 1.9, 21.4);
+    const geo = mergeGeometries(stones.map((g) => { g.deleteAttribute('uv'); return g; }));
+    groundRoot.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: '#9a8f8a', flatShading: true })));
+  }
+
   // ---------- canteros y estanque ----------
   {
     const stoneMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
