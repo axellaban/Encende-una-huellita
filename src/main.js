@@ -7,7 +7,7 @@ import { createWatercolorPass } from './scene/watercolor.js';
 import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
-import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF } from './scene/world.js';
+import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF, onPath, insideHall, onBridge } from './scene/world.js';
 import { buildHall, SLOTS_PER_FLOOR, EASEL_POS } from './scene/hall.js';
 import { createControls } from './scene/controls.js';
 import { createLanterns } from './scene/lanterns.js';
@@ -84,7 +84,7 @@ import { GUIDE_STEPS, renderGuide } from './guide.js';
   void PICADO_COLORS;
 }
 import { portraitCanvas } from './scene/textures.js';
-import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver } from './audio.js';
+import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver, setMood, step, boop, clink } from './audio.js';
 import { TIERS, pickTier, savedQuality, saveQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
 import { FEATURED } from '../server/seed.js';
 
@@ -259,7 +259,7 @@ async function buildScene() {
     if (!sheetEl.hidden) { closeSheet(); return; }
     const hit = cast(e, [...hall.pickables(), ...cozy.pickables, ...spirits.pickables, elevator.hit, ...world.walkable]);
     if (!hit) return;
-    if (hit.object.userData.kind === 'jar') return openJar();
+    if (hit.object.userData.kind === 'jar') { clink(); return openJar(); }
     if (hit.object.userData.kind === 'elevator') return callElevator();
     if (hit.object.userData.kind === 'spirit') return tapSpirit(spirits.spiritOf(hit.object));
     if (hit.object.userData.kind === 'ball') {
@@ -296,6 +296,8 @@ async function buildScene() {
   const clock = new THREE.Clock();
   let riverT = 0;
   let kickT = 0;
+  let stepT = 0;
+  let moodT = 0;
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
     const t = clock.elapsedTime;
@@ -313,6 +315,22 @@ async function buildScene() {
     hall.animate(t);
     lanterns.update(dt, t);
     offerFx.update(dt);
+    // Pasos que suenan según el piso: piedra en el camino y el salón, madera en el puente, pasto o nube.
+    if (P.moving && P.speed > 0.4 && introDone) {
+      stepT -= dt * P.speed / 0.62;
+      if (stepT < 0) {
+        stepT = 1;
+        const x = P.pos.x;
+        const z = P.pos.z;
+        step(world.colliders.up ? 'cloud' : onBridge(x, z, 0.1) ? 'wood' : onPath(x, z, 0.1) || insideHall(x, z) ? 'stone' : 'grass');
+      }
+    }
+    // La música cambia con el lugar: jardín, salón o cielo.
+    moodT -= dt;
+    if (moodT < 0) {
+      moodT = 1;
+      setMood(heaven.k > 0.4 ? 'sky' : insideHall(P.pos.x, P.pos.z) ? 'hall' : 'garden');
+    }
     // Al caminar se levantan pétalos de cempasúchil de los pies (en el jardín y el salón).
     if (P.moving && !world.colliders.up && !reduced) {
       kickT -= dt * Math.min(2, P.speed / 2);
@@ -2718,6 +2736,7 @@ function updateBallPrompt() {
 
 const SPIRIT_LINES = ['mueve la cola de felicidad', 'te mira con ojitos brillantes', 'da un saltito de alegría', 'te quiere invitar a jugar'];
 function tapSpirit(a) {
+  boop();
   if (!a) return;
   const P0 = controls.player;
   const petting = a.role === 'companion' && P0.pos.distanceTo(a.pos) < 2.2 && !P0.moving;
@@ -2834,6 +2853,7 @@ function finishIntro() {
 }
 function skipIntro() {
   if (introDone || !controls) return;
+  $('#intro-cap')?.classList.remove('on');
   controls.snapFollow();
   finishIntro();
 }
@@ -2850,12 +2870,30 @@ $('#enter').onclick = () => {
     finishIntro();
     return;
   }
-  controls.follow({
-    duration: 5.2,
-    path: [new THREE.Vector3(12, 14, 72), new THREE.Vector3(3, 5.5, 61)],
-    done: finishIntro,
-  });
+  // La intro, como el comienzo de una película: el cielo con la Vía Láctea y los cometas, la cámara
+  // baja sobre el salón con sus farolitos, sigue el camino hasta el río y se da vuelta sobre el
+  // puente, a través del arcoíris, hasta quedar detrás tuyo. Tocando la pantalla se saltea.
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  controls.cinematic([
+    { pos: V3(10, 26, -30), look: V3(-70, 130, -220) },
+    { pos: V3(13, 20, -6), look: V3(-20, 40, -120) },
+    { pos: V3(12, 15, 4), look: V3(0, 2, -14) },
+    { pos: V3(7, 9, 22), look: V3(0, 2.5, 38) },
+    { pos: V3(9, 5.5, 46), look: V3(0, 2.6, 40) },
+    { pos: V3(3, 4.2, 56), look: V3(0, 2.2, 38) },
+  ], 13, () => controls.follow({ duration: 1.6, done: finishIntro }));
+  introCaption('Hay un jardín donde siguen brillando', 1200, 4200);
+  introCaption('Cruzá el puente y encendé una luz', 7600, 4200);
 };
+function introCaption(text, at, dur) {
+  setTimeout(() => {
+    if (introDone) return;
+    const el = $('#intro-cap');
+    el.textContent = text;
+    el.classList.add('on');
+    setTimeout(() => el.classList.remove('on'), dur);
+  }, at);
+}
 
 document.addEventListener('visibilitychange', () => pauseAll(document.hidden));
 addEventListener('huellita:storage-full', () => toast('Este navegador ya no tiene lugar para guardar más (modo demo). Lo nuevo se puede perder al cerrar.'));
