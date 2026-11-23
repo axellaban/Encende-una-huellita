@@ -22,6 +22,7 @@ const P = 'hu:';
 export const SLOTS_PER_FLOOR = 90;
 const MAX_SLOT = SLOTS_PER_FLOOR * 200;
 const PRESENCE_MS = 25_000;
+const MAX_PRESENT = 150;
 const DAY_TTL = 30 * 3600;
 
 const newId = () => randomBytes(6).toString('base64url');
@@ -450,6 +451,8 @@ export function createStore(kv) {
       // Limpieza de quienes se fueron y, sólo si hay novedades, los eventos.
       const more = [];
       if (stale.length) more.push(['HDEL', `${P}pres`, ...stale]);
+      // Tope de presencia: si alguien inunda con sids inventados, los nuevos no se guardan.
+      if (sid && fresh.length > MAX_PRESENT && !fresh.slice(0, MAX_PRESENT).some(([k]) => k === sid)) more.push(['HDEL', `${P}pres`, sid]);
       const seq = withEvents ? Number(r[r.length - 1]) || 0 : 0;
       if (withEvents && seq > since) more.push(['LRANGE', `${P}ev`, '0', '19']);
       const x = more.length ? await kv.pipeline(more) : [];

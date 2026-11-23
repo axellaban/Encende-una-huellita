@@ -28,6 +28,10 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+// Encabezados de seguridad. Deben coincidir con los de vercel.json (hay un test que lo controla).
+export const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+const SECURITY = { 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'Permissions-Policy': 'camera=(), geolocation=(), microphone=(self)' };
+
 export function createApp({ kv } = {}) {
   const store = createStore(kv);
 
@@ -65,9 +69,11 @@ export function createApp({ kv } = {}) {
   }
 
   function serveFile(res, file, cache) {
-    res.writeHead(200, { 'Content-Type': MIME[extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': cache, 'X-Content-Type-Options': 'nosniff' });
+    const type = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': cache, ...SECURITY });
     createReadStream(file).pipe(res);
   }
+
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');

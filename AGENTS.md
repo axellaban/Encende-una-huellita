@@ -38,7 +38,7 @@ textos y arte propios. La huellita destacada del centro es **Luca**, el perro de
 npm install
 npm run build && npm start   # http://localhost:8787 (datos en data/kv.json)
 npm run dev                  # Vite con recarga (5173) + API (8787)
-npm test                     # 16 tests de API: servidor local Y función de Vercel con Upstash simulado
+npm test                     # 20 tests de API: servidor local Y función de Vercel con Upstash simulado
 ```
 
 Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
@@ -95,6 +95,16 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
   de `public/huellitas/` y los íconos de `public/`.
 - CSS: tema vino en paneles (`dialog.modal`, `.sheet`) vía variables; los "papeles" (notas, libro,
   diario, estampita) son claros con tinta oscura. `[hidden]` siempre gana (`display:none !important`).
+
+## Recorrido de punta a punta
+
+Antes de mergear algo grande, recorré todo con Playwright (como en la auditoría del 23/11/2026):
+entrar, bienvenida, visitar a Luca, vela (y que no sume dos veces), flor, abrazo, regalito, libro,
+compartir, sumar una mascota con foto y "cómo era", editar, diario, pasear, caminar, pelota, llamar,
+Hoy, lista con búsqueda, menú → Prado, gestos y frases, guía, frasco, farolillo, consuelo, "Así te
+ven los demás", pisos y quitar la huellita. En celular, compu, celular acostado, iPhone SE, modo demo
+(`/api/health` con `ok:false`) y sin WebGL (`--disable-webgl`: tiene que verse el aviso y poder abrir
+fichas por encima).
 
 ## Cómo verificar visualmente (sin GPU)
 
