@@ -295,6 +295,7 @@ async function buildScene() {
 
   const clock = new THREE.Clock();
   let riverT = 0;
+  let kickT = 0;
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
     const t = clock.elapsedTime;
@@ -312,6 +313,11 @@ async function buildScene() {
     hall.animate(t);
     lanterns.update(dt, t);
     offerFx.update(dt);
+    // Al caminar se levantan pétalos de cempasúchil de los pies (en el jardín y el salón).
+    if (P.moving && !world.colliders.up && !reduced) {
+      kickT -= dt * Math.min(2, P.speed / 2);
+      if (kickT < 0) { kickT = 0.28; offerFx.kick(P.pos); }
+    }
     sparkles?.update(camera.position);
     // El murmullo del río sube al acercarte (en los pisos de arriba no hay río).
     riverT -= dt;
@@ -1464,7 +1470,31 @@ function floatFromCurrent(ch) {
   avatars.floatAt(ch, at.clone().add(new THREE.Vector3(0, -0.2, 0)));
 }
 
+// Invitación a llevarla en la pantalla de inicio (como el original, pero a nuestro modo): después
+// del primer gesto, una sola vez cada dos semanas. En iPhone explica cómo hacerlo desde Compartir.
+function maybeInstallCard() {
+  if (maybeInstallCard.done) return;
+  maybeInstallCard.done = true;
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const until = Number(store.get('huellita.installNo') || 0);
+  if (standalone || Date.now() < until) return;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !/crios|fxios/i.test(navigator.userAgent);
+  if (!installPrompt && !ios) return;
+  $('#install-hint').textContent = ios && !installPrompt ? 'Tocá Compartir (el cuadrado con la flechita) y después “Agregar a inicio”.' : 'Abrila con un toque, como una app, y volvé a visitarlos cuando quieras.';
+  $('#install-yes').hidden = !installPrompt;
+  setTimeout(() => { $('#install-card').hidden = false; }, 3500);
+}
+$('#install-yes').onclick = async () => {
+  $('#install-card').hidden = true;
+  try { await installPrompt?.prompt(); } catch { /* el navegador no quiso */ }
+};
+$('#install-no').onclick = () => {
+  $('#install-card').hidden = true;
+  store.set('huellita.installNo', String(Date.now() + 14 * 86400_000));
+};
+
 function afterGesture(kind, r, { bonus = 0 } = {}) {
+  maybeInstallCard();
   const target = r.memorial || current;
   const pet = myPet();
   const isOwn = !!pet && target?.id === pet.id;

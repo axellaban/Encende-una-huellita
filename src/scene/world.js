@@ -88,6 +88,11 @@ function paint(geo, color) {
 // Donde empieza el camino (justo afuera del piso del salón).
 export const PATH_START = HALL_CENTER.z + HALL_RADIUS + 2;
 
+// Canteros de flores con borde de piedra y un estanque chiquito (el pasto, las flores sueltas y los
+// árboles no se meten adentro).
+export const POND = { x: -14.2, z: 28, r: 2.7 };
+export const BEDS = [[-6.8, 27.2, 1.7], [6.6, 31.4, 1.6], [7.2, 12.8, 1.8], [-14.5, 21.6, 1.7], [11.5, 33.5, 1.5]];
+export const inFeature = (x, z, pad = 0) => Math.hypot(x - POND.x, z - POND.z) < POND.r + 0.5 + pad || BEDS.some(([bx, bz, br]) => Math.hypot(x - bx, z - bz) < br + 0.25 + pad);
 export function insideHall(x, z, pad = 0) {
   return Math.hypot(x - HALL_CENTER.x, z - HALL_CENTER.z) < HALL_RADIUS + 1.6 + pad;
 }
@@ -409,7 +414,7 @@ export function buildWorld(scene, tier) {
       const a = r() * Math.PI * 2;
       const x = Math.sin(a) * rad;
       const z = Math.cos(a) * rad - 2;
-      if (onPath(x, z, 0.2) || insideHall(x, z, 0.1) || nearCreek(x, z) || Math.hypot(x, z) > GARDEN_RADIUS - 0.4) continue;
+      if (onPath(x, z, 0.2) || insideHall(x, z, 0.1) || nearCreek(x, z) || inFeature(x, z) || Math.hypot(x, z) > GARDEN_RADIUS - 0.4) continue;
       m.position.set(x, 0, z);
       m.rotation.set((r() - 0.5) * 0.3, r() * Math.PI * 2, (r() - 0.5) * 0.3);
       const s = 0.22 + r() * 0.38;
@@ -443,7 +448,7 @@ export function buildWorld(scene, tier) {
     for (let i = 0; i < tier.flowers * 6 && placed < tier.flowers; i++) {
       const x = (r() - 0.5) * 2 * GARDEN_RADIUS;
       const z = (r() - 0.5) * 2 * GARDEN_RADIUS - 2;
-      if (onPath(x, z, 0.3) || insideHall(x, z, 0.2) || nearCreek(x, z, 0.3) || outside(x, z) || Math.hypot(x, z) > GARDEN_RADIUS - 1) continue;
+      if (onPath(x, z, 0.3) || insideHall(x, z, 0.2) || nearCreek(x, z, 0.3) || outside(x, z) || inFeature(x, z, 0.2) || Math.hypot(x, z) > GARDEN_RADIUS - 1) continue;
       // Agrupadas en manchones.
       if (Math.sin(x * 0.35) * Math.cos(z * 0.3) < 0.15 && r() < 0.8) continue;
       m.position.set(x, 0.16 + r() * 0.2, z);
@@ -479,6 +484,7 @@ export function buildWorld(scene, tier) {
       if (Math.hypot(x - MEADOW.x, z - MEADOW.z) < MEADOW_R + 2.5) continue;
       if (Math.hypot(x - ELEVATOR_POS.x, z - ELEVATOR_POS.z) < 6) continue;
       if (Math.hypot(x - BRIDGE.x, z - BRIDGE.z) < 9) continue;
+      if (inFeature(x, z, 2.5)) continue;
       if (Math.hypot(x, z) > GARDEN_RADIUS - 2.5 || nearCreek(x, z, 1.5)) continue;
       if (colliders.circles.some((c) => Math.hypot(c.x - x, c.z - z) < 4)) continue;
       const blossom = r() < 0.28;
@@ -709,5 +715,93 @@ export function buildWorld(scene, tier) {
   }
 
   const fog = scene.fog;
+  // ---------- canteros y estanque ----------
+  {
+    const stoneMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    const soilMat = new THREE.MeshLambertMaterial({ color: '#3a2a20', emissive: '#120a06' });
+    const stoneRing = (cx, cz, rad, n, size) => {
+      const parts = [];
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + r() * 0.1;
+        const g = new THREE.DodecahedronGeometry(size * (0.8 + r() * 0.5), 0).toNonIndexed();
+        g.deleteAttribute('uv');
+        g.scale(1.3, 0.7 + r() * 0.3, 1);
+        g.rotateY(-a);
+        g.translate(cx + Math.cos(a) * rad, size * 0.4, cz + Math.sin(a) * rad);
+        const c = new THREE.Color('#8f8794').multiplyScalar(0.8 + r() * 0.35);
+        const arr = new Float32Array(g.attributes.position.count * 3);
+        for (let v = 0; v < g.attributes.position.count; v++) c.toArray(arr, v * 3);
+        g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+        parts.push(g);
+      }
+      return parts;
+    };
+    // Canteros: tierra un poquito levantada, borde de piedras y flores bien tupidas.
+    const stones = [];
+    const bedFlowers = [];
+    const pal = [PALETTE.cempasuchil, PALETTE.naranja, '#e0457b', '#f4ede0', '#8b4fc7', PALETTE.amarillo].map((c) => new THREE.Color(c));
+    for (const [bx, bz, br] of BEDS) {
+      const soil = new THREE.Mesh(new THREE.CylinderGeometry(br, br + 0.08, 0.2, 24), soilMat);
+      soil.position.set(bx, 0.1, bz);
+      groundRoot.add(soil);
+      stones.push(...stoneRing(bx, bz, br + 0.08, Math.round(br * 14), 0.11));
+      const n = Math.round(br * br * 44);
+      for (let i = 0; i < n; i++) {
+        const a = r() * Math.PI * 2;
+        const d = Math.sqrt(r()) * (br - 0.15);
+        bedFlowers.push([bx + Math.cos(a) * d, 0.24 + r() * 0.16 + (1 - d / br) * 0.18, bz + Math.sin(a) * d, i]);
+      }
+      colliders.circles.push({ x: bx, z: bz, r: br + 0.15, ground: true });
+    }
+    const fm = new THREE.InstancedMesh(marigoldGeometry(0.1, '#ffffff', r), marigoldMaterial(), bedFlowers.length);
+    const m = new THREE.Object3D();
+    bedFlowers.forEach(([x, y, z, i], k) => {
+      m.position.set(x, y, z);
+      m.rotation.set((r() - 0.5) * 0.5, r() * 6, (r() - 0.5) * 0.5);
+      m.scale.setScalar(0.8 + r() * 0.7);
+      m.updateMatrix();
+      fm.setMatrixAt(k, m.matrix);
+      fm.setColorAt(k, pal[(((i + Math.floor(x * 3)) % pal.length) + pal.length) % pal.length]);
+    });
+    groundRoot.add(fm);
+    // Estanque: agua oscura que brilla con la luna, borde de piedras, nenúfares y juncos.
+    stones.push(...stoneRing(POND.x, POND.z, POND.r + 0.1, 30, 0.16));
+    groundRoot.add(new THREE.Mesh(mergeGeometries(stones), stoneMat));
+    const pondWater = new THREE.Mesh(new THREE.CircleGeometry(POND.r, 40).rotateX(-Math.PI / 2), new THREE.MeshPhongMaterial({ color: '#0b1a2c', emissive: '#050b16', specular: '#9fb4ff', shininess: 90, transparent: true, opacity: 0.94 }));
+    pondWater.position.set(POND.x, 0.04, POND.z);
+    groundRoot.add(pondWater);
+    const pads = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+      const a = r() * Math.PI * 2;
+      const d = 0.6 + r() * (POND.r - 1.1);
+      const pad = new THREE.Mesh(new THREE.CircleGeometry(0.28 + r() * 0.12, 14, 0.4, Math.PI * 2 - 0.4).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#3f6b35', emissive: '#0f2410', side: THREE.DoubleSide }));
+      pad.position.set(POND.x + Math.cos(a) * d, 0.06, POND.z + Math.sin(a) * d);
+      pad.rotation.y = r() * 6;
+      pads.add(pad);
+      if (i % 2 === 0) {
+        const fl = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.1, 6, 1, true).rotateX(Math.PI), new THREE.MeshLambertMaterial({ color: '#f7b6cf', emissive: '#6a2440', side: THREE.DoubleSide }));
+        fl.position.copy(pad.position).add(new THREE.Vector3(0, 0.07, 0));
+        pads.add(fl);
+      }
+    }
+    groundRoot.add(pads);
+    animated.push((t) => { pads.children.forEach((p, i) => { p.position.y = 0.06 + Math.sin(t * 1.1 + i) * 0.006 + (p.geometry.type === 'ConeGeometry' ? 0.07 : 0); }); });
+    {
+      const blades = [];
+      for (let i = 0; i < 46; i++) {
+        const a = r() * Math.PI * 2;
+        const d = POND.r + 0.15 + r() * 0.4;
+        const h = 0.5 + r() * 0.8;
+        const b = new THREE.ConeGeometry(0.02, h, 3);
+        b.translate(0, h / 2, 0);
+        b.rotateZ((r() - 0.5) * 0.4);
+        b.translate(POND.x + Math.cos(a) * d, 0, POND.z + Math.sin(a) * d);
+        blades.push(b.toNonIndexed());
+      }
+      groundRoot.add(new THREE.Mesh(mergeGeometries(blades), new THREE.MeshLambertMaterial({ color: '#46613a', emissive: '#14200e' })));
+    }
+    colliders.circles.push({ x: POND.x, z: POND.z, r: POND.r + 0.1, ground: true });
+  }
+
   return { colliders, animated, walkable, ground: groundRoot, deck, sky, stars: sky.userData.stars, moon, hemi, moonLight, warmFill, fog, flies: sky.userData.flies };
 }
