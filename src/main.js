@@ -173,7 +173,8 @@ let bloomPass = null;
 let composer = null;
 let adaptive = null;
 let watercolor = null; // estilo acuarela (pase final)
-const watercolorOn = () => store.get('huellita.watercolor') !== '0';
+// Apagada por defecto (en el celular se veía sucia); se prende en Opciones.
+const watercolorOn = () => store.get('huellita.watercolor') === '1';
 
 function setupRenderer() {
   renderer.setSize(innerWidth, innerHeight);

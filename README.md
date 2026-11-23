@@ -74,8 +74,8 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   arriba se camina sobre las nubes y sólo se ve a quienes están en tu mismo piso.
 - **Paseo con correa**: el espíritu va adelante tuyo con collar de cuero y medallita, la correa va de tu
   mano al collar (floja o tirante según la distancia), mueve la cola y se desvía a olfatear.
-- **Estilo acuarela**: todo parece pintado a mano (papel, pigmento en los bordes, lavados de color);
-  se apaga en Opciones.
+- **Estilo acuarela** (opcional, se prende en Opciones): todo parece pintado a mano (papel, pigmento en
+  los bordes, lavados de color).
 - **Cielo mágico**: de noche, Vía Láctea, nebulosas, cometas con su cola y estrellas fugaces; arriba,
   cirros, halo del sol, nubes gigantes, islas que flotan con cascadas de luz y pájaros de luz.
 - **Pasillos y pisos con nombre** ("Pasillo de las veladoras · 4 huellitas", "Piso 24 · Corredor de las

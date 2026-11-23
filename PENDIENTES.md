@@ -19,8 +19,8 @@ en celular (iPhone 13 y SE) y el recorrido de punta a punta (ver AGENTS).
 - [ ] Después de publicar, preguntarle al dueño si vuelve a ver la pantalla negra.
 
 ### 2. Que se vea limpio en el celular
-- [ ] **Acuarela apagada por defecto** (`watercolorOn()` en `main.js`: que sea `=== '1'`). En el iPhone del
-      dueño se ve sucia y lavada (líneas negras y textura de lienzo por todos lados). Dejarla como
+- [x] **Acuarela apagada por defecto** (`watercolorOn()` en `main.js`, hecho el 23/11). En el iPhone del
+      dueño se veía sucia y lavada (líneas negras y textura de lienzo por todos lados). Dejarla como
       opción en Más → Opciones; si se quiere el look de littleprince.dev, pedirle capturas al dueño (el
       juego necesita WebGPU y en el contenedor no carga) y bajarla mucho (`uAmt` ≈ 0.3, sin bordes Sobel).
 - [ ] **HUD "modo juego"** (el dueño: "los juegos tienen muy poquitas cosas en pantalla"). Hoy hay ~11
