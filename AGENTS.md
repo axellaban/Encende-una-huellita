@@ -38,7 +38,7 @@ textos y arte propios. La huellita destacada del centro es **Luca**, el perro de
 npm install
 npm run build && npm start   # http://localhost:8787 (datos en data/kv.json)
 npm run dev                  # Vite con recarga (5173) + API (8787)
-npm test                     # 20 tests de API: servidor local Y función de Vercel con Upstash simulado
+npm test                     # 22 tests de API: servidor local Y función de Vercel con Upstash simulado
 ```
 
 Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
@@ -68,6 +68,14 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     chispitas. `setPack(memorials)` elige quiénes juegan en el Prado; `walk(m, from)` saca a pasear.
     Cómo se ve cada uno sale de `m.look` (`server/looks.js`) o, si no hay, de un hash de su id.
   - `src/api.js`: cliente HTTP + **modo demo** (localStorage) si no hay base de datos.
+  - **Compartir** (`src/share.js`, `server/page.js`): cada huellita vive en `/h/<id>` (los links viejos
+    `#h/<id>` siguen andando). El servidor devuelve la app con título, texto e imagen de esa huellita
+    (Vercel: rewrite `/h/:id` → `api/handler.js?page=:id`, que lee `dist/index.html` incluido con
+    `functions.includeFiles`, o lo pide a sí mismo, o devuelve una página mínima que redirige).
+    La imagen: `og` de las destacadas (`public/huellitas/luca-og.jpg`), la tarjeta que sube la familia
+    (`drawOgCard`, 1200x630) o su foto. Invitar: `?de=<nombre>&l=<código>`; la primera vela de quien
+    llega suma al código (`hu:ref:<código>`). `src/photo.js`: polaroid del modo foto (captura del
+    canvas en el mismo cuadro en que se dibuja, `captureNext` en el ciclo).
   - `src/game.js` (gestos del día, racha, Glow guardado), `src/guide.js` (la sexta etapa),
     `src/quality.js` (calidad por dispositivo + resolución adaptativa), `src/audio.js` (todo sintetizado).
 - **Backend**: `server/core.js` (rutas, independiente del runtime) + `server/store.js` (lógica sobre

@@ -195,7 +195,8 @@ dialog[open] { animation: pop .3s var(--ease); }
 @keyframes bump { 30% { transform: scale(1.6); } }
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .actions .candle-btn { grid-column: 1 / -1; min-height: 54px; font-size: 16.5px; }
-.candle-btn.lit { background: #8c6a3f; box-shadow: 0 6px 22px rgba(255,190,90,.35); }
+.candle-btn.lit { background: linear-gradient(135deg, #ffe7a8, #ffbf66); color: #5a2a08; font-size: 15px; box-shadow: 0 0 0 2px rgba(255,210,140,.5), 0 8px 26px rgba(255,170,80,.45); }
+.candle-btn.lit b { font-weight: 900; }
 .candle-btn.lit .flame-ic { animation: flicker 1.4s ease-in-out infinite; display: inline-block; }
 .guestbook { margin-top: 22px; }
 .guestbook h3, .today-body h3 { font-family: var(--serif); margin: 18px 0 8px; font-weight: 400; font-size: 19px; }
@@ -570,6 +571,36 @@ dialog.guide[open] { display: flex; }
 
 /* ---------- paseo con su espíritu ---------- */
 .walk-btn { background: linear-gradient(135deg, #14b3b0, #7b2cbf); color: #fff; box-shadow: 0 6px 22px rgba(20,179,176,.35); margin-top: 12px; }
+/* Modo foto. */
+body.photo-mode .top, body.photo-mode .dock, body.photo-mode .joy, body.photo-mode .emote-btn, body.photo-mode .walk-hud,
+body.photo-mode .hint, body.photo-mode .bottom, body.photo-mode .ball-prompt { opacity: 0 !important; pointer-events: none !important; transition: opacity .3s; }
+body.photo-mode::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 30; box-shadow: inset 0 0 0 10px rgba(255,255,255,.18); border-radius: 18px; }
+.flash { position: fixed; inset: 0; background: #fff; z-index: 60; pointer-events: none; animation: flash .5s ease-out forwards; }
+@keyframes flash { from { opacity: .9; } to { opacity: 0; } }
+.photo-polaroid { display: block; width: 100%; max-height: 56dvh; object-fit: contain; border-radius: 6px; margin: 4px 0 6px; box-shadow: 0 14px 34px rgba(0,0,0,.35); transform: rotate(-1.2deg); }
+#photo-btn { margin-top: 10px; }
+/* Pasá la luz: aparece cuando ya encendiste tu vela. */
+.pass-btn { margin-top: 10px; min-height: 52px; background: linear-gradient(135deg, #ffe7a8, #ffc46b); color: #5a2a08; font-size: 14.5px; line-height: 1.2; text-align: left; padding: 8px 18px; box-shadow: 0 0 0 2px rgba(255,210,140,.5), 0 8px 26px rgba(255,170,80,.4); animation: passIn .6s var(--ease); }
+.pass-btn span:first-child { font-size: 22px; animation: twinkle 2.4s ease-in-out infinite; }
+@keyframes passIn { from { transform: translateY(8px) scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes twinkle { 0%, 100% { transform: scale(1) rotate(0); } 50% { transform: scale(1.18) rotate(12deg); } }
+/* Llegó por una invitación: el botón de la vela la llama. */
+.candle-btn.invite { animation: invitePulse 1.6s ease-in-out infinite; }
+@keyframes invitePulse { 0%, 100% { box-shadow: 0 6px 22px rgba(228,22,124,.35), 0 0 0 0 rgba(255,190,110,.7); } 50% { box-shadow: 0 6px 22px rgba(228,22,124,.35), 0 0 0 12px rgba(255,190,110,0); } }
+.reach { margin: 10px 0 0; padding: 12px 14px; border-radius: 16px; background: linear-gradient(135deg, #fff1cf, #ffe0c0); color: #6b3d16; font-weight: 800; font-size: 14px; line-height: 1.35; }
+/* Entrada personalizada al llegar por el link de una huellita. */
+.splash-pet { display: grid; justify-items: center; gap: 6px; animation: passIn .9s var(--ease); }
+.splash-frame { width: min(46vw, 190px); aspect-ratio: 4 / 5; padding: 9px; background: #fbefd9; border: 10px solid #e0b55d; border-radius: 6px; transform: rotate(-2deg); box-shadow: 0 0 60px rgba(255,180,90,.45), 0 18px 40px rgba(0,0,0,.45); }
+.splash-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.splash-invite { margin: 10px 0 0; font-family: var(--hand); font-size: 24px; color: #ffd9a8; line-height: 1.1; }
+.splash-pet h2 { margin: 0; font-family: var(--fiesta); font-style: italic; font-weight: 600; font-size: clamp(40px, 11vw, 64px); line-height: 1; color: #fff; text-shadow: 0 4px 30px rgba(255,170,90,.5); }
+.splash-candles { margin: 0; font-weight: 800; font-size: 14px; opacity: .85; }
+.splash.has-pet { gap: 16px; }
+.splash.has-pet .candle-css { display: none; }
+.splash.has-pet h1 { font-size: clamp(18px, 4.4vw, 22px); opacity: .8; order: 3; }
+.splash.has-pet .splash-quote { display: none; }
+.splash.has-pet #enter { order: 4; }
+.splash.has-pet .splash-sub { order: 5; }
 .walk-btn .paw { display: inline-block; animation: pawHop 1.8s var(--ease) infinite; }
 @keyframes pawHop { 0%, 70%, 100% { transform: none; } 80% { transform: translateY(-4px) rotate(-12deg); } 90% { transform: translateY(0) rotate(8deg); } }
 .walk-hud { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 22px); transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 999px; background: var(--glass-2); border: 1px solid rgba(143, 243, 255, .35); box-shadow: 0 0 22px rgba(120, 230, 255, .22), var(--shadow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 5; animation: rise .4s var(--ease); transition: opacity .3s, transform .3s var(--ease); }
@@ -623,6 +654,7 @@ body.sheet-open .ball-prompt, body.walking .ball-prompt { display: none; }
   /* Pantallas angostas (iPhone SE): la botonera del paseo entra al lado de la palanca. */
   .walk-hud { left: 134px; gap: 3px; padding: 4px; }
   .walk-who img, .walk-act { width: 36px; height: 36px; font-size: 18px; }
+  .walk-who { display: none; }
   .ball-prompt { left: 134px; padding: 11px 13px; font-size: 13.5px; }
 }
 

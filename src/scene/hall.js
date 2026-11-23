@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { HALL_CENTER, HALL_RADIUS, rand } from './world.js';
 import {
-  emptySlotTexture, portraitTexture, photoTexture, labelTexture, flameTexture, glowTexture, woodTexture, lightConeTexture, emojiTexture, lanternTexture,
+  emptySlotTexture, portraitTexture, photoTexture, labelTexture, twoSided, flameTexture, glowTexture, woodTexture, lightConeTexture, emojiTexture, lanternTexture,
 } from './textures.js';
 import { stageOf } from '../../server/glow.js';
 import { PALETTE, paintedWallTexture, talaveraTexture, marigoldGeometry, marigoldMaterial, marigoldCluster, picadoBanner, sugarSkull, panDeMuerto, backgroundTexture } from './muertos.js';
@@ -230,9 +230,8 @@ export function buildHall(scene, colliders, tier) {
     // Cartel de bienvenida colgado en la entrada.
     const a = posts[0];
     const b = posts[posts.length - 1];
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.55), new THREE.MeshBasicMaterial({
+    const sign = twoSided(new THREE.PlaneGeometry(3.4, 0.55), new THREE.MeshBasicMaterial({
       map: labelTexture('Jardín de las huellitas', { w: 1024, h: 166, font: '400 70px "Young Serif", Georgia, serif', bg: 'rgba(74,48,34,0.96)', fg: '#f6e3c4' }),
-      side: THREE.DoubleSide,
     }));
     sign.position.set((a.x + b.x) / 2, POST_H - 0.55, (a.z + b.z) / 2);
     sign.lookAt(sign.position.x, sign.position.y, sign.position.z + 10);

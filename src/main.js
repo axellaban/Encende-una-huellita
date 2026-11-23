@@ -15,6 +15,10 @@ import { createElevator } from './scene/elevator.js';
 import { createSpirits, MEADOW } from './scene/spirits.js';
 import { createCharacter } from './scene/character.js';
 import { FURS, EARS, SIZES } from '../server/looks.js';
+import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard } from './share.js';
+import { polaroid } from './photo.js';
+// Cómo llegó esta persona (link de una huellita, invitación de alguien). Se lee antes de tocar la URL.
+const ARRIVAL = arrival();
 import { createGame } from './game.js';
 import { GIFTS, SAYINGS, EMOTES, STAGES, stageOf } from '../server/glow.js';
 import { BACKGROUNDS } from '../server/plans.js';
@@ -155,6 +159,7 @@ let avatars;
 let elevator;
 let spirits;
 let me; // tu personaje
+let captureNext = null; // modo foto
 let composer = null;
 let adaptive = null;
 
@@ -258,7 +263,8 @@ async function buildScene() {
     canvas.style.cursor = hit && hit.distance < 16 && (key !== null || hit.object.userData.kind) ? 'pointer' : '';
   });
   controls.onMove(hideHint);
-  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)) };
+  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
+    ogCard: async (id) => { const m = memorials.find((x) => x.id === id); return (await drawOgCard(m, photoSrc(m))).toDataURL('image/jpeg', 0.88); } };
 
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
@@ -280,6 +286,12 @@ async function buildScene() {
     avatars.animate(dt, t);
     if (composer) composer.render(dt);
     else renderer.render(scene, camera);
+    // Modo foto: leer el cuadro recién dibujado (antes de que el navegador lo borre).
+    if (captureNext) {
+      const cb = captureNext;
+      captureNext = null;
+      try { cb(renderer.domElement.toDataURL('image/jpeg', 0.92)); } catch { cb(null); }
+    }
     adaptive.tick(dt);
   });
   // Compilar los shaders antes de entrar evita tirones en el primer movimiento.
@@ -517,7 +529,7 @@ async function openSheet(m) {
   $('#sheet-scroll').scrollTop = 0;
   fillSheet(m);
   renderGuestbook(null);
-  history.replaceState(null, '', `#h/${m.id}`);
+  history.replaceState(null, '', `/h/${m.id}`);
   try {
     const full = await api.get(m.id);
     if (current?.id === m.id) {
@@ -533,7 +545,7 @@ function closeSheet() {
   current = null;
   if (controls?.mode === 'focus') controls.follow();
   document.body.classList.remove('sheet-open');
-  history.replaceState(null, '', location.pathname + location.search);
+  history.replaceState(null, '', '/');
   if (bottomSheet()) {
     setSheet('closed');
     setTimeout(() => { if (!current) sheetEl.hidden = true; }, 420);
@@ -617,7 +629,10 @@ function fillSheet(m) {
   $('#s-walk-label').textContent = walking?.id === m.id ? `Terminar el paseo con ${m.name}` : `Sacar a pasear a ${m.name}`;
   const lit = didToday('c', m.id);
   $('#s-candle').classList.toggle('lit', lit);
-  $('#s-candle-label').textContent = lit ? 'Tu vela está encendida · volvé mañana' : 'Encender una vela';
+  $('#s-pass').hidden = true; // (la invitación va en el botón de la vela)
+  $('#s-pass-label').textContent = `Pasá la luz: invitá a alguien a encenderle una vela a ${m.name}`;
+  maybeOgCard(m);
+  $('#s-candle-label').innerHTML = lit ? 'Tu vela brilla · <b>Pasá la luz a alguien</b>' : 'Encender una vela';
   $('#s-flower').classList.toggle('done', didToday('f', m.id));
   $('#s-gift').classList.toggle('done', didToday('g', m.id));
   $('#s-hug').classList.toggle('done', didToday('h', m.id));
@@ -711,11 +726,16 @@ function releaseLantern(m, { burst = false } = {}) {
 
 $('#s-candle').onclick = async () => {
   if (!current) return;
+  // Con la vela ya encendida, el botón invita a pasar la luz.
+  if (didToday('c', current.id)) { haptic(10); return shareLinkNow(); }
   const btn = $('#s-candle');
   btn.disabled = true;
   try {
-    const r = await api.candle(current.id, who());
+    const via = viaRef();
+    const r = await api.candle(current.id, { ...who(), ...(via ? { ref: via } : {}) });
     markToday('c', r.memorial.id);
+    $('#s-candle').classList.remove('invite');
+    if (via && !r.already) store.set('huellita.via', '');
     updateMemorial(r.memorial);
     if (!r.already) {
       releaseLantern(r.memorial, { burst: true });
@@ -747,8 +767,8 @@ $('#s-flower').onclick = async () => {
 $('#s-share').onclick = () => openShare();
 async function shareLinkNow() {
   if (!current) return;
-  const url = `${location.origin}${location.pathname}#h/${current.id}`;
-  const text = `Encendé una vela por ${current.name} 🕯️`;
+  const url = shareUrl(current.id, { invite: true, name: shareName() });
+  const text = didToday('c', current.id) ? `Encendí una vela por ${current.name} 🕯️ ¿Le encendés una vos también?` : `Encendé una vela por ${current.name} 🕯️`;
   if (navigator.share) {
     try { await navigator.share({ title: 'Encendé una huellita', text, url }); } catch { /* cancelado */ }
     return;
@@ -922,6 +942,7 @@ $('#add-form').onsubmit = async (e) => {
     await refresh();
     const fresh = memorials.find((x) => x.id === m.id) || m;
     markToday('c', fresh.id);
+    maybeOgCard(fresh, true);
     visit(fresh);
     setTimeout(() => releaseLantern(fresh, { burst: true }), reduced ? 100 : 1600);
     sparkle();
@@ -1031,6 +1052,7 @@ const THEN = {
   home: () => goHome(),
   floors: () => { renderFloors(); $('#floors').showModal(); },
   install: () => installPrompt?.prompt(),
+  photo: () => photoMode(),
   meadow: () => goMeadow(),
 };
 $$('dialog [data-close]').forEach((b) => {
@@ -1390,6 +1412,8 @@ function renderToday() {
       <button class="btn primary small" data-add-pet>🐾 Sumar a mi mascota</button>`;
     box.querySelector('[data-add-pet]').onclick = () => openAdd(null);
   }
+  $('#reach').hidden = !lightReach;
+  $('#reach').textContent = `✨ Tu luz llegó a ${lightReach} ${lightReach === 1 ? 'persona' : 'personas'}: encendieron una vela gracias a tus invitaciones.`;
   const st = game.streak;
   const n = st.last ? st.n : 0;
   $('#streak').innerHTML = `<span>🌙</span><span>${n <= 1 ? 'Primera noche en el jardín' : `${n} noches seguidas`}</span><span class="moons">${'●'.repeat(Math.min(7, n))}${'○'.repeat(Math.max(0, 7 - n))}</span>`;
@@ -1727,7 +1751,7 @@ async function lightEternal() {
 function downloadIcs(m) {
   const d = new Date(m.gathering);
   const fmt = (x) => x.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const url = `${location.origin}/#h/${m.id}`;
+  const url = shareUrl(m.id);
   const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Encende una huellita//ES', 'BEGIN:VEVENT', `UID:${m.id}-${m.gathering}@huellita`,
     `DTSTAMP:${fmt(new Date())}`, `DTSTART:${fmt(d)}`, `DTEND:${fmt(new Date(m.gathering + 3600_000))}`,
     `SUMMARY:Encuentro de ${m.name} 🕯️`, `DESCRIPTION:Encendemos velas juntos por ${m.name}. ${url}`, `URL:${url}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
@@ -1855,6 +1879,7 @@ $('#edit-form').onsubmit = async (e) => {
   };
   $('#edit').close();
   await ownAction('edit', body, 'Guardado 🤍');
+  if (current) maybeOgCard(current, true);
 };
 
 function openBackgrounds() {
@@ -1995,7 +2020,8 @@ function acceptFamilyLink() {
   const tokens = myTokens();
   tokens[m[1]] = decodeURIComponent(m[2]);
   try { localStorage.setItem('huellita.tokens', JSON.stringify(tokens)); } catch { /* sin storage */ }
-  history.replaceState(null, '', `#h/${m[1]}`);
+  history.replaceState(null, '', `/h/${m[1]}`);
+  ARRIVAL.id = m[1];
   setTimeout(() => toast('🧡 Ya podés cuidar su lugar desde este dispositivo'), 1500);
   return true;
 }
@@ -2147,7 +2173,7 @@ $('#share-image').onclick = async () => {
   const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.9));
   const file = new File([blob], `${current?.name || 'huellita'}.jpg`, { type: 'image/jpeg' });
   if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], text: `Encendé una vela por ${current.name} 🕯️ ${location.origin}/#h/${current.id}` }); } catch { /* cancelado */ }
+    try { await navigator.share({ files: [file], text: `Encendé una vela por ${current.name} 🕯️ ${shareUrl(current.id, { invite: true, name: shareName() })}` }); } catch { /* cancelado */ }
     return;
   }
   const a = document.createElement('a');
@@ -2252,7 +2278,7 @@ function downloadMuertosIcs() {
   const y = new Date().getMonth() > 10 || (new Date().getMonth() === 10 && new Date().getDate() > 2) ? new Date().getFullYear() + 1 : new Date().getFullYear();
   const pet = myPet();
   const name = pet ? pet.name : 'quienes extrañamos';
-  const url = `${location.origin}/${pet ? `#h/${pet.id}` : ''}`;
+  const url = pet ? shareUrl(pet.id) : `${location.origin}/`;
   const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Encende una huellita//ES', 'BEGIN:VEVENT', `UID:muertos-${y}@huellita`,
     `DTSTART;VALUE=DATE:${y}1101`, `DTEND;VALUE=DATE:${y}1103`, 'RRULE:FREQ=YEARLY',
     `SUMMARY:🌼 Día de Muertos: ofrenda para ${name}`, `DESCRIPTION:Poner su foto y su cosa en la ofrenda. Encender una vela: ${url}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
@@ -2284,6 +2310,137 @@ $('#muertos-add').onclick = () => {
   if (myPet()) visit(myPet()); else openAdd(null);
 };
 
+
+// ---------- modo foto: una polaroid con tu espíritu ----------
+let shooting = false;
+let lastPhoto = null;
+const later = (ms) => new Promise((r) => setTimeout(r, ms));
+function grabFrame() {
+  return new Promise((res) => {
+    // Un cuadro con más resolución para que la foto se vea nítida.
+    const prev = renderer.getPixelRatio();
+    const want = Math.min(2, Math.max(prev, devicePixelRatio || 1));
+    if (want !== prev) { renderer.setPixelRatio(want); composer?.setPixelRatio(want); }
+    captureNext = (url) => {
+      if (want !== prev) { renderer.setPixelRatio(prev); composer?.setPixelRatio(prev); }
+      res(url);
+    };
+  });
+}
+async function photoMode() {
+  if (!renderer || !controls || shooting) return;
+  shooting = true;
+  closeSheet();
+  closeModals();
+  $('#emote-tray').hidden = true;
+  const P = controls.player;
+  let comp = spirits?.companion && spirits.companion.fade > 0.5 ? spirits.companion : null;
+  document.body.classList.add('photo-mode');
+  if (comp && comp.pos.distanceTo(P.pos) > 1.7) {
+    // Primero lo llamás: viene corriendo a tu lado.
+    spirits.call();
+    for (let i = 0; i < 30 && comp.pos.distanceTo(P.pos) > 1.7; i++) await later(100);
+  }
+  const center = P.pos.clone();
+  if (comp && comp.pos.distanceTo(P.pos) < 2.6) {
+    // Se sienta a tu lado y mira a cámara.
+    center.lerp(comp.pos, 0.4);
+    spirits.cuddle(comp);
+  }
+  const dist = comp ? 3.4 : 2.8;
+  let stand = null;
+  for (const off of [0.55, -0.55, 0.95, -0.95, 0]) {
+    const a = P.heading + off;
+    const s = new THREE.Vector3(center.x + Math.sin(a) * dist, 1.3, center.z + Math.cos(a) * dist);
+    if (!controls.blocked(s.x, s.z, 0.25)) { stand = s; break; }
+  }
+  stand ||= new THREE.Vector3(center.x + Math.sin(P.heading) * dist, 1.4, center.z + Math.cos(P.heading) * dist);
+  controls.flyTo(stand, center.clone().setY(0.82), async () => {
+    me.wave();
+    await later(550);
+    $('#flash').hidden = false;
+    tick();
+    haptic(15);
+    const url = await grabFrame();
+    setTimeout(() => { $('#flash').hidden = true; }, 500);
+    document.body.classList.remove('photo-mode');
+    shooting = false;
+    controls.follow();
+    if (!url) return toast('No pudimos sacar la foto en este navegador.');
+    const caption = comp ? `Paseando con ${comp.name} 🐾` : 'En el jardín de las huellitas 🌼';
+    const when = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+    lastPhoto = { canvas: await polaroid(url, { caption, sub: `${when} · Encendé una huellita` }), name: comp?.name || 'jardin', id: comp?.memorialId || null };
+    $('#photo-preview').src = lastPhoto.canvas.toDataURL('image/jpeg', 0.9);
+    $('#photo-dialog-sub').textContent = comp ? `Un recuerdo de tu paseo con ${comp.name}.` : 'Un recuerdo de tu visita al jardín.';
+    $('#photo-dialog').showModal();
+  }, { duration: reduced ? 0.3 : 1.1 });
+}
+async function sharePhoto() {
+  if (!lastPhoto) return;
+  const blob = await new Promise((res) => lastPhoto.canvas.toBlob(res, 'image/jpeg', 0.92));
+  const file = new File([blob], `huellita-${lastPhoto.name}.jpg`, { type: 'image/jpeg' });
+  const link = lastPhoto.id ? shareUrl(lastPhoto.id, { invite: true, name: shareName() }) : `${location.origin}/`;
+  const text = lastPhoto.id ? `Paseando con ${lastPhoto.name} en el jardín de las huellitas 🐾 ${link}` : `Un jardín para recordar a las mascotas que amamos 🌼 ${link}`;
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], text }); } catch { /* cancelado */ }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = file.name;
+  a.click();
+  toast('📸 Foto guardada. Subila a tu historia y etiquetá a quien también lo quería.');
+}
+$('#walk-photo-btn').onclick = photoMode;
+$('#photo-btn').onclick = photoMode;
+$('#photo-share').onclick = sharePhoto;
+$('#photo-again').onclick = () => { $('#photo-dialog').close(); photoMode(); };
+
+// ---------- compartir: Pasá la luz, vista previa y entrada personalizada ----------
+// El nombre con el que invito: el que puse al firmar un libro, o mi apodo del jardín.
+const shareName = () => store.get('huellita.signName') || visitor.name;
+
+$('#s-pass').onclick = () => { haptic(10); shareLinkNow(); };
+
+// La tarjeta de la vista previa: la arma y la sube quien cuida la huellita (una vez por sesión).
+const ogDone = new Set();
+function maybeOgCard(m, force = false) {
+  if (!m || !isMine(m) || api?.mode !== 'server' || (!force && (m.ogCard || ogDone.has(m.id)))) return;
+  ogDone.add(m.id);
+  uploadOgCard(api, m, photoSrc(m)).then((r) => {
+    if (r?.ogCard) { const x = memorials.find((y) => y.id === m.id); if (x) x.ogCard = r.ogCard; }
+  });
+}
+
+// "Tu luz llegó a N personas": cuántas velas se encendieron gracias a tus links.
+let lightReach = 0;
+async function checkReach() {
+  if (!api || api.mode !== 'server') return;
+  try {
+    const { n } = await api.ref(myRef());
+    lightReach = n;
+    const seen = Number(store.get('huellita.refSeen')) || 0;
+    if (n > seen) {
+      store.set('huellita.refSeen', String(n));
+      setTimeout(() => toast(n - seen === 1 ? '✨ Alguien encendió una vela gracias a tu invitación' : `✨ ${n - seen} personas encendieron una vela gracias a tus invitaciones`), 2600);
+    }
+  } catch { /* sin datos */ }
+}
+
+// Si llegó por el link de una huellita, la entrada la muestra a ella (y a quien invitó).
+function personalizeSplash() {
+  const m = ARRIVAL.id && memorials.find((x) => x.id === ARRIVAL.id);
+  if (!m) return;
+  const box = $('#splash-pet');
+  box.hidden = false;
+  $('#splash-photo').src = photoSrc(m);
+  $('#splash-photo').alt = `Foto de ${m.name}`;
+  $('#splash-name').textContent = m.name;
+  $('#splash-invite').textContent = ARRIVAL.de ? `${ARRIVAL.de} te invita a encenderle una vela` : 'Te espera en el jardín';
+  $('#splash-candles').textContent = m.candles > 0 ? `🕯️ ${m.candles.toLocaleString('es-AR')} ${m.candles === 1 ? 'vela encendida' : 'velas encendidas'}` : '';
+  $('#splash').classList.add('has-pet');
+  $('#enter-label').textContent = `🕯️ Encenderle una vela a ${m.name}`;
+}
 
 // ---------- el Prado y el paseo con su espíritu ----------
 let walking = null; // la huellita cuyo espíritu te acompaña
@@ -2439,10 +2596,15 @@ lookPicker($('#add-look'));
 
 // ---------- arranque ----------
 function openFromHash() {
-  const m = location.hash.match(/^#h\/([\w-]+)/);
+  const m = location.hash.match(/^#h\/([\w-]+)/) || location.pathname.match(/^\/h\/([\w-]+)/);
   if (!m) return false;
   const mem = memorials.find((x) => x.id === m[1]);
-  if (mem) { visit(mem); return true; }
+  if (mem) {
+    visit(mem);
+    // Llegó invitada a encender una vela: el botón la llama.
+    if (ARRIVAL.id === mem.id && !didToday('c', mem.id)) setTimeout(() => $('#s-candle').classList.add('invite'), 900);
+    return true;
+  }
   return false;
 }
 
@@ -2484,7 +2646,7 @@ $('#enter').onclick = () => {
   if (store.get('huellita.sounds') !== '0') setSounds(true);
   syncMusicBtn();
   if (!renderer || !controls) return finishIntro();
-  if (reduced || location.hash.startsWith('#h/')) {
+  if (reduced || ARRIVAL.id) {
     controls.snapFollow();
     finishIntro();
     return;
@@ -2523,7 +2685,9 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheetEl.hidden &
   }
   await refresh().catch((err) => toast(err.message));
   label.textContent = 'Entrar al jardín 🕯️';
+  personalizeSplash();
   $('#enter').disabled = false;
+  checkReach();
   heartbeat();
   const away = game.whileAway(myMemorials());
   if (away.length) {

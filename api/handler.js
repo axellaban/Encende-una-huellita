@@ -1,7 +1,10 @@
 // Función de Vercel: todas las rutas /api/* llegan acá (ver vercel.json).
 // Necesita Upstash Redis conectado al proyecto (Vercel → Storage → Upstash for Redis).
 // Sin eso, /api/health responde ok:false y la página funciona en modo demo (datos en el navegador).
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { MAX_BODY, safeHandle } from '../server/core.js';
+import { pageMeta, injectMeta, fallbackPage } from '../server/page.js';
 import { createStore } from '../server/store.js';
 import { createUpstashKv, upstashConfigFromEnv } from '../server/kv/upstash.js';
 
@@ -15,8 +18,36 @@ function json(status, body) {
   });
 }
 
+// La app (dist/index.html) para servir /h/<id> con la vista previa de esa huellita.
+let indexHtml = null;
+async function appHtml(origin) {
+  if (indexHtml) return indexHtml;
+  for (const p of [join(process.cwd(), 'dist', 'index.html'), join(process.cwd(), 'index.html')]) {
+    try { indexHtml = readFileSync(p, 'utf8'); if (indexHtml.includes('/assets/')) return indexHtml; } catch { /* sigue */ }
+  }
+  try {
+    const r = await fetch(`${origin}/index.html`, { headers: { 'x-huellita-page': '1' } });
+    if (r.ok) { indexHtml = await r.text(); return indexHtml; }
+  } catch { /* sin acceso */ }
+  indexHtml = null;
+  return null;
+}
+
+async function page(url, id) {
+  const origin = `${url.protocol}//${url.host}`;
+  const meta = store ? await pageMeta(store, id, { origin, de: url.searchParams.get('de') || '' }) : null;
+  const html = await appHtml(origin);
+  const body = html ? injectMeta(html, meta) : fallbackPage(meta, id);
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400' },
+  });
+}
+
 async function handle(request) {
   const url = new URL(request.url);
+  const pageId = url.searchParams.get('page');
+  if (pageId && /^[\w-]{3,24}$/.test(pageId)) return page(url, pageId);
   const rewritten = url.searchParams.get('path');
   const path = rewritten != null ? `/api/${rewritten.replace(/^\/+/, '')}` : url.pathname;
 

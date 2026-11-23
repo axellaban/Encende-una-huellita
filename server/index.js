@@ -1,10 +1,11 @@
 // Servidor local: API + archivos estáticos de dist/. En Vercel se usa api/handler.js en su lugar.
 // Sin Upstash configurado, guarda todo en data/kv.json (emulador de Redis en memoria).
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MAX_BODY, safeHandle } from './core.js';
+import { PAGE_RE, pageMeta, injectMeta, fallbackPage } from './page.js';
 import { createStore } from './store.js';
 import { createMemoryKv } from './kv/memory.js';
 import { createUpstashKv, upstashConfigFromEnv } from './kv/upstash.js';
@@ -86,6 +87,14 @@ export function createApp({ kv } = {}) {
         json: () => readJson(req),
       }, store);
       return send(res, r);
+    }
+    const page = url.pathname.match(PAGE_RE);
+    if (page) {
+      const index = join(DIST, 'index.html');
+      const meta = await pageMeta(store, page[1], { origin: `http://${req.headers.host || 'localhost'}`, de: url.searchParams.get('de') || '' });
+      const html = existsSync(index) ? injectMeta(readFileSync(index, 'utf8'), meta) : fallbackPage(meta, page[1]);
+      res.writeHead(meta ? 200 : 404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...SECURITY });
+      return res.end(html);
     }
     let f;
     try { f = normalize(join(DIST, decodeURIComponent(url.pathname))); } catch { f = null; }

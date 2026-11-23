@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, CREEK_Z, MEADOW, MEADOW_R, nearCreek, uTime, rand } from './world.js';
 import { EASEL_POS, ALTAR_SCALE } from './hall.js';
-import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture } from './textures.js';
+import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture, twoSided } from './textures.js';
 import { picadoBanner, marigoldCluster, PALETTE } from './muertos.js';
 
 export const JAR_POS = new THREE.Vector3(-3.3, 0, 2.2);
@@ -202,9 +202,9 @@ export function createCozy(scene, tier, colliders) {
     const g = new THREE.Group();
     g.position.set(PATH_HALF + 1.3, 0, SPAWN.z - 3.2);
     g.rotation.y = -0.55;
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.82), new THREE.MeshLambertMaterial({
+    const board = twoSided(new THREE.PlaneGeometry(1.1, 0.82), new THREE.MeshLambertMaterial({
       map: chalkboardTexture([['¡Bienvenidos! 🐾', 64, 92], ['Seguí los pétalos', 50, 186], ['hasta la ofrenda', 50, 246], ['🌼 🕯️ 💀', 54, 330]]),
-      emissive: '#222', side: THREE.DoubleSide,
+      emissive: '#222',
     }));
     board.position.y = 1.05;
     board.rotation.x = -0.1;
@@ -346,9 +346,8 @@ export function createCozy(scene, tier, colliders) {
     scene.add(rainbow);
     animated.push((t) => rainbow.children.forEach((a, i) => { a.material.opacity = 0.065 + Math.sin(t * 0.4 + i * 0.5) * 0.02; }));
 
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.36), new THREE.MeshBasicMaterial({
+    const sign = twoSided(new THREE.PlaneGeometry(1.7, 0.36), new THREE.MeshBasicMaterial({
       map: labelTexture('Puente del Arcoíris 🌈', { w: 640, h: 136, font: '700 66px Caveat, cursive', bg: 'rgba(74,48,34,0.95)', fg: '#f6e3c4' }),
-      side: THREE.DoubleSide,
     }));
     sign.position.set(1.6, 1.0, bridge.position.z + L / 2 + 0.6);
     scene.add(sign);
@@ -390,9 +389,8 @@ export function createCozy(scene, tier, colliders) {
   // ---------- el Prado de los espíritus: cartel, cucha, cuenco y piedritas que brillan ----------
   {
     const wood = new THREE.MeshLambertMaterial({ map: woodTexture('#7a5236') });
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.42), new THREE.MeshBasicMaterial({
+    const sign = twoSided(new THREE.PlaneGeometry(1.9, 0.42), new THREE.MeshBasicMaterial({
       map: labelTexture('Prado de los espíritus 🐾', { w: 720, h: 150, font: '700 70px Caveat, cursive', bg: 'rgba(74,48,34,0.95)', fg: '#f6e3c4' }),
-      side: THREE.DoubleSide,
     }));
     const sx = MEADOW.x - MEADOW_R * 0.72;
     const sz = MEADOW.z + MEADOW_R * 0.72;

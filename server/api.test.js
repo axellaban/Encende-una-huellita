@@ -6,6 +6,8 @@ import { parseDataUrl, validateMemorial } from './core.js';
 import { createMemoryKv } from './kv/memory.js';
 import { createStore } from './store.js';
 
+// JPG de 1x1.
+const JPG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
 // PNG de 1x1.
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
@@ -49,6 +51,13 @@ before(async () => {
   // Simula el rewrite de vercel.json: /api/:path* -> /api/handler?path=:path*
   targets.vercel = (p, init = {}) => {
     const u = new URL(p, 'https://huellita.test');
+    // Simula el rewrite /h/:id -> /api/handler?page=:id
+    const page = u.pathname.match(/^\/h\/([\w-]+)$/);
+    if (page) {
+      const q = new URLSearchParams(u.search);
+      q.set('page', page[1]);
+      return fn.GET(new Request(`https://huellita.test/api/handler?${q}`));
+    }
     const rewritten = new URL(`https://huellita.test/api/handler?path=${encodeURIComponent(u.pathname.replace(/^\/api\//, ''))}`);
     const method = init.method || 'GET';
     return fn[method](new Request(rewritten, { ...init, method }));
@@ -161,6 +170,37 @@ for (const name of ['local', 'vercel']) {
     assert.deepEqual(p.pet, { n: 'Toby', sp: 'perro', fur: 'dorado', ears: 'down', size: 'm' });
     const k = await (await post('/api/now', { sid: 'p3', visitor: 'X' })).json();
     assert.equal(k.others.find((o) => o.name === 'Otra').pet, null, 'sin nombre no hay espíritu');
+  });
+
+  test(`[${name}] compartir: /h/<id> con vista previa, imagen propia y "Pasá la luz"`, async () => {
+    // Luca: su imagen para compartir y su nombre en el título.
+    let html = await (await call('/h/luca')).text();
+    assert.match(html, /<title>Luca · Encendé una huellita<\/title>/);
+    assert.match(html, /og:image" content="https?:\/\/[^"]+\/huellitas\/luca-og\.jpg"/);
+    assert.match(html, /og:url" content="https?:\/\/[^"]+\/h\/luca"/);
+    // Quién invita aparece en el texto (y escapado).
+    html = await (await call('/h/luca?de=' + encodeURIComponent('Ana <b>'))).text();
+    assert.match(html, /Ana b encendió una vela por Luca/);
+    assert.ok(!/og:description" content="[^"]*</.test(html), 'sin etiquetas inyectadas');
+    // Una huellita nueva sube su imagen y la vista previa la usa.
+    const c = await (await post('/api/memorials', { name: 'Kira', species: 'perro', photo: PNG })).json();
+    const own = { 'X-Edit-Token': c.editToken };
+    html = await (await call(`/h/${c.memorial.id}`)).text();
+    assert.match(html, new RegExp(`og:image" content="[^"]+/api/photos/${c.memorial.id}`), 'sin imagen propia usa la foto');
+    assert.equal((await post(`/api/memorials/${c.memorial.id}/og`, { image: PNG }, own)).status, 400, 'sólo JPG');
+    const r = await (await post(`/api/memorials/${c.memorial.id}/og`, { image: JPG }, own)).json();
+    assert.match(r.ogCard, /\/api\/og\//);
+    assert.equal((await post(`/api/memorials/${c.memorial.id}/og`, { image: JPG }, { 'X-Edit-Token': 'no' })).status, 403);
+    const img = await call(`/api/og/${c.memorial.id}`);
+    assert.equal(img.headers.get('content-type'), 'image/jpeg');
+    html = await (await call(`/h/${c.memorial.id}`)).text();
+    assert.match(html, /og:image" content="[^"]+\/api\/og\//);
+    // Pasá la luz: una vela que llega por un link suma a quien lo compartió (una vez por persona y día).
+    const code = name === 'local' ? 'abc123loc' : 'abc123ver';
+    await post(`/api/memorials/${c.memorial.id}/candle`, { sid: 'r1', visitor: 'X', ref: code });
+    await post(`/api/memorials/${c.memorial.id}/candle`, { sid: 'r1', visitor: 'X', ref: code });
+    await post(`/api/memorials/${c.memorial.id}/candle`, { sid: 'r2', visitor: 'Y', ref: 'MAL!' });
+    assert.equal((await (await call(`/api/ref/${code}`)).json()).n, 1);
   });
 
   test(`[${name}] Glow, regalitos, abrazos, frasco y noche de velas`, async () => {

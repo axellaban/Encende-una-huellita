@@ -45,6 +45,19 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   búsqueda**, **links para compartir** (`/#h/luca`) e imagen para WhatsApp/redes.
 - **Sonido** generado en el navegador: música suave, grillos y efectos.
 
+### Para compartir (lo que hace que llegue a más gente)
+
+- **Cada huellita tiene su link**: `/h/luca`. En WhatsApp, Instagram, Facebook y X la vista previa
+  muestra su foto en un marco dorado, su nombre y "Encendé una vela" (la tarjeta la arma la app al
+  sumarla o editarla; si no hay, usa su foto).
+- **Invitaciones**: el link que compartís lleva tu nombre (`?de=`) y tu código (`?l=`). Quien lo abre
+  ve una entrada con la foto de esa mascota y "Axel te invita a encenderle una vela", y entra directo
+  a su ofrenda con el botón de la vela latiendo.
+- **Pasá la luz**: después de encender tu vela, ese mismo botón te invita a pasarle la luz a alguien.
+  Cuando alguien enciende una vela gracias a tu link, te avisa ("Tu luz llegó a 3 personas").
+- **Modo foto** (📸 en el paseo, en los gestos o en el menú): tu espíritu viene corriendo, se sienta a
+  tu lado, tu personaje saluda y sale una polaroid 4:5 con "Paseando con Luca 🐾" lista para historias.
+
 ### Día de Muertos
 
 - Papel picado (con huellitas recortadas) entre los postes y cruzando el camino, paredes pintadas de
@@ -145,6 +158,9 @@ index.html              Interfaz (barra, dock, ficha, modales)
 src/main.js             Arranque, intro, interacción, ficha deslizable, actividad en vivo
 src/quality.js          Calidad por dispositivo y resolución adaptativa
 src/api.js              Cliente de la API + modo demo (localStorage)
+src/share.js            Links /h/<id>, invitaciones, "Pasá la luz" y la tarjeta para la vista previa
+src/photo.js            La polaroid del modo foto
+server/page.js          Vista previa de cada huellita en /h/<id> (local y Vercel)
 src/audio.js            Música, grillos y efectos con Web Audio
 src/scene/world.js      Cielo, luna, colinas, pasto con viento, árboles, faroles, luciérnagas
 src/scene/hall.js       Muro, marcos, pérgola, guirnaldas, atril de Luca
@@ -180,6 +196,9 @@ server/index.js         Servidor local
 | `GET /api/activity/:since` | Eventos nuevos + cuántos hay ahora |
 | `POST /api/memorials/:id/gift` | Deja un regalito (`gift` del catálogo) |
 | `POST /api/memorials/:id/hug` | Abrazo en silencio |
+| `GET /h/:id` | La app con la vista previa de esa huellita (`?de=` quién invita) |
+| `POST /api/memorials/:id/og` · `GET /api/og/:id` | Tarjeta 1200x630 para la vista previa (la sube la familia, sólo JPG) |
+| `GET /api/ref/:code` | Cuántas velas se encendieron por los links de ese código (las velas aceptan `ref`) |
 | `POST /api/now` | Latido: posición y rumbo del personaje, gesto o frase, y `pet` (el espíritu que pasea); devuelve a los demás visitantes y, con `since`, los eventos nuevos (`events`, `seq`) |
 | `GET /api/night` | Velas y países de esta noche |
 | `POST /api/memorials/:id/eternal` | Luz eterna |

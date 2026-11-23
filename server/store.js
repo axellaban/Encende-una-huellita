@@ -72,6 +72,7 @@ export function createStore(kv) {
       bg: h.bg || 'crema',
       gathering: Number(h.gathering) > Date.now() - 3 * 3600_000 ? Number(h.gathering) : null,
       diaryCount: Number(h.dc) || 0,
+      ogCard: h.og ? `/api/og/${id}?v=${h.og}` : null,
     };
   }
 
@@ -220,6 +221,7 @@ export function createStore(kv) {
       const night = [['INCR', `${P}night:${day}`], ['EXPIRE', `${P}night:${day}`, String(DAY_TTL * 2)]];
       if (code) night.push(['SADD', `${P}nco:${day}`, code], ['EXPIRE', `${P}nco:${day}`, String(DAY_TTL * 2)]);
       await kv.pipeline(night);
+      if (who.ref) await kv.cmd('INCR', `${P}ref:${who.ref}`);
       const memorial = toPublic(await getRaw(id), id);
       await event('candle', memorial, who.visitor, code ? { country: code } : {});
       return { memorial, glow, firstLight: first };
@@ -299,6 +301,26 @@ export function createStore(kv) {
       if (patch.bg && BACKGROUND_IDS.has(patch.bg)) cmds.push(['HSET', `${P}m:${id}`, 'bg', patch.bg]);
       await kv.pipeline(cmds);
       return toPublic(await getRaw(id), id);
+    },
+
+    // Imagen para la vista previa al compartir (la arma el navegador de la familia).
+    async setOg(id, token, img) {
+      const o = await owner(id, token);
+      if (o.error) return o.error;
+      await kv.pipeline([['SET', `${P}og:${id}`, JSON.stringify({ t: img.type, d: img.bytes.toString('base64') })], ['HINCRBY', `${P}m:${id}`, 'og', '1']]);
+      return toPublic(await getRaw(id), id);
+    },
+
+    async og(id) {
+      const raw = await kv.cmd('GET', `${P}og:${id}`);
+      if (!raw) return null;
+      const { t, d } = JSON.parse(raw);
+      return { type: t, bytes: Buffer.from(d, 'base64') };
+    },
+
+    // "Pasá la luz": cuántas velas se encendieron gracias a los links que compartió alguien.
+    async refCount(code) {
+      return Number(await kv.cmd('GET', `${P}ref:${code}`)) || 0;
     },
 
     async addPhoto(id, token, photo) {

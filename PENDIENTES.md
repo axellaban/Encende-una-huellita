@@ -25,6 +25,12 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 
 ## P1 · Lo que más suma ahora
 
+- [ ] **Probar las vistas previas en el mundo real**: mandar `https://encende-una-huellita.vercel.app/h/luca`
+      por WhatsApp e Instagram (y el depurador de Facebook) y confirmar foto, título y texto. Si Vercel
+      no incluyera `dist/index.html` en la función, igual responde (lo pide o redirige), pero conviene mirarlo.
+- [ ] **Más viral**: recordatorio "hoy cumpliría años" con link para compartir; contador público de
+      velas de la noche en la entrada; QR imprimible para la ofrenda de casa; video corto del paseo.
+
 - [ ] **Espíritus**: que tu espíritu juegue con los espíritus que pasean otros visitantes; más acciones
       (tirar de una soga entre dos, cavar, perseguir mariposas de luz); ladridos/maullidos suaves.
 - [ ] **Tu personaje**: más opciones (rebozo, peinados, farolito de colores); hoy se elige color del

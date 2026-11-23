@@ -69,6 +69,8 @@ function whoFrom(body, req) {
     glowTo: /^[\w-]{3,24}$/.test(body.glowTo || '') ? body.glowTo : null,
     glowToken: typeof body.glowToken === 'string' ? body.glowToken.slice(0, 64) : null,
     country: countryOf(req),
+    // Código de quien compartió el link por el que llegó esta persona ("Pasá la luz").
+    ref: /^[a-z0-9]{6,12}$/.test(body.ref || '') ? body.ref : null,
   };
 }
 
@@ -120,6 +122,16 @@ export async function handleApi(req, store) {
     return { status: 200, bytes: p.bytes, type: p.type, cache: 'public, max-age=31536000, s-maxage=31536000, immutable' };
   }
 
+  m = path.match(/^\/api\/og\/([\w-]{3,24})$/);
+  if (m && method === 'GET') {
+    const p = await store.og(m[1]);
+    if (!p) return fail(404, 'No encontrada');
+    return { status: 200, bytes: p.bytes, type: p.type, cache: 'public, max-age=31536000, s-maxage=31536000, immutable' };
+  }
+
+  m = path.match(/^\/api\/ref\/([a-z0-9]{6,12})$/);
+  if (m && method === 'GET') return ok({ n: await store.refCount(m[1]) });
+
   m = path.match(/^\/api\/photos\/([\w-]{3,24})$/);
   if (m && method === 'GET') {
     const p = await store.photo(m[1]);
@@ -128,7 +140,7 @@ export async function handleApi(req, store) {
   }
 
   // ---------- herramientas de dueños (token en X-Edit-Token) ----------
-  m = path.match(/^\/api\/memorials\/([\w-]{3,24})\/(edit|photos|voice|diary|gathering)$/);
+  m = path.match(/^\/api\/memorials\/([\w-]{3,24})\/(edit|photos|voice|diary|gathering|og)$/);
   if (m && method === 'POST') {
     const [, id, what] = m;
     if (await store.limited(`o:${ip}`, 20)) return fail(429, 'Más despacio, por favor 🤍');
@@ -156,6 +168,11 @@ export async function handleApi(req, store) {
         if (!photo || photo.bytes.length > MAX_PHOTO) return fail(400, 'Esa foto no funcionó. Probá con otra.');
       }
       r = await store.edit(id, token, patch, photo);
+    }
+    if (what === 'og') {
+      const img = parseDataUrl(body.image);
+      if (!img || img.type !== 'image/jpeg' || img.bytes.length > 500 * 1024) return fail(400, 'Esa imagen no funcionó.');
+      r = await store.setOg(id, token, img);
     }
     if (what === 'photos') {
       if (!allowed('extraPhotos')) return fail(402, 'Más fotos es parte del plan familiar.');
