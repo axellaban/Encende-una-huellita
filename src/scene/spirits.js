@@ -619,7 +619,7 @@ export function createSpirits(scene, { blocked, tier }) {
           const tx = o.pos.x + fx2 * lead + fz2 * lat;
           const tz = o.pos.z + fz2 * lead - fx2 * lat;
           const dt2 = Math.hypot(tx - a.pos.x, tz - a.pos.z);
-          a.goal = { x: tx, z: tz, speed: clamp(dt2 * 2.6 + o.vel.length(), 0.6, 5.5) * a.s, stop: 0.08 };
+          a.goal = { x: tx, z: tz, speed: clamp(dt2 * 2.6 + o.vel.length(), 0.6, 5.5) * Math.max(0.95, a.s), stop: 0.08 };
           a.look = a.want.sniff ? null : tmp.set(a.pos.x + fx2 * 3, 0.4, a.pos.z + fz2 * 3);
           a.excite = 0.95;
         } else {

@@ -2,6 +2,7 @@
 // colores, sombrero o corona de cempasúchil, y un farolito en la mano. Camina, mira, saluda y tira
 // la pelota. Hecho con formas simples, sin modelos externos.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { calaveraTexture, marigoldGeometry, marigoldMaterial } from './muertos.js';
 import { glowTexture, lanternTexture } from './textures.js';
 
@@ -52,6 +53,24 @@ function sharedGeo() {
   shared.band = new THREE.CylinderGeometry(0.192, 0.192, 0.04, 18);
   shared.flower = marigoldGeometry(0.06, '#ff9a1f');
   shared.lantern = new THREE.CylinderGeometry(0.06, 0.05, 0.13, 8);
+  // Párpados (tapan los ojos pintados al parpadear) y cachetes.
+  shared.lid = new THREE.SphereGeometry(0.046, 14, 10).scale(1, 1, 0.45);
+  shared.cheek = new THREE.CircleGeometry(0.036, 16);
+  // Flecos del sarape: tiritas alrededor del borde de abajo.
+  {
+    const parts = [];
+    for (let i = 0; i < 34; i++) {
+      const a = (i / 34) * Math.PI * 2;
+      const b = new THREE.BoxGeometry(0.014, 0.07, 0.006);
+      b.translate(0, -0.035, 0);
+      b.rotateY(-a);
+      b.translate(Math.sin(a) * 0.272, 0, Math.cos(a) * 0.272);
+      parts.push(b);
+    }
+    shared.fringe = mergeGeometries(parts);
+  }
+  // Rebozo: un chal que cae sobre los hombros (una franja curva).
+  shared.rebozo = new THREE.TorusGeometry(0.2, 0.045, 8, 24, Math.PI * 1.25).rotateX(Math.PI / 2).rotateY(Math.PI * 0.375).scale(1.1, 1, 0.95);
   return shared;
 }
 
@@ -138,6 +157,38 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
     l.position.y = -0.1;
     lantern.add(l);
   }
+  // Ojos que parpadean: párpados del color de la cara pintada, encima de los ojos del dibujo.
+  const lidMat = new THREE.MeshLambertMaterial({ color: '#fbf3e6', emissive: '#4a3a34', emissiveIntensity: 0.5 });
+  const lids = [-1, 1].map((sd) => {
+    const l = new THREE.Mesh(G.lid, lidMat);
+    l.position.set(sd * 0.079, 0.08, 0.214);
+    l.lookAt(sd * 0.079 * 3, 0.08 * 3, 0.214 * 3);
+    l.scale.y = 0.01;
+    l.visible = false;
+    head.add(l);
+    return l;
+  });
+  // Cachetes rosados.
+  const cheekMat = new THREE.MeshBasicMaterial({ color: '#ff7aa8', transparent: true, opacity: 0.32, depthWrite: false });
+  for (const sd of [-1, 1]) {
+    const c = new THREE.Mesh(G.cheek, cheekMat);
+    c.position.set(sd * 0.13, -0.005, 0.2);
+    c.lookAt(sd * 0.13 * 3, -0.015, 0.6);
+    head.add(c);
+  }
+  // Flecos del sarape y, en algunos, un rebozo sobre los hombros.
+  const fringe = new THREE.Mesh(G.fringe, new THREE.MeshLambertMaterial({ color: '#fbefd9', emissive: '#3a2a20' }));
+  fringe.position.y = 0.0;
+  torso.add(fringe);
+  if (Math.round(hue / 7) % 3 === 0) {
+    const reb = new THREE.Mesh(G.rebozo, new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((hue + 160) % 360) / 360, 0.55, 0.42), emissive: '#1a0d14' }));
+    reb.position.set(0, 0.45, -0.02);
+    torso.add(reb);
+  }
+  let blinkT = 1 + Math.random() * 3;
+  let skyT = 8 + Math.random() * 10;
+  let sky = 0;
+
   // Sombra de contacto suave.
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.32, depthWrite: false }));
   shadow.position.y = 0.025;
@@ -179,6 +230,20 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
       arms[0].rotation.x = leashing ? -0.55 - swing * 0.2 : -swing * 0.9;
       arms[1].rotation.x = swing * 0.6 - 0.25 * (1 - k * 0.5);
       body.position.y = Math.abs(Math.cos(phase)) * 0.045 * k + Math.sin(t * 2) * 0.006 * (1 - k);
+      // Un poquito de aplastar y estirar en cada paso, y la respiración cuando está quieto.
+      const squash = k * (Math.abs(Math.cos(phase)) - 0.5) * 0.05;
+      body.scale.set(1 - squash * 0.5, 1 + squash, 1 - squash * 0.5);
+      tor.scale.set(1, 1 + Math.sin(t * 2.1) * 0.012 * (1 - k), 1);
+      hips.rotation.y = Math.sin(phase) * 0.08 * k;
+      // Parpadeo.
+      blinkT -= dt;
+      const closed = blinkT < 0.13 ? 1 - Math.abs(blinkT - 0.065) / 0.065 : 0;
+      for (const l of lids) { l.visible = closed > 0.02; l.scale.y = Math.max(0.01, closed); }
+      if (blinkT < 0) blinkT = 1.8 + Math.random() * 4;
+      // De vez en cuando, quieto, mira el cielo.
+      skyT -= dt;
+      if (skyT < 0) { skyT = 9 + Math.random() * 12; if (k < 0.1) sky = 2.2; }
+      sky = Math.max(0, sky - dt);
       torso.rotation.y = swing * 0.18;
       torso.rotation.x = 0.06 * Math.min(1, speed / 4);
       body.rotation.z = THREE.MathUtils.clamp(-turn * speed * 0.02, -0.15, 0.15);
@@ -187,7 +252,8 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
       if (glanceT < 0) { glanceT = 2 + Math.random() * 4; glance = (Math.random() - 0.5) * 1.2; }
       lookYaw += ((speed > 0.3 ? 0 : glance) - lookYaw) * Math.min(1, dt * 3);
       head.rotation.y = lookYaw;
-      head.rotation.z = Math.sin(t * 1.3) * 0.03;
+      head.rotation.z = Math.sin(t * 1.3) * 0.03 + lookYaw * 0.08;
+      head.rotation.x = -Math.sin(Math.min(1, sky / 2.2) * Math.PI) * 0.32;
       if (act) {
         act.t += dt;
         const p = Math.min(1, act.t / act.dur);
