@@ -4,7 +4,80 @@ Lista para quien siga el proyecto (persona o IA). Leé primero [`AGENTS.md`](AGE
 Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** = lo que más suma,
 **P2** = completa el relevamiento del sitio de referencia, **P3** = deuda técnica y mejoras.
 
-## ⭐ Empezá por acá: lo que pidió el dueño (23/11/2026) — hecho y lo que falta
+## 🧭 Plan: lo que falta para mejorarlo todo (en orden)
+
+Escrito el 23/11/2026 a la noche, después de las capturas del dueño en su iPhone y del video de
+referencia ("Where Winds Meet"). Cada punto dice qué, por qué y dónde tocar. Antes de mergear: capturas
+en celular (iPhone 13 y SE) y el recorrido de punta a punta (ver AGENTS).
+
+### 1. Publicar lo que está listo
+- [ ] **Arreglo de la pantalla negra** (commit "Arreglo de la pantalla negra…"): está en la rama, falta
+      publicarlo. El recorrido en celular dio 31/35, pero los 4 que fallaron parecen datos de prueba
+      viejos en `data/kv.json` (búsqueda con 3 resultados, huellita repetida que no se borra) y algo con
+      vela y flor que hay que mirar: arrancar con `data/` limpio y repetir. Si se repite lo de la vela,
+      revisar si el aviso de `webglcontextlost` recarga la página en swiftshader.
+- [ ] Después de publicar, preguntarle al dueño si vuelve a ver la pantalla negra.
+
+### 2. Que se vea limpio en el celular
+- [ ] **Acuarela apagada por defecto** (`watercolorOn()` en `main.js`: que sea `=== '1'`). En el iPhone del
+      dueño se ve sucia y lavada (líneas negras y textura de lienzo por todos lados). Dejarla como
+      opción en Más → Opciones; si se quiere el look de littleprince.dev, pedirle capturas al dueño (el
+      juego necesita WebGPU y en el contenedor no carga) y bajarla mucho (`uAmt` ≈ 0.3, sin bordes Sobel).
+- [ ] **HUD "modo juego"** (el dueño: "los juegos tienen muy poquitas cosas en pantalla"). Hoy hay ~11
+      cosas fijas. Propuesta aprobada en la charla, falta hacerla:
+      1. Arriba, nada: sacar `#brand` (ya está en la portada), el chip `acá ahora` y `#me-chip` pasan
+         al menú; `#music-btn` también. Queda un solo botón redondo de menú arriba a la derecha con un
+         anillo de progreso de "Hoy" (3/4).
+      2. **Palanca invisible** (`#joy`): aparece donde apoyás el pulgar en la mitad izquierda y
+         desaparece al soltar.
+      3. **Un botón de acción según el contexto** (abajo a la derecha, reemplaza a `#emote-btn` y al
+         dock): 🕯️ frente a un marco (abre la ficha), 🛗 en el ascensor, 🐾 con tu mascota cerca,
+         🎾 si la pelota está cerca, ➕ en un lugar libre, y si no hay nada, 🤍 gestos y frases. Calcularlo
+         cada ~0,3 s en el ciclo de `main.js` con la posición del personaje (`hall.viewpoint`,
+         `elevator.standPoint`, `spirits.companion`, `spirits.ball`).
+      4. **Sin dock** (`nav.dock`): Huellitas, Luca, Hoy, Sumar mascota, Pisos, Prado, Foto, Opciones van a
+         una hoja de menú con íconos grandes.
+      5. **El HUD se desvanece al caminar** o mientras vuela la cámara, y vuelve al frenar (clase en
+         `body`, `opacity` con transición).
+      6. **Menos avisos**: los `toast` de actividad de otros, cortos y de a uno; nada de avisos encima
+         del personaje mientras camina.
+- [ ] Probar que con el HUD nuevo todo siga a un toque: recorrido de punta a punta ajustado.
+
+### 3. Que se sienta como el video (sin copiarlo)
+Lo que lo hace lindo: bruma en capas, perspectiva aérea (lo lejos se aclara a celeste), vista inmensa
+con capas de profundidad, masas de árboles en flor, y moverse planeando. Etapa A, con lo que tenemos:
+- [ ] **Atmósfera en capas**: niebla de altura (shader propio o `onBeforeCompile` del `fog` de three) y
+      bancos de bruma entre objetos (sprites/planos con ruido que se mueven), más fuerte a lo lejos.
+- [ ] **"Valle del cielo"** en los pisos altos (`heaven.js` / `skymagic.js`): pilares de piedra gigantes
+      (karst) a varias distancias, árboles en flor rosa y lila en masas, puentes colgantes entre pilares,
+      cascadas que caen en la bruma.
+- [ ] **Planear**: saltar desde el borde del piso del cielo (o desde una isla) y planear con el sarape
+      abierto como alas (o agarrado a un barrilete), con estelas de viento y un aterrizaje suave. Nuevo
+      modo en `controls.js` (velocidad hacia adelante, caída lenta, giro con la palanca) y animación en
+      `character.js`.
+- [ ] **Luz de día con sombras de verdad** en esos pisos (`DirectionalLight` con sombras sólo en calidad
+      alta, `shadow.mapSize` 1024, que siga al personaje).
+- [ ] Etapa B (**decide el dueño**): modelos 3D hechos por artistas (glTF) para árboles, rocas, personajes
+      y perros con animaciones de verdad; bibliotecas CC0 (Quaternius, Kenney, Poly Pizza) o encargados.
+      Rompe la regla de "todo generado en código" de AGENTS, suma peso de descarga y hay que medir FPS en
+      gama media. Preguntarle antes de empezar.
+
+### 4. Verificar en teléfonos reales (no se puede desde el contenedor)
+- [ ] FPS con **calidad alta por defecto** en un Android de gama media y en un iPhone viejo; si no da,
+      que `autoTier` vuelva a elegir media en celulares con poca memoria.
+- [ ] Que la intro de película se vea fluida y que las leyendas coincidan con el vuelo (van con
+      `setTimeout`, el vuelo con el reloj del juego).
+- [ ] Sonidos: pasos, música por zona, murmullo del río, burbujas; que no saturen con todo junto.
+- [ ] La pantalla negra (ver punto 1) y que al volver de otra app el 3D siga bien.
+
+### 5. Lo que quedó de antes (sigue valiendo)
+- [ ] Al abrir una huellita, una vista grande del nicho en 3D con las repisas a los costados (como el
+      original), en lugar de la foto plana de la ficha.
+- [ ] Expresiones del personaje (sonrisa al regalar), más ropa a elegir.
+- [ ] Regalitos con su gracia al llegar (la pelota rebota, el globo tira para arriba).
+- [ ] Todo lo de P0 (Upstash, rama de producción de Vercel, moderación), P1, P2 y P3 de abajo.
+
+## ✅ Ya hecho: lo que pidió el dueño (23/11/2026) — hecho y lo que falta
 
 Pedidos del dueño con capturas del original (lightapaw.com) y del juego littleprince.dev. Casi todo
 quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir mejorando. Regla del dueño:
