@@ -42,7 +42,7 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
 - **Velas, flores y libro de visitas** en cada huellita. Con 20 velas el marco se vuelve dorado.
 - **En vivo**: cuántas personas hay ahora y qué está pasando ("Brisa Suave encendió una vela por Luca").
 - **Cumpleaños**, **la hora de las velas** (21 h), **pisos** (90 lugares cada uno), **lista con
-  búsqueda**, **links para compartir** (`/#h/luca`) e imagen para WhatsApp/redes.
+  búsqueda**, **links para compartir** (`/h/luca`) e imagen para WhatsApp/redes.
 - **Sonido** generado en el navegador: música suave, grillos y efectos.
 
 ### Para compartir (lo que hace que llegue a más gente)
@@ -82,8 +82,8 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   nubes rosas"), botonera de bronce y una cabina con ojo de buey al viajar.
 - **Ventanitas en el muro**: cada huellita vive en una ventanita con postigos pintados que se abren; en
   su ficha, la repisa con cada regalito y cuántos le dejaron.
-- **Farolitos de papel calado** en guirnaldas sobre el camino, canteros, un estanque y pétalos que se
-  levantan al caminar.
+- **Farolitos de papel calado** en guirnaldas sobre el camino y colgando de la pérgola del salón,
+  canteros, un estanque y pétalos que se levantan al caminar.
 - **Intro de película**: la cámara baja desde la Vía Láctea, pasa sobre el salón y cruza el río hasta
   quedar detrás tuyo, con dos leyendas. La música cambia con el lugar (vals en el jardín, campanitas en
   el salón, mayor y luminosa en el cielo) y los pasos suenan distinto en piedra, pasto, madera o nube.
@@ -140,8 +140,8 @@ tarjeta para historias, farolillo que se va volando y palabras de consuelo.
   **modo tranquilo** para ocultarlos.
 - **Frasco de gracias**, **"mientras no estabas…"** y la **hora de las velas** con velas y países.
 - Detalles: huellitas en el camino, hongos que brillan, pétalos, farolitos de papel, pizarrón de
-  bienvenida, el **Puente del Arcoíris** con su arroyo, y un perrito y un gatito de luz que pasean
-  (tocalos 🤍).
+  bienvenida, huellitas que llevan hasta el **Puente del Arcoíris**, y un perrito y un gatito de luz
+  que pasean (tocalos 🤍).
 
 ### Pensado para el celular
 
@@ -193,32 +193,47 @@ Si definís `KV_REST_API_URL` y `KV_REST_API_TOKEN`, el servidor local también 
 
 ```
 index.html              Interfaz (barra, dock, ficha, modales)
+src/styles.css          Estilos (tema vino en paneles, papeles claros)
 src/main.js             Arranque, intro, interacción, ficha deslizable, actividad en vivo
 src/quality.js          Calidad por dispositivo y resolución adaptativa
 src/api.js              Cliente de la API + modo demo (localStorage)
 src/share.js            Links /h/<id>, invitaciones, "Pasá la luz" y la tarjeta para la vista previa
 src/photo.js            La polaroid del modo foto
-server/page.js          Vista previa de cada huellita en /h/<id> (local y Vercel)
+src/game.js             Gestos del día, racha y Glow guardado
+src/guide.js            La sexta etapa del duelo (guía en 7 tarjetas)
+src/floors.js           Nombres de los 99 pisos y de los pasillos
 src/audio.js            Música, grillos y efectos con Web Audio
-src/scene/world.js      Cielo, luna, colinas, pasto con viento, árboles, faroles, luciérnagas
-src/scene/hall.js       Muro, marcos, pérgola, guirnaldas, atril de Luca
-src/scene/lanterns.js   Farolitos que suben y destellos
+src/scene/world.js      Plano del jardín, cielo, luna, colinas, pasto con viento, árboles, faroles, luciérnagas
+src/scene/hall.js       Muro con ventanitas, pérgola, guirnaldas, ofrenda y atril de Luca
+src/scene/muertos.js    Papel picado, cempasúchil, calaveritas, pan de muerto, pueblito
+src/scene/cozy.js       Camino de pétalos, frasco de gracias, alebrijes, Prado de los espíritus
+src/scene/river.js      El río, el Puente del Arcoíris y el arco de entrada al jardín
+src/scene/elevator.js   La torre del ascensor y su cabina
+src/scene/heaven.js     Los pisos hacia el cielo (mar de nubes, sol, rayos)
+src/scene/skymagic.js   Cometas, estrellas fugaces, nubes gigantes, islas y pájaros de luz
+src/scene/watercolor.js El pase de acuarela (Opciones → Estilo acuarela)
+src/scene/sparkles.js   Brillitos que caen alrededor de la cámara
+src/scene/lanterns.js   Farolitos de papel (los que suben y los que cuelgan)
 src/scene/controls.js   Tercera persona: personaje, palanca, cámara que sigue/enfoca, colisiones
 src/scene/character.js  El personaje de cada visitante (caminar, saludar, tirar, acariciar)
+src/scene/avatars.js    Los demás visitantes
 src/scene/petRig.js     Cuerpo procedural de los espíritus y su animador (marchas y acciones)
 src/scene/spirits.js    Cerebro de los espíritus: el Prado, el paseo, la pelota, huellitas de luz
-server/looks.js         Pelajes, orejas y tamaños (formulario, 3D y validación)
-lab/pets.html           Laboratorio de poses y simulación del Prado (sólo en desarrollo)
-lab/gifts.html          Los 24 regalitos en 3D juntos (sólo en desarrollo)
-src/scene/river.js      El río, el Puente del Arcoíris y el arco de entrada al jardín
 src/scene/gifts3d.js    Regalitos en 3D y efectos de los gestos (vela, flor, regalito, abrazo)
 src/scene/textures.js   Texturas dibujadas en canvas
 server/core.js          La API (independiente del servidor)
 server/store.js         Datos sobre Redis (Upstash o emulador local)
 server/kv/              Cliente REST de Upstash y emulador de Redis
 server/seed.js          Huellitas destacadas (Luca)
-api/handler.js          Función de Vercel
+server/glow.js          Reglas del Glow, regalitos, frases y gestos
+server/plans.js         Funciones que serán pagas (hoy gratis) y fondos
+server/looks.js         Pelajes, orejas y tamaños (formulario, 3D y validación)
+server/page.js          Vista previa de cada huellita en /h/<id> (local y Vercel)
 server/index.js         Servidor local
+api/handler.js          Función de Vercel
+scripts/dev.mjs         Levanta Vite y la API juntos (npm run dev)
+lab/pets.html           Laboratorio de poses y simulación del Prado (sólo en desarrollo)
+lab/gifts.html          Los 24 regalitos en 3D juntos (sólo en desarrollo)
 ```
 
 ### API
@@ -230,11 +245,11 @@ server/index.js         Servidor local
 | `POST /api/memorials` | Crea una (`name`, `species`, `photo` como data URL, `birthday`/`passedDay` en `MM-DD`, `message`, `slot`, `look` = `{fur, ears, size, pattern}`). Devuelve `editToken` |
 | `GET /api/memorials/:id` | Una huellita con su libro de visitas |
 | `DELETE /api/memorials/:id` | La quita (header `X-Edit-Token`) |
-| `POST /api/memorials/:id/candle` | Enciende una vela (una cada 10 min por visitante) |
-| `POST /api/memorials/:id/flower` | Deja una flor |
+| `POST /api/memorials/:id/candle` | Enciende una vela (una por día por huellita y visitante) |
+| `POST /api/memorials/:id/flower` | Deja una flor (una por día, igual que el regalito y el abrazo) |
 | `POST /api/memorials/:id/guestbook` | Firma el libro (`text`, `name`) |
 | `GET /api/photos/:id` | La foto (cacheada en el CDN) |
-| `GET /api/activity/:since` | Eventos nuevos + cuántos hay ahora |
+| `GET /api/activity/:since` | Eventos nuevos + cuántos hay ahora (la app ya usa `POST /api/now`; queda por compatibilidad) |
 | `POST /api/memorials/:id/gift` | Deja un regalito (`gift` del catálogo) |
 | `POST /api/memorials/:id/hug` | Abrazo en silencio |
 | `GET /h/:id` | La app con la vista previa de esa huellita (`?de=` quién invita) |
@@ -257,8 +272,7 @@ Los gestos aceptan `glowTo` + `glowToken` (el token de edición de tu mascota) p
 La investigación inicial, hecha con [REA](https://github.com/morluto/rea), está en
 [`docs/investigacion-rea.md`](docs/investigacion-rea.md).
 
-## Pendientes posibles
+## Pendientes
 
-- Moderación de fotos y textos antes de publicarlos.
-- Recuperar la edición por email (enlace mágico) en lugar del token guardado en el navegador.
-- Ver los espíritus que pasean los demás también en el Prado jugando con la manada.
+Lo que falta, priorizado, está en [`PENDIENTES.md`](PENDIENTES.md). Lo más urgente: conectar Upstash en
+Vercel (hoy el sitio publicado está en modo demo), moderación mínima y probarlo en teléfonos reales.

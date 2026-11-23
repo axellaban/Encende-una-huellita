@@ -108,7 +108,8 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 - [x] **Botonera y cabina del ascensor**: botones de bronce con nombre del piso; al viajar, ojo de
       buey con el cielo que pasa y la plaquita del piso.
 - [x] **Farolitos** (`paperLantern` en `lanterns.js`): papel calado, aros, llama que titila,
-      guirnaldas sobre el camino, en la pérgola del salón, en el ahuehuete y más en el cielo.
+      guirnaldas sobre el camino, colgando de la pérgola del salón (uno cada dos postes, `hall.js`),
+      en el ahuehuete y más en el cielo.
 - [x] **Arcoíris doble** con polvo de luz y reflejo en el agua (`river.js`).
 - [x] **Jardín**: canteros con borde de piedra, estanque, caminitos de piedras, jacarandás en flor,
       un ahuehuete enorme con farolitos y pétalos que se levantan al caminar.
@@ -123,10 +124,13 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 ## P0 · Verificaciones que nunca se hicieron en el mundo real
 
 - [ ] **Rama de producción de Vercel**: hoy es `claude/ecstatic-gates-rt74m2` (ver AGENTS). Cambiarla a
-      `main` en Vercel → Settings → Environments → Production Branch.
-- [ ] **Conectar Upstash en producción**: `/api/health` responde `ok:false` (23/11/2026), así que el
-      sitio está en modo demo (cada visitante solo, sin presencia compartida). Vercel → Storage →
-      Create Database → Upstash for Redis → conectar a Production y Preview → Redeploy.
+      `main` en Vercel → Settings → Environments → Production Branch. (Al cierre del 23/11/2026 `main` y
+      esa rama apuntan al mismo commit y el sitio sirve el mismo `index-*.js` que `npm run build`.)
+- [ ] **Conectar Upstash en producción**: `/api/health` sigue respondiendo `ok:false` ("Falta conectar
+      Upstash Redis", revisado de nuevo al cierre del 23/11/2026), así que el sitio está en **modo demo**:
+      cada visitante solo, sin presencia compartida, y lo que suma la gente se pierde al borrar el
+      navegador. Es lo que más falta para mostrarlo. Vercel → Storage → Create Database → Upstash for
+      Redis → conectar a Production y Preview → Redeploy.
 - [ ] **Deploy real en Vercel + Upstash.** Todo se probó con un Upstash simulado (`server/api.test.js`).
       Confirmar: rewrite `/api/:path*` → `api/handler.js`, lectura de `KV_REST_API_URL`/`TOKEN`,
       fotos servidas con caché de CDN, y que sin Upstash la app caiga bien al **modo demo**.
@@ -143,9 +147,10 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 
 ## P1 · Lo que más suma ahora
 
-- [ ] **Probar las vistas previas en el mundo real**: mandar `https://encende-una-huellita.vercel.app/h/luca`
-      por WhatsApp e Instagram (y el depurador de Facebook) y confirmar foto, título y texto. Si Vercel
-      no incluyera `dist/index.html` en la función, igual responde (lo pide o redirige), pero conviene mirarlo.
+- [ ] **Probar las vistas previas en el mundo real**: el servidor ya responde bien (23/11/2026:
+      `curl https://encende-una-huellita.vercel.app/h/luca` devuelve `og:title` "Luca · Encendé una
+      huellita", su texto y `og:image` absoluta a `/huellitas/luca-og.jpg`). Falta mandarlo por WhatsApp e
+      Instagram (y pasarlo por el depurador de Facebook) para ver la tarjeta de verdad.
 - [ ] **Más viral**: recordatorio "hoy cumpliría años" con link para compartir; contador público de
       velas de la noche en la entrada; QR imprimible para la ofrenda de casa; video corto del paseo.
 
@@ -156,10 +161,10 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       espíritu en el paseo se pare a mirar el agua en el puente.
 - [ ] **Pisos del cielo**: hoy el salón de cada piso es igual (con su muro). Se podría variar la
       decoración según la altura (más flores blancas y luz arriba) y sumar algo único en el piso 99.
-- [ ] **Espíritus**: que tu espíritu juegue con los espíritus que pasean otros visitantes; más acciones
-      (tirar de una soga entre dos, cavar, perseguir mariposas de luz); ladridos/maullidos suaves.
-- [ ] **Tu personaje**: más opciones (rebozo, peinados, farolito de colores); hoy se elige color del
-      sarape y sombrero o corona desde "Así te ven los demás" (el sombrero viaja como paridad del `hue`).
+- [ ] **Espíritus**: los que pasean otros visitantes ya se ven (`spirits.setRemote`) pero sólo siguen a
+      su dueño: falta que jueguen con la manada del Prado y con el tuyo (hoy `others()` en `spirits.js`
+      no los incluye). Más acciones (tirar de una soga entre dos, cavar, perseguir mariposas de luz);
+      ladridos/maullidos suaves.
 
 - [ ] **Palabras de Luca**: su mensaje sigue siendo el provisorio *"Siempre en nuestro corazón."*
       (`server/seed.js`). Pedírselas al dueño. En la foto principal aparece otro perro negro: preguntar
@@ -188,24 +193,28 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 - [ ] Bandera del país en la placa; traducción automática de mensajes.
 - [ ] Comentarios y corazones en las páginas del diario de otras familias; tablero "Diarios".
 - [ ] Videos cortos por huellita; video recuerdo de 15–30 s con fotos y música; tarjeta imprimible con QR.
-- [ ] Dirección web propia por huellita (`/luca` además de `#h/luca`).
+- [x] Dirección web propia por huellita: `/h/luca` (con vista previa propia; `#h/luca` sigue andando).
+      Opcional: una más corta (`/luca`).
 - [ ] Idiomas (hoy sólo español).
 - [ ] Partes pagas a implementar cuando se monetice: ver `MONETIZACION.md` (planes, regalos para otros,
       recuerdos impresos, cartas con IA, donaciones con muro de agradecimiento).
 
 ## P3 · Deuda técnica
 
-- [ ] **Dividir `src/main.js`** (≈2.200 líneas) en módulos: ficha, formularios, familia, juego, guía,
-      ascensor, presencia.
+- [ ] **Dividir `src/main.js`** (≈2.870 líneas y creciendo) en módulos: ficha, formularios, familia,
+      juego, guía, ascensor, presencia.
 - [ ] **Archivos fuera de Redis**: fotos (≈100–150 KB) y voces (hasta 600 KB) se guardan en base64 en
       Upstash; pasar a Vercel Blob/S3 y dejar sólo la URL.
 - [ ] **Presencia**: un solo latido (`POST /api/now` con `since`) cada 12 s (solo) o 5 s (con gente),
       3 comandos de Redis cada uno; nada con la pestaña oculta. Una visita de 10 min gasta ≈150–400
       comandos (el plan gratis de Upstash da 500.000/mes). Con mucho más tráfico: WebSockets/SSE
       (Ably, Pusher, PartyKit) para que los demás se muevan en tiempo real y gastar todavía menos.
-- [ ] **Paquete JS**: three.js ya va en su propio archivo (≈190 KB comprimido, queda en caché entre
-      versiones) y la app en otro (≈76 KB). Falta cargar diferido lo que no hace falta al entrar
-      (guía, compartir, voz).
+- [ ] **Paquete JS**: three.js ya va en su propio archivo (≈193 KB comprimido, queda en caché entre
+      versiones) y la app en otro, que creció a ≈111 KB comprimido (305 KB sin comprimir, 23/11/2026;
+      antes ≈76 KB). Falta cargar diferido lo que no hace falta al entrar: guía, compartir, voz, y del 3D
+      lo que está lejos de la entrada (pisos del cielo, `skymagic.js`, ascensor, regalitos).
+- [ ] `GET /api/activity/:since` ya no lo usa la app (todo va por `POST /api/now` con `since`); queda por
+      compatibilidad y tiene test. Se puede quitar junto con `api.activity` en `src/api.js`.
 - [ ] **Tests de frontend**: sólo hay tests de API. Convertir los recorridos de Playwright (ver
       `AGENTS.md`) en una suite que se pueda correr.
 - [x] Encabezados de seguridad (CSP, Permissions-Policy) en `vercel.json` y en el servidor local
@@ -221,4 +230,4 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       etiquetas `og:image`/`twitter:image` para que WhatsApp y redes la muestren.
 - [ ] La ilustración de la estampita del Principito tiene firma de su autora: si el sitio es público,
       pedir permiso o darle crédito.
-- [ ] En teléfonos lentos, al abrir un link directo (`#h/luca`) la cámara puede tardar en llegar a la ofrenda.
+- [ ] En teléfonos lentos, al abrir un link directo (`/h/luca`) la cámara puede tardar en llegar a la ofrenda.

@@ -22,6 +22,9 @@ textos y arte propios. La huellita destacada del centro es **Luca**, el perro de
   (`git push origin origin/main:refs/heads/claude/ecstatic-gates-rt74m2`) y verificá que
   `https://encende-una-huellita.vercel.app/` cargue el mismo `assets/index-*.js` que `npm run build`.
   Se arregla del todo en Vercel → Settings → Environments → Production Branch = `main`.
+- **Ojo también: producción está en modo demo.** `/api/health` responde `ok:false` porque falta conectar
+  Upstash en Vercel (revisado al cierre del 23/11/2026). Lo que se suma en el sitio publicado queda sólo
+  en el navegador de cada visitante; no le prometas al dueño que "ya lo ven todos" hasta conectarlo.
 - Prioridad absoluta: **experiencia en el celular** (mobile-first, que se sienta como un juego amable).
 - Es un proyecto con carga emocional (Luca murió hace poco). Tono cálido, nunca frívolo.
 - Decisiones ya tomadas que **no hay que revertir**:
@@ -38,7 +41,7 @@ textos y arte propios. La huellita destacada del centro es **Luca**, el perro de
 npm install
 npm run build && npm start   # http://localhost:8787 (datos en data/kv.json)
 npm run dev                  # Vite con recarga (5173) + API (8787)
-npm test                     # 22 tests de API: servidor local Y función de Vercel con Upstash simulado
+npm test                     # 23 tests de API: servidor local Y función de Vercel con Upstash simulado
 ```
 
 Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
@@ -53,7 +56,7 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
   Si se agranda algo, revisar que no quede encimado (camino, faroles, bancos, frasco, carteles en
   `cozy.js`, árboles) y sacar una captura desde arriba (`H.controls.teleportCamera(...)`).
 - **Frontend** (Vite + Three.js, sin framework): `index.html` + `src/`.
-  - `src/main.js` (≈2.400 líneas, el más grande): arranque, UI, ficha, modales, gamificación, guía,
+  - `src/main.js` (≈2.870 líneas, el más grande): arranque, UI, ficha, modales, gamificación, guía,
     ascensor, presencia, paseo. **Candidato a dividir** (ver PENDIENTES).
   - `src/scene/`: `world.js` (cielo, pasto, árboles, faroles, luciérnagas), `hall.js` (muro de
     marcos, pérgola, ofrenda central de Luca, estampita), `muertos.js` (papel picado, cempasúchil,
