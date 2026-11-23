@@ -35,7 +35,7 @@ async function appHtml(origin) {
 
 async function page(url, id) {
   const origin = `${url.protocol}//${url.host}`;
-  const meta = store ? await pageMeta(store, id, { origin, de: url.searchParams.get('de') || '' }) : null;
+  const meta = await pageMeta(store, id, { origin, de: url.searchParams.get('de') || '' });
   const html = await appHtml(origin);
   const body = html ? injectMeta(html, meta) : fallbackPage(meta, id);
   return new Response(body, {
