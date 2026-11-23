@@ -15,10 +15,13 @@ export const EARS = [
   { id: 'tip', name: 'Dobladas' },
   { id: 'down', name: 'Caídas' },
 ];
+// Bien distintos: de un chihuahua a un gran danés (los gatos van en una escala más chica).
 export const SIZES = [
+  { id: 'xs', name: 'Mini' },
   { id: 's', name: 'Chico' },
   { id: 'm', name: 'Mediano' },
   { id: 'l', name: 'Grande' },
+  { id: 'xl', name: 'Gigante' },
 ];
 export const PATTERNS = [
   { id: 'solid', name: 'Liso' },

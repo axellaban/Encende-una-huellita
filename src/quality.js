@@ -26,8 +26,10 @@ export function saveQuality(v) {
 export function autoTier() {
   const mem = navigator.deviceMemory || 8;
   const cores = navigator.hardwareConcurrency || 8;
+  // Por defecto, calidad alta (la resolución adaptativa baja los píxeles si el equipo no da);
+  // sólo los equipos muy justos arrancan en media.
   if (!isMobile()) return cores <= 2 ? 'mid' : 'high';
-  return mem <= 3 || cores <= 4 ? 'low' : 'mid';
+  return mem <= 2 || cores <= 2 ? 'mid' : 'high';
 }
 
 export function pickTier() {

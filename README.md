@@ -74,6 +74,10 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   arriba se camina sobre las nubes y sólo se ve a quienes están en tu mismo piso.
 - **Paseo con correa**: el espíritu va adelante tuyo con collar de cuero y medallita, la correa va de tu
   mano al collar (floja o tirante según la distancia), mueve la cola y se desvía a olfatear.
+- **Brillitos en el aire**: polvo de luz diminuto que cae muy despacio alrededor tuyo, en todos los pisos.
+- **Caminito al ascensor**, con dos farolitos de papel que lo marcan.
+- **Tamaños de mascota bien distintos**: Mini, Chico, Mediano, Grande y Gigante (de un chihuahua a un
+  gran danés; los gatos en una escala más chica).
 - **La llegada**: entrás del otro lado del río, por un camino de tierra. Cruzás el **Puente del
   Arcoíris** (el arcoíris lo envuelve) y entrás por un arco de cempasúchil con papel picado y veladoras
   ("Bienvenidos al jardín"; al salir dice "Volvé cuando quieras"). Afuera todo es más apagado; adentro,

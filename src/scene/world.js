@@ -2,7 +2,7 @@
 // camino con balizas, faroles, bancos y luciérnagas. Todo procedural (sin modelos ni imágenes externas).
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { grassTexture, stoneTexture, woodTexture, floorTexture, glowTexture, blobShadowTexture, moonTexture } from './textures.js';
+import { grassTexture, stoneTexture, woodTexture, floorTexture, glowTexture, blobShadowTexture, moonTexture, lanternTexture } from './textures.js';
 import { marigoldGeometry, marigoldMaterial, buildPueblo, PALETTE } from './muertos.js';
 
 // Plano del jardín (en metros). Todo lo demás se ubica a partir de estos números.
@@ -91,8 +91,21 @@ export const PATH_START = HALL_CENTER.z + HALL_RADIUS + 2;
 export function insideHall(x, z, pad = 0) {
   return Math.hypot(x - HALL_CENTER.x, z - HALL_CENTER.z) < HALL_RADIUS + 1.6 + pad;
 }
+// Caminito al ascensor: sale del camino principal y llega a la puerta de la torre
+// (la torre mira hacia el camino con este ángulo, igual que en elevator.js).
+const ELEV_RY = Math.atan2(-ELEVATOR_POS.x, 6);
+const ELEV_DIR = new THREE.Vector3(Math.sin(ELEV_RY), 0, Math.cos(ELEV_RY));
+export const ELEV_PATH_B = ELEVATOR_POS.clone().addScaledVector(ELEV_DIR, 2.2);
+export const ELEV_PATH_A = ELEV_PATH_B.clone().addScaledVector(ELEV_DIR, (-PATH_HALF + 0.3 - ELEV_PATH_B.x) / ELEV_DIR.x);
+const ELEV_PATH_HALF = 0.95;
+function onElevatorPath(x, z, pad = 0) {
+  const ax = ELEV_PATH_A.x, az = ELEV_PATH_A.z, bx = ELEV_PATH_B.x, bz = ELEV_PATH_B.z;
+  const dx = bx - ax, dz = bz - az;
+  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+  return Math.hypot(x - (ax + dx * t), z - (az + dz * t)) < ELEV_PATH_HALF + pad;
+}
 export function onPath(x, z, pad = 0) {
-  return Math.abs(x) < PATH_HALF + pad && z > HALL_CENTER.z + HALL_RADIUS - 1 && z < SPAWN.z + 6;
+  return (Math.abs(x) < PATH_HALF + pad && z > HALL_CENTER.z + HALL_RADIUS - 1 && z < SPAWN.z + 6) || onElevatorPath(x, z, pad);
 }
 
 export function buildWorld(scene, tier) {
@@ -263,6 +276,43 @@ export function buildWorld(scene, tier) {
   };
   pathPiece(HALL_CENTER.z + HALL_RADIUS - 1, BRIDGE.z - BRIDGE.halfL + 0.25, stoneTexture(), '#ffffff', '#6d625a');
   pathPiece(BRIDGE.z + BRIDGE.halfL - 0.25, SPAWN.z + 6, stoneTexture(), '#8a7864', '#4a4038');
+  // El caminito al ascensor, con dos farolitos de papel que lo marcan.
+  {
+    const d = ELEV_PATH_B.clone().sub(ELEV_PATH_A);
+    const len = d.length();
+    const g = new THREE.Group();
+    g.position.copy(ELEV_PATH_A).addScaledVector(d, 0.5);
+    g.rotation.y = Math.atan2(d.x, d.z);
+    const tex = stoneTexture();
+    tex.repeat.set(0.6, len / 4);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(ELEV_PATH_HALF * 2, len), new THREE.MeshLambertMaterial({ map: tex }));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.016;
+    mesh.name = 'ground';
+    g.add(mesh);
+    walkable.push(mesh);
+    for (const s of [-1, 1]) {
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, len), new THREE.MeshLambertMaterial({ color: '#6d625a' }));
+      edge.position.set(s * (ELEV_PATH_HALF + 0.04), 0.035, 0);
+      g.add(edge);
+      // Farolito de papel colgado de un poste curvo, a cada lado.
+      const z = s * len * 0.18;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.7, 8), new THREE.MeshLambertMaterial({ color: '#3a2a22' }));
+      post.position.set(s * (ELEV_PATH_HALF + 0.35), 0.85, z);
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.45, 6), post.material);
+      arm.rotation.z = Math.PI / 2;
+      arm.position.set(s * (ELEV_PATH_HALF + 0.15), 1.68, z);
+      const lan = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.1, 0.3, 10, 1, true), new THREE.MeshBasicMaterial({ map: lanternTexture(), color: new THREE.Color(2.2, 1.2, 0.6), side: THREE.DoubleSide }));
+      lan.position.set(s * (ELEV_PATH_HALF - 0.05), 1.42, z);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.6, color: new THREE.Color(1.3, 0.75, 0.4) }));
+      glow.scale.setScalar(1.3);
+      glow.position.copy(lan.position);
+      g.add(post, arm, lan, glow);
+      const wp = new THREE.Vector3(s * (ELEV_PATH_HALF + 0.35), 0, z).applyAxisAngle(new THREE.Vector3(0, 1, 0), g.rotation.y).add(g.position);
+      colliders.circles.push({ x: wp.x, z: wp.z, r: 0.12, ground: true });
+    }
+    groundRoot.add(g);
+  }
 
   // Piso de madera del salón y borde de piedra.
   const floorTex = floorTexture();
@@ -518,7 +568,7 @@ export function buildWorld(scene, tier) {
   {
     const parts = [];
     const metal = [];
-    const benchSpots = [[-3.8, 29, Math.PI / 2], [3.8, 26, -Math.PI / 2], [-3.8, 21.5, Math.PI / 2], [3.8, 14, -Math.PI / 2]];
+    const benchSpots = [[-3.8, 29, Math.PI / 2], [3.8, 26, -Math.PI / 2], [-3.8, 32.5, Math.PI / 2], [3.8, 14, -Math.PI / 2]];
     for (const [x, z, rot] of benchSpots) {
       const tr = new THREE.Matrix4().makeRotationY(rot).setPosition(x, 0, z);
       for (let s = 0; s < 4; s++) {

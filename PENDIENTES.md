@@ -4,6 +4,71 @@ Lista para quien siga el proyecto (persona o IA). Leé primero [`AGENTS.md`](AGE
 Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** = lo que más suma,
 **P2** = completa el relevamiento del sitio de referencia, **P3** = deuda técnica y mejoras.
 
+## ⭐ Empezá por acá: lo que pidió el dueño el 23/11/2026 y quedó sin hacer
+
+Pedidos textuales del dueño (con capturas del original, lightapaw.com, y del juego littleprince.dev).
+Ya está hecho: río natural, puente como entrada, regalitos en 3D, cempasúchil con pétalos, arcoíris
+que no se ve de canto, **caminito al ascensor**, **5 tamaños de mascota** (Mini a Gigante, bien
+distintos; `SIZE_SCALE` en `src/scene/petRig.js`), **calidad alta por defecto** (`autoTier` en
+`src/quality.js`) y **brillitos que caen en el aire** (`src/scene/sparkles.js`). Lo que falta, en
+el orden en que más se nota. No hagas "berretadas": cada cosa, con capturas en celular antes de mergear.
+
+1. [ ] **Estilo acuarela como littleprince.dev** ("los gráficos son completamente distintos a esa
+   acuarela"). El juego usa WebGPU: en este contenedor abre con
+   `--enable-unsafe-webgpu --enable-features=Vulkan,WebGPU --use-webgpu-adapter=swiftshader --use-vulkan=swiftshader`
+   pero con swiftshader se queda en "PREPARING THE SCENE · 0%" (4 minutos); hay que verlo en un equipo
+   con GPU o pedirle capturas al dueño. No copiar su código ni sus imágenes: tomar la idea. Plan: un
+   pase de postproceso "acuarela" en `main.js` (después del bloom): textura de papel generada en canvas,
+   bordes oscurecidos con Sobel sobre luminancia (y profundidad si se agrega un depth texture),
+   manchas de pigmento con ruido de baja frecuencia que tiñen y aclaran, colores levemente
+   cuantizados y un poco de "sangrado" (muestras desplazadas por ruido), viñeta cálida. Con perilla de
+   intensidad y apagado en calidad baja. Probar que no se vuelva borroso en celular.
+2. [ ] **Cielo mágico e inmenso en el piso 1 y en el 99**, con **cometas** ("Cometas en el cielo").
+   Piso 1 (noche, `world.js`, shader del cielo con `uK`): Vía Láctea (franja con ruido y polvo),
+   nebulosas suaves rosa/violeta, estrellas de varios tamaños que titilan, 2–3 cometas lentos con cola
+   larga (sprites aditivos estirados o una cinta con degradé) y estrellas fugaces cada tanto. Piso 99
+   (`heaven.js`): más amplitud (horizonte lejano de nubes en capas, nubes gigantes lejos, rayos de sol
+   que se mueven, alguna isla flotante muy lejana, pájaros de luz), y cometas tenues también de día.
+3. [ ] **Personajes al máximo** (`src/scene/character.js`): proporciones más lindas (cabeza grande tipo
+   chibi pero con más forma), cara con ojos que parpadean y expresiones, pelo con volumen y variedad,
+   ropa con detalle (rebozo, sarape, sombrero), caminata con rebote, balanceo de brazos y peso,
+   animaciones en reposo (mirar, estirarse, saludar a otros), sombra de contacto. Mirar los personajes
+   del original (capturas del dueño: cabeza grande, cuerpo simple, cartelito con nombre arriba).
+4. [ ] **Perros y gatos al máximo** (`petRig.js`, `spirits.js`): más razas (hocico largo/corto,
+   orejas caídas/paradas/grandes, colas), pelaje con más detalle, ojos con brillo, mejores
+   transiciones entre marchas, que los chiquitos corran con pasitos rápidos y los grandes con trancos
+   lentos (escalar la frecuencia de paso con `size`), sentarse y acostarse más naturales.
+5. [ ] **El hall como el original**: pasillos con nombre y contador ("Pasillo 2 · 320 amigos" en el
+   original; acá, nombres propios del Día de Muertos, p. ej. "Pasillo de las veladoras · 27
+   huellitas"), carteles colgando arriba de cada muro y cada **piso con su nombre** (el original los
+   tiene: "Hogar cálido", "Luz de vela"…; inventar los nuestros, no copiarlos) en el ascensor y en el
+   diálogo de pisos.
+6. [ ] **El obituario como ventanita en la pared** (capturas del original): al abrir una huellita, el
+   marco se vuelve un nicho con puertitas de madera que se abren; adentro, el fondo elegido (cielo con
+   luna, prado), la foto grande al centro, repisas a los costados con los regalitos y su **contador**
+   (x2, x11), un jarrito de flores y una plaquita con el nombre y las fechas. Hoy la ficha es una hoja
+   HTML: armar esa vista en 3D (o en un canvas encima) y dejar la hoja para las acciones.
+7. [ ] **Botones del ascensor mucho mejores** (`#floors` en `index.html`/`styles.css`, `floorSky()` en
+   `main.js`): botonera de bronce con botones redondos que se hunden y se iluminan, el nombre del
+   piso, y al viajar una **vista de cabina** (como la captura "24F · Camino en flor": ojo de buey
+   redondo con el cielo que pasa, plaquita con el piso arriba y cartel con el nombre abajo).
+8. [ ] **Más farolitos y con mejores detalles** (`lanterns.js`, `world.js`, `hall.js`): farolitos de
+   papel picado calado (la luz sale por los dibujos), que se mezan con el viento, llama que titila
+   adentro, colgados en guirnaldas sobre los caminos y la pérgola; más en el cielo a lo lejos.
+9. [ ] **Arcoíris más lindo** (`river.js`): doble arcoíris (el segundo más tenue y con los colores al
+   revés), polvo de luz que cae de él, su reflejo en el agua y que "nazca" de la bruma en las orillas.
+10. [ ] **Jardín**: el dueño preguntó si está excelente así; no lo está. Faltan canteros con forma
+    (no flores sueltas al azar), caminitos secundarios entre canteros, más variedad de árboles
+    (jacarandá, ahuehuete, cempasúchil en macetas de barro), un estanque chico, bancos con faroles, y
+    menos pasto uniforme. Sacar una captura desde arriba y diseñar el plano antes de tocar.
+11. [ ] **A la altura de Coco (sin copiarla)**: intro cinematográfica más emotiva (cámara que baja por el
+    puente de pétalos mientras suena la guitarra), transiciones suaves entre lugares, música por zona,
+    pétalos que se levantan al caminar, sonidos al tocar cosas, y que cada gesto tenga una pequeña
+    "celebración" en 3D. Revisar todo en celular a 60 fps.
+12. [ ] **Del original que todavía no tenemos** (capturas): contador por tipo de regalito en la repisa,
+    catálogo de regalitos más grande (el original tiene ~20 solo de comida; cada uno nuevo necesita su
+    modelo en `gifts3d.js`), aviso para "Agregar a la pantalla de inicio" (PWA), botón "Recuerdo".
+
 ## P0 · Verificaciones que nunca se hicieron en el mundo real
 
 - [ ] **Rama de producción de Vercel**: hoy es `claude/ecstatic-gates-rt74m2` (ver AGENTS). Cambiarla a
