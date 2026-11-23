@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { createWatercolorPass } from './scene/watercolor.js';
+import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
 import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF } from './scene/world.js';
@@ -412,8 +413,9 @@ function renderFloors() {
     const b = document.createElement('button');
     b.className = `${f === currentFloor() ? 'on' : ''} ${n ? 'has' : ''}`;
     b.style.setProperty('--sky', floorSky(f));
-    b.innerHTML = `<b>${f + 1}</b>${n ? `<small>${n}🐾</small>` : ''}`;
-    b.title = n ? `Piso ${f + 1} · ${n} ${n === 1 ? 'huellita' : 'huellitas'}` : `Piso ${f + 1}`;
+    b.innerHTML = `<b>${f + 1}</b><span class="fn"></span>${n ? `<small>${n} 🐾</small>` : ''}`;
+    b.querySelector('.fn').textContent = floorName(f);
+    b.title = `Piso ${f + 1} · ${floorName(f)}${n ? ` · ${n} ${n === 1 ? 'huellita' : 'huellitas'}` : ''}`;
     b.setAttribute('aria-label', b.title);
     b.onclick = () => {
       $('#floors').close();
@@ -423,6 +425,8 @@ function renderFloors() {
     list.append(b);
   }
   $$('.floor-num').forEach((el) => { el.textContent = currentFloor() + 1; });
+  const here = $('#floor-here');
+  if (here) here.textContent = `Estás en el piso ${currentFloor() + 1} · ${floorName(currentFloor())}`;
   elevator?.setFloor(currentFloor());
 }
 
@@ -437,6 +441,8 @@ function rideTo(f) {
   const num = $('#lift-num');
   num.textContent = from + 1;
   $('#lift-arrow').textContent = f > from ? '▲' : '▼';
+  $('#lift-name').textContent = floorName(f);
+  lift.classList.toggle('down', f < from);
   lift.hidden = false;
   requestAnimationFrame(() => requestAnimationFrame(() => lift.classList.add('closed')));
   haptic(10);
@@ -461,7 +467,7 @@ function rideTo(f) {
           lift.classList.remove('closed');
           elevator?.setOpen(true);
           setTimeout(() => { lift.hidden = true; riding = false; elevator?.setOpen(false); }, 900);
-          toast(`🛗 Piso ${f + 1}`);
+          toast(`🛗 Piso ${f + 1} · ${floorName(f)}`);
         }, 350);
       }
     }, Math.max(70, 900 / steps));

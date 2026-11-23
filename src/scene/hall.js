@@ -8,6 +8,7 @@ import {
 } from './textures.js';
 import { stageOf } from '../../server/glow.js';
 import { giftMesh, idleGift } from './gifts3d.js';
+import { CORRIDOR_NAMES } from '../floors.js';
 import { PALETTE, paintedWallTexture, talaveraTexture, marigoldGeometry, marigoldMaterial, marigoldCluster, picadoBanner, sugarSkull, panDeMuerto, backgroundTexture } from './muertos.js';
 
 // Ramo del jarrito: [x, y, z, tamaño] de cada flor (se van sumando con las flores que le dejan).
@@ -188,8 +189,14 @@ export function buildHall(scene, colliders, tier) {
     cone.position.set(0, 2.08, 0.0);
     panel.add(bar, cone);
 
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.3), new THREE.MeshBasicMaterial({ transparent: true }));
-    label.position.set(0, 4.35, 0.12);
+    // Cartel del pasillo, colgado de dos cadenitas sobre el techito.
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 0.52), new THREE.MeshBasicMaterial({ transparent: true }));
+    label.position.set(0, 4.62, 0.36);
+    for (const sx of [-1.35, 1.35]) {
+      const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.34, 4), new THREE.MeshLambertMaterial({ color: '#c9973f' }));
+      chain.position.set(sx, 5.02, 0.36);
+      panel.add(chain);
+    }
     panel.add(label);
     panelLabels.push(label);
 
@@ -669,11 +676,17 @@ export function buildHall(scene, colliders, tier) {
       else if (Math.floor(m.slot / SLOTS_PER_FLOOR) === floor) here.set(m.slot % SLOTS_PER_FLOOR, m);
     }
     slots.forEach((s, i) => (here.has(i) ? fillSlot(s, here.get(i)) : clearSlot(s)));
-    if (labelFloor === floor) return;
+    // Cada pasillo con su nombre y cuántas huellitas tiene en este piso.
+    const per = new Array(PANELS).fill(0);
+    for (const i of here.keys()) per[Math.floor(i / PER_PANEL)]++;
     labelFloor = floor;
     panelLabels.forEach((lbl, p) => {
+      const n = per[p];
+      const text = n ? `${CORRIDOR_NAMES[p]} · ${n} ${n === 1 ? 'huellita' : 'huellitas'}` : CORRIDOR_NAMES[p];
+      if (lbl.userData.text === text) return;
+      lbl.userData.text = text;
       lbl.material.map?.dispose();
-      lbl.material.map = labelTexture(`Piso ${floor + 1} · Pared ${p + 1}`, { w: 512, h: 96 });
+      lbl.material.map = labelTexture(text, { w: 1100, h: 172, font: '400 70px "Young Serif", Georgia, serif', bg: 'rgba(58,36,24,0.95)', fg: '#f6e3c4' });
       lbl.material.needsUpdate = true;
     });
   }
