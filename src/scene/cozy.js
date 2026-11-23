@@ -3,12 +3,12 @@
 // el Puente del Arcoíris con su arroyo, el Prado de los espíritus y el frasco de gracias.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, CREEK_Z, MEADOW, MEADOW_R, nearCreek, insideHall, uTime, rand } from './world.js';
+import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, CREEK_Z, CREEK_HALF, GARDEN_RADIUS, creekZ, MEADOW, MEADOW_R, nearCreek, insideHall, uTime, rand } from './world.js';
 import { EASEL_POS, ALTAR_SCALE, POST_H } from './hall.js';
 import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture, twoSided } from './textures.js';
 import { picadoBanner, marigoldCluster, PALETTE } from './muertos.js';
 
-export const JAR_POS = new THREE.Vector3(-3.6, 0, 8.4);
+export const JAR_POS = new THREE.Vector3(-4.2, 0, 15.5);
 
 export function createCozy(scene, tier, colliders) {
   const r = rand(23);
@@ -64,7 +64,7 @@ export function createCozy(scene, tier, colliders) {
   {
     const poleMat = new THREE.MeshLambertMaterial({ map: woodTexture('#5a3a28') });
     const poleGeo = new THREE.CylinderGeometry(0.045, 0.06, 4.4, 7);
-    for (const [z, seed] of [[24.3, 1], [19.3, 4], [14.3, 9], [9.3, 13]]) {
+    for (const [z, seed] of [[41.5, 1], [35, 4], [28.5, 9], [22, 13], [15.5, 2]]) {
       const b = picadoBanner(new THREE.Vector3(-2.75, 4.3, z), new THREE.Vector3(2.75, 4.3, z - 0.2), { sag: 0.42, flags: 11, size: 0.4, seed });
       scene.add(b);
       animated.push((t) => b.userData.flutter(t));
@@ -79,7 +79,7 @@ export function createCozy(scene, tier, colliders) {
 
   // ---------- hongos que brillan ----------
   {
-    const n = tierCount(tier, 70);
+    const n = tierCount(tier, 120);
     const stems = [];
     const caps = [];
     const capColors = [];
@@ -87,7 +87,7 @@ export function createCozy(scene, tier, colliders) {
     for (let i = 0; i < n; i++) {
       // Grupitos en el pasto, lejos del camino y del salón.
       const a = r() * Math.PI * 2;
-      const d = 14 + r() * 21;
+      const d = 14 + r() * (GARDEN_RADIUS - 16);
       const cx = Math.sin(a) * d;
       const cz = Math.cos(a) * d - 4;
       if ((Math.abs(cx) < PATH_HALF + 1 && cz > -2) || nearCreek(cx, cz, 0.5) || insideHall(cx, cz, 0.5)) continue;
@@ -156,11 +156,11 @@ export function createCozy(scene, tier, colliders) {
 
   // ---------- pétalos que caen ----------
   {
-    const n = tierCount(tier, 140);
+    const n = tierCount(tier, 240);
     const pos = new Float32Array(n * 3);
     const seed = new Float32Array(n);
     for (let i = 0; i < n; i++) {
-      pos.set([(r() - 0.5) * 50, r() * 9, (r() - 0.5) * 50 - 2], i * 3);
+      pos.set([(r() - 0.5) * 80, r() * 9, (r() - 0.5) * 80 - 2], i * 3);
       seed[i] = r();
     }
     const geo = new THREE.BufferGeometry();
@@ -176,7 +176,7 @@ export function createCozy(scene, tier, colliders) {
           float fall = mod(p.y + uTime * (0.12 + seed * 0.12), 9.0);
           p.y = fall;
           p.x += sin(uTime * 0.8 + seed * 20.0) * 0.6 + uTime * 0.12;
-          p.x = mod(p.x + 25.0, 50.0) - 25.0;
+          p.x = mod(p.x + 40.0, 80.0) - 40.0;
           p.z += cos(uTime * 0.6 + seed * 13.0) * 0.5;
           vS = seed;
           vec4 mv = modelViewMatrix * vec4(p, 1.0);
@@ -227,7 +227,7 @@ export function createCozy(scene, tier, colliders) {
   {
     // Arroyo: una cinta que serpentea de lado a lado detrás del salón.
     const pts = [];
-    for (let x = -36; x <= 36; x += 2) pts.push(new THREE.Vector3(x, 0.03, CREEK_Z + Math.sin(x * 0.12) * 2.2));
+    for (let x = -44; x <= 44; x += 2) pts.push(new THREE.Vector3(x, 0.03, creekZ(x)));
     const curve = new THREE.CatmullRomCurve3(pts);
     const segs = 120;
     const pos = [];
@@ -238,10 +238,11 @@ export function createCozy(scene, tier, colliders) {
       const p = curve.getPoint(t);
       const tan = curve.getTangent(t);
       const n = new THREE.Vector3(-tan.z, 0, tan.x).normalize();
-      const w = 1.5 + Math.sin(t * 9) * 0.25;
+      const w = CREEK_HALF + Math.sin(t * 9) * 0.3;
       pos.push(p.x + n.x * w, 0.03, p.z + n.z * w, p.x - n.x * w, 0.03, p.z - n.z * w);
-      uvs.push(t * 30, 0, t * 30, 1);
-      if (i < segs) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+      uvs.push(t * 60, 0, t * 60, 1);
+      // Caras mirando hacia arriba (antes quedaban boca abajo y el río no se veía).
+      if (i < segs) idx.push(i * 2, i * 2 + 2, i * 2 + 1, i * 2 + 1, i * 2 + 2, i * 2 + 3);
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -251,30 +252,41 @@ export function createCozy(scene, tier, colliders) {
       uniforms: { uTime },
       transparent: true,
       vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+      // Un río que se vea de noche: agua turquesa que corre, reflejos de luna y espuma en las orillas.
       fragmentShader: `uniform float uTime; varying vec2 vUv; varying vec3 vW;
         float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
         void main(){
-          float edge = smoothstep(0.0, 0.18, vUv.y) * smoothstep(1.0, 0.82, vUv.y);
-          vec3 deep = vec3(0.06, 0.09, 0.2);
-          vec3 c = mix(vec3(0.16, 0.2, 0.32), deep, edge);
-          // Destellos de la luna que corren con el agua.
-          vec2 g = vec2(vUv.x * 2.0 - uTime * 0.6, vUv.y * 6.0);
-          vec2 cell = floor(g);
-          float s = h(cell);
-          float tw = smoothstep(0.92, 1.0, s) * (0.5 + 0.5 * sin(uTime * 3.0 + s * 40.0));
-          float d = length(fract(g) - 0.5);
-          c += vec3(1.4, 1.3, 1.1) * tw * smoothstep(0.25, 0.0, d) * edge;
-          gl_FragColor = vec4(c, 0.92);
+          float mid = 1.0 - abs(vUv.y - 0.5) * 2.0;
+          vec3 shallow = vec3(0.13, 0.30, 0.42);
+          vec3 deep = vec3(0.04, 0.11, 0.27);
+          vec3 c = mix(shallow, deep, smoothstep(0.05, 0.85, mid));
+          // Corriente: ondas que avanzan río abajo.
+          float flow = vUv.x * 5.0 - uTime * 1.1;
+          float rip = sin(flow + sin(vUv.y * 9.0 + uTime * 0.7) * 1.8) * 0.5 + 0.5;
+          float rip2 = sin(flow * 1.9 + 2.0 + vUv.y * 5.0) * 0.5 + 0.5;
+          c += vec3(0.06, 0.13, 0.18) * pow(rip, 6.0) * mid + vec3(0.02, 0.05, 0.07) * pow(rip2, 10.0);
+          // Camino de luz de la luna sobre el agua.
+          c += vec3(0.30, 0.32, 0.45) * pow(max(0.0, sin(vUv.x * 0.9 + 1.3)), 24.0) * mid;
+          // Destellos que corren con el agua.
+          vec2 g = vec2(vUv.x * 2.0 - uTime * 0.6, vUv.y * 7.0);
+          float s = h(floor(g));
+          float tw = smoothstep(0.9, 1.0, s) * (0.5 + 0.5 * sin(uTime * 3.0 + s * 40.0));
+          c += vec3(1.6, 1.5, 1.3) * tw * smoothstep(0.25, 0.0, length(fract(g) - 0.5)) * mid;
+          // Espuma suave contra las orillas.
+          float foam = (1.0 - smoothstep(0.0, 0.09, vUv.y)) + smoothstep(0.91, 1.0, vUv.y);
+          foam *= 0.6 + 0.4 * sin(vUv.x * 40.0 - uTime * 2.0);
+          c = mix(c, vec3(0.45, 0.58, 0.66), clamp(foam, 0.0, 1.0) * 0.45);
+          gl_FragColor = vec4(c, 0.96);
         }`,
     }));
     scene.add(water);
     // Piedritas en la orilla.
     const stones = [];
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 160; i++) {
       const t = r();
       const p = curve.getPoint(t);
       const tan = curve.getTangent(t);
-      const n = new THREE.Vector3(-tan.z, 0, tan.x).normalize().multiplyScalar((r() < 0.5 ? -1 : 1) * (1.6 + r() * 0.4));
+      const n = new THREE.Vector3(-tan.z, 0, tan.x).normalize().multiplyScalar((r() < 0.5 ? -1 : 1) * (CREEK_HALF + 0.15 + r() * 0.45));
       const sg = new THREE.DodecahedronGeometry(0.12 + r() * 0.15, 0).toNonIndexed();
       sg.deleteAttribute('uv');
       sg.scale(1, 0.5, 1);
@@ -283,17 +295,51 @@ export function createCozy(scene, tier, colliders) {
     }
     scene.add(new THREE.Mesh(mergeGeometries(stones), new THREE.MeshLambertMaterial({ color: '#8a8290', flatShading: true })));
 
+    // Velitas que flotan río abajo (como las ofrendas que se dejan al agua).
+    {
+      const N = 18;
+      const cupGeo = new THREE.CylinderGeometry(0.11, 0.08, 0.07, 12);
+      const cupMat = new THREE.MeshLambertMaterial({ color: '#f2b84b', emissive: '#7a3d00', emissiveIntensity: 0.6 });
+      const flameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.7, 0.7) });
+      const glowMat = new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(1.0, 0.7, 0.35), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.55 });
+      const boats = [];
+      for (let i = 0; i < N; i++) {
+        const b = new THREE.Group();
+        const cup = new THREE.Mesh(cupGeo, cupMat);
+        const flame = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6).scale(1, 1.8, 1), flameMat);
+        flame.position.y = 0.1;
+        const glow = new THREE.Sprite(glowMat);
+        glow.scale.setScalar(0.9);
+        glow.position.y = 0.12;
+        const petals = marigoldCluster([[0, 0.02, 0, 0.6]], { r: 0.09, rnd: r });
+        b.add(petals, cup, flame, glow);
+        scene.add(b);
+        boats.push({ b, t: r(), side: (r() - 0.5) * CREEK_HALF * 1.1, sp: 0.006 + r() * 0.006, bob: r() * 6 });
+      }
+      animated.push((t, dt) => {
+        for (const o of boats) {
+          o.t = (o.t + (dt || 0.016) * o.sp) % 1;
+          const p = curve.getPoint(o.t);
+          const tan = curve.getTangent(o.t);
+          o.b.position.set(p.x - tan.z * o.side, 0.06 + Math.sin(t * 1.6 + o.bob) * 0.015, p.z + tan.x * o.side);
+          o.b.rotation.y = t * 0.2 + o.bob;
+        }
+      });
+    }
+
     // Puente de madera en arco.
     const bridge = new THREE.Group();
     bridge.position.set(0, 0, curve.getPoint(0.5).z);
     const wood = new THREE.MeshLambertMaterial({ map: woodTexture('#7a5236') });
     const planks = [];
-    const L = 5.2;
+    const L = 8.2;
+    const ARCH = 1.15; // altura del arco sobre el agua
+    const BW = 1.05; // medio ancho del puente
     for (let i = 0; i <= 16; i++) {
       const t = i / 16;
       const z = (t - 0.5) * L;
-      const y = Math.sin(t * Math.PI) * 0.75 + 0.1;
-      const pg = new THREE.BoxGeometry(1.7, 0.07, 0.3);
+      const y = Math.sin(t * Math.PI) * ARCH + 0.1;
+      const pg = new THREE.BoxGeometry(BW * 2 + 0.06, 0.07, 0.3);
       pg.rotateX(-Math.cos(t * Math.PI) * 0.42);
       pg.translate(0, y, z);
       planks.push(pg);
@@ -302,15 +348,15 @@ export function createCozy(scene, tier, colliders) {
       for (let i = 0; i <= 8; i++) {
         const t = i / 8;
         const z = (t - 0.5) * L;
-        const y = Math.sin(t * Math.PI) * 0.75 + 0.1;
+        const y = Math.sin(t * Math.PI) * ARCH + 0.1;
         const post = new THREE.BoxGeometry(0.07, 0.7, 0.07);
-        post.translate(s * 0.82, y + 0.35, z);
+        post.translate(s * BW, y + 0.35, z);
         planks.push(post);
       }
       const railPts = [];
       for (let i = 0; i <= 16; i++) {
         const t = i / 16;
-        railPts.push(new THREE.Vector3(s * 0.82, Math.sin(t * Math.PI) * 0.75 + 0.78, (t - 0.5) * L));
+        railPts.push(new THREE.Vector3(s * BW, Math.sin(t * Math.PI) * ARCH + 0.78, (t - 0.5) * L));
       }
       const rail = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPts), 24, 0.035, 5, false);
       bridge.add(new THREE.Mesh(rail, wood));
@@ -319,14 +365,14 @@ export function createCozy(scene, tier, colliders) {
     // Faroles chiquitos en las puntas.
     for (const s of [-1, 1]) for (const e of [-1, 1]) {
       const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.7, 1.0) }));
-      bulb.position.set(s * 0.82, 0.9 + 0.08, e * L / 2);
+      bulb.position.set(s * BW, 0.9 + 0.08, e * L / 2);
       bridge.add(bulb);
     }
     {
       const pts = [];
       for (const s2 of [-1, 1]) for (let i = 0; i <= 30; i++) {
         const t = i / 30;
-        pts.push([s2 * 0.82, Math.sin(t * Math.PI) * 0.75 + 0.82 + (r() - 0.5) * 0.06, (t - 0.5) * L, 0.8 + r() * 0.5]);
+        pts.push([s2 * BW, Math.sin(t * Math.PI) * ARCH + 0.82 + (r() - 0.5) * 0.06, (t - 0.5) * L, 0.8 + r() * 0.5]);
       }
       bridge.add(marigoldCluster(pts, { r: 0.07, rnd: r }));
     }
@@ -337,12 +383,12 @@ export function createCozy(scene, tier, colliders) {
     const rainbow = new THREE.Group();
     colors.forEach((c, i) => {
       const arc = new THREE.Mesh(
-        new THREE.TorusGeometry(14 - i * 0.5, 0.26, 6, 64, Math.PI),
+        new THREE.TorusGeometry(22 - i * 0.7, 0.38, 6, 64, Math.PI),
         new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
       );
       rainbow.add(arc);
     });
-    rainbow.position.set(0, -2, CREEK_Z - 6);
+    rainbow.position.set(0, -2, CREEK_Z - 5);
     scene.add(rainbow);
     animated.push((t) => rainbow.children.forEach((a, i) => { a.material.opacity = 0.065 + Math.sin(t * 0.4 + i * 0.5) * 0.02; }));
 
@@ -359,7 +405,7 @@ export function createCozy(scene, tier, colliders) {
   // ---------- cartel con flecha en la entrada: por acá al Prado ----------
   {
     const g = new THREE.Group();
-    g.position.set(PATH_HALF + 1.5, 0, 12.6);
+    g.position.set(PATH_HALF + 1.5, 0, 24.5);
     const wood = new THREE.MeshLambertMaterial({ map: woodTexture('#6b4630') });
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.8, 0.08), wood);
     post.position.y = 0.9;

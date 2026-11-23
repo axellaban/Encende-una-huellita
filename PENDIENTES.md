@@ -18,6 +18,8 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
       (`src/quality.js`), palanca, hoja deslizable, teclado sobre formularios, áreas seguras del notch.
       Con la tercera persona: que la cámara no se meta en los muros, que la palanca se sienta natural
       y cuántos espíritus aguanta un teléfono de gama baja (hoy 3 en "Ahorro", 4 en media, 5 en alta).
+      El jardín creció (radio 58 m, salón de 21 m, más pasto y árboles): mirar los FPS en gama baja y,
+      si hace falta, bajar `grass`/`flowers` de "Ahorro" en `src/quality.js`.
 - [ ] **Grabar la voz en iOS Safari** (MediaRecorder entrega `audio/mp4`; el servidor lo acepta,
       pero nunca se probó en un iPhone).
 - [ ] **Moderación mínima** antes de abrirlo al público: hoy cualquiera puede subir fotos y escribir en

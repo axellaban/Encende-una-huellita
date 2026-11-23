@@ -54,15 +54,17 @@ export const SLOTS_PER_FLOOR = PANELS * PER_PANEL;
 
 const FRAME_W = 0.8;
 const FRAME_H = 1.0;
-const COL_X = [-1.45, 0, 1.45];
+const COL_X = [-1.8, 0, 1.8];
+const PANEL_W = 5.8; // ancho de cada pared (local, antes de escalar)
 const ROW_Y = [3.05, 1.95, 0.85];
 // Paredes del muro más grandes (marcos, repisas y techitos crecen juntos) para el salón amplio.
-export const WALL_SCALE = 1.25;
-export const POST_H = 6.3;
-const POLE_H = 8.9;
+export const WALL_SCALE = 1.45;
+export const POST_H = 7.4;
+const POLE_H = 11.5;
 // La ofrenda central es grande (se ve desde la entrada y domina el salón en tercera persona).
-export const ALTAR_SCALE = 1.75;
-export const EASEL_POS = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 5.2);
+export const ALTAR_SCALE = 2.2;
+export const EASEL_POS = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 9.5);
+const BED_R = 3.3; // cantero de flores del centro
 
 export function candleLevel(n) {
   return n >= 12 ? 3 : n >= 5 ? 2 : n >= 1 ? 1 : 0;
@@ -116,25 +118,25 @@ export function buildHall(scene, colliders, tier) {
 
     // Pared pintada de colores, con techito y un friso de talavera abajo.
     const wallMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture(WALL_COLORS[p % WALL_COLORS.length]) });
-    const board = new THREE.Mesh(new THREE.BoxGeometry(4.7, 3.9, 0.22), wallMat);
+    const board = new THREE.Mesh(new THREE.BoxGeometry(PANEL_W, 3.9, 0.22), wallMat);
     board.position.set(0, 2.05, -0.12);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.14, 0.7), new THREE.MeshLambertMaterial({ color: '#b5482a' }));
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(PANEL_W + 0.3, 0.14, 0.7), new THREE.MeshLambertMaterial({ color: '#b5482a' }));
     roof.position.set(0, 4.06, 0.08);
-    const plinth = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.2, 0.36), panelMat);
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(PANEL_W + 0.1, 0.2, 0.36), panelMat);
     plinth.position.set(0, 0.1, -0.05);
-    const tiles = new THREE.Mesh(new THREE.PlaneGeometry(4.7, 0.3), tileMat.clone());
+    const tiles = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W, 0.3), tileMat.clone());
     tiles.material.map = talaveraTexture().clone();
-    tiles.material.map.repeat.set(16, 1);
+    tiles.material.map.repeat.set(20, 1);
     tiles.material.map.needsUpdate = true;
     tiles.position.set(0, 0.36, 0.0);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(4.74, 0.06, 0.05), new THREE.MeshLambertMaterial({ color: '#fbefd9' }));
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(PANEL_W + 0.04, 0.06, 0.05), new THREE.MeshLambertMaterial({ color: '#fbefd9' }));
     trim.position.set(0, 3.98, 0.0);
     panel.add(board, roof, plinth, tiles, trim);
 
     // Aplique de luz y su haz sobre el muro.
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.05, 0.08), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 1.15, 0.75) }));
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.05, 0.08), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 1.15, 0.75) }));
     bar.position.set(0, 3.93, 0.32);
-    const cone = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.7), new THREE.MeshBasicMaterial({ map: lightConeTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.3 }));
+    const cone = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W - 0.1, 3.7), new THREE.MeshBasicMaterial({ map: lightConeTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.3 }));
     cone.position.set(0, 2.08, 0.0);
     panel.add(bar, cone);
 
@@ -144,8 +146,8 @@ export function buildHall(scene, colliders, tier) {
     panelLabels.push(label);
 
     panel.updateMatrixWorld();
-    const lp = new THREE.Vector3(-2.4, 0, 0).applyMatrix4(panel.matrixWorld);
-    const rp = new THREE.Vector3(2.4, 0, 0).applyMatrix4(panel.matrixWorld);
+    const lp = new THREE.Vector3(-PANEL_W / 2 - 0.05, 0, 0).applyMatrix4(panel.matrixWorld);
+    const rp = new THREE.Vector3(PANEL_W / 2 + 0.05, 0, 0).applyMatrix4(panel.matrixWorld);
     colliders.segments.push([lp.x, lp.z, rp.x, rp.z]);
 
     for (let row = 0; row < 3; row++) {
@@ -233,7 +235,7 @@ export function buildHall(scene, colliders, tier) {
     // Cartel de bienvenida colgado en la entrada.
     const a = posts[0];
     const b = posts[posts.length - 1];
-    const sign = twoSided(new THREE.PlaneGeometry(4.6, 0.75), new THREE.MeshBasicMaterial({
+    const sign = twoSided(new THREE.PlaneGeometry(6.4, 1.04), new THREE.MeshBasicMaterial({
       map: labelTexture('Jardín de las huellitas', { w: 1024, h: 166, font: '400 70px "Young Serif", Georgia, serif', bg: 'rgba(74,48,34,0.96)', fg: '#f6e3c4' }),
     }));
     sign.position.set((a.x + b.x) / 2, POST_H - 0.55, (a.z + b.z) / 2);
@@ -315,18 +317,18 @@ export function buildHall(scene, colliders, tier) {
   const bulbColor = new THREE.Color();
 
   // Luz cálida general del salón (las guirnaldas).
-  const hallLight = new THREE.PointLight('#ffbf7a', 13, 30, 1.5);
+  const hallLight = new THREE.PointLight('#ffbf7a', 18, 44, 1.4);
   hallLight.position.set(HALL_CENTER.x, POLE_H - 1.2, HALL_CENTER.z);
   scene.add(hallLight);
 
   // ---------- cantero central ----------
   {
-    const bed = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.35, 0.45, 40), new THREE.MeshLambertMaterial({ color: '#8b7d72' }));
+    const bed = new THREE.Mesh(new THREE.CylinderGeometry(BED_R, BED_R + 0.15, 0.45, 48), new THREE.MeshLambertMaterial({ color: '#8b7d72' }));
     bed.position.copy(HALL_CENTER).setY(0.3);
-    const soil = new THREE.Mesh(new THREE.CylinderGeometry(2.02, 2.02, 0.05, 40), new THREE.MeshLambertMaterial({ color: '#3b2a20' }));
+    const soil = new THREE.Mesh(new THREE.CylinderGeometry(BED_R - 0.18, BED_R - 0.18, 0.05, 48), new THREE.MeshLambertMaterial({ color: '#3b2a20' }));
     soil.position.copy(HALL_CENTER).setY(0.53);
     scene.add(bed, soil);
-    colliders.circles.push({ x: HALL_CENTER.x, z: HALL_CENTER.z, r: 2.6 });
+    colliders.circles.push({ x: HALL_CENTER.x, z: HALL_CENTER.z, r: BED_R + 0.4 });
     const petals = [];
     for (let i = 0; i < 5; i++) {
       const p = new THREE.CircleGeometry(0.05, 6);
@@ -335,13 +337,13 @@ export function buildHall(scene, colliders, tier) {
       petals.push(p);
     }
     void petals;
-    const n = 260;
+    const n = 520;
     const fl = new THREE.InstancedMesh(marigoldGeometry(0.075, '#ffffff', r), marigoldMaterial(), n);
     const pal = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a', '#ff9a1f'].map((c) => new THREE.Color(c));
     const m = new THREE.Object3D();
     for (let i = 0; i < n; i++) {
       const a = r() * Math.PI * 2;
-      const d = Math.sqrt(r()) * 1.9;
+      const d = Math.sqrt(r()) * (BED_R - 0.3);
       m.position.set(HALL_CENTER.x + Math.cos(a) * d, 0.6 + r() * 0.18, HALL_CENTER.z + Math.sin(a) * d);
       m.rotation.set((r() - 0.5) * 0.6, r() * 6, (r() - 0.5) * 0.6);
       m.scale.setScalar(0.8 + r() * 0.8);

@@ -45,6 +45,10 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
 
 ## Arquitectura en 1 minuto
 
+- **Plano del jardín**: los números están arriba de `src/scene/world.js` (`HALL_CENTER`, `HALL_RADIUS`,
+  `GARDEN_RADIUS`, `SPAWN`, `CREEK_Z`, `MEADOW`, `ELEVATOR_POS`); lo demás se ubica a partir de ellos.
+  Si se agranda algo, revisar que no quede encimado (camino, faroles, bancos, frasco, carteles en
+  `cozy.js`, árboles) y sacar una captura desde arriba (`H.controls.teleportCamera(...)`).
 - **Frontend** (Vite + Three.js, sin framework): `index.html` + `src/`.
   - `src/main.js` (≈2.400 líneas, el más grande): arranque, UI, ficha, modales, gamificación, guía,
     ascensor, presencia, paseo. **Candidato a dividir** (ver PENDIENTES).

@@ -7,7 +7,7 @@ import { paintedWallTexture, talaveraTexture, marigoldCluster } from './muertos.
 
 export { ELEVATOR_POS };
 // Más grande que una persona: se ve desde el camino como un edificio propio.
-export const ELEVATOR_SCALE = 1.45;
+export const ELEVATOR_SCALE = 2.2;
 
 function dialTexture() {
   const c = document.createElement('canvas');
@@ -40,7 +40,8 @@ export function createElevator(scene, colliders, rnd) {
   const g = new THREE.Group();
   g.position.copy(ELEVATOR_POS);
   // Mirando hacia el camino.
-  g.rotation.y = Math.atan2(0 - ELEVATOR_POS.x, 12 - ELEVATOR_POS.z);
+  // Mirando al camino, de frente a quien entra al jardín.
+  g.rotation.y = Math.atan2(0 - ELEVATOR_POS.x, ELEVATOR_POS.z + 6 - ELEVATOR_POS.z);
   scene.add(g);
   g.scale.setScalar(ELEVATOR_SCALE);
   colliders.circles.push({ x: ELEVATOR_POS.x, z: ELEVATOR_POS.z, r: 1.1 * ELEVATOR_SCALE });
