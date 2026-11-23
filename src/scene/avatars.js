@@ -80,6 +80,19 @@ export function createAvatars(scene) {
       }
     },
     // Un gesto propio: aparece sobre tu personaje para que lo veas.
+    // Saludo al cruzarse: devuelve true si alguien que no te saludó hace poco pasa cerca (y lo hace saludar).
+    greetNear(pos, r = 3.2, nowMs = performance.now()) {
+      if (!visible) return false;
+      let any = false;
+      for (const p of people.values()) {
+        if (p.g.position.distanceTo(pos) > r || nowMs - (p.greetedAt || 0) < 60_000) continue;
+        p.greetedAt = nowMs;
+        p.g.rotation.y = Math.atan2(pos.x - p.g.position.x, pos.z - p.g.position.z);
+        p.ch.wave();
+        any = true;
+      }
+      return any;
+    },
     floatAt(ch, at) {
       for (let i = 0; i < 4; i++) setTimeout(() => float(ch, at.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.4, 0, 0)), 0.3), i * 160);
     },

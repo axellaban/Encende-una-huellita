@@ -183,3 +183,135 @@ export async function uploadOgCard(api, m, photoSrc) {
     return null;
   }
 }
+
+// "Recuerdo": una estampita vertical (1080x1350) para guardar, imprimir o compartir en historias.
+// Papel cálido, papel picado arriba, la foto bajo un arco dorado, el nombre, las fechas, las palabras
+// de la familia y una velita con flores de cempasúchil.
+export async function drawKeepsake(m, photoSrc, { dates = '', years = '', link = '' } = {}) {
+  const W = 1080;
+  const H = 1350;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  await Promise.all(['italic 600 120px "Cormorant Garamond"', '700 40px Caveat', '700 30px "DM Sans"'].map((f) => document.fonts?.load(f).catch(() => {})));
+  // Papel.
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#fbf3e6');
+  bg.addColorStop(1, '#f0dcc0');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+  let seed = 11;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < 2600; i++) {
+    g.fillStyle = `rgba(120,80,40,${0.02 + rnd() * 0.04})`;
+    g.fillRect(rnd() * W, rnd() * H, 1 + rnd() * 2, 1 + rnd() * 2);
+  }
+  // Doble borde.
+  g.strokeStyle = '#c9973f';
+  g.lineWidth = 6;
+  g.strokeRect(34, 34, W - 68, H - 68);
+  g.strokeStyle = '#d6246e';
+  g.lineWidth = 2;
+  g.strokeRect(50, 50, W - 100, H - 100);
+  // Papel picado arriba.
+  for (let i = 0; i < 9; i++) g.drawImage(papelPicadoTexture(PICADO_COLORS[i % 7], i).image, 60 + i * 107, 46, 107, 107);
+  // Foto bajo un arco dorado.
+  const ax = W / 2;
+  const top = 186;
+  const aw = 560;
+  const ah = 610;
+  const arch = (pad) => {
+    g.beginPath();
+    g.moveTo(ax - aw / 2 - pad, top + ah + pad);
+    g.lineTo(ax - aw / 2 - pad, top + aw / 2);
+    g.arc(ax, top + aw / 2, aw / 2 + pad, Math.PI, 0);
+    g.lineTo(ax + aw / 2 + pad, top + ah + pad);
+    g.closePath();
+  };
+  g.save();
+  g.shadowColor = 'rgba(90,50,20,.35)';
+  g.shadowBlur = 40;
+  g.shadowOffsetY = 12;
+  arch(24);
+  g.fillStyle = '#e0b55d';
+  g.fill();
+  g.restore();
+  arch(10);
+  g.fillStyle = '#fbefd9';
+  g.fill();
+  const img = await loadImg(photoSrc);
+  if (img) {
+    g.save();
+    arch(0);
+    g.clip();
+    const r = Math.max(aw / img.naturalWidth, ah / img.naturalHeight);
+    const w = img.naturalWidth * r;
+    const h = img.naturalHeight * r;
+    g.drawImage(img, ax - w / 2, top - (h - ah) * 0.35, w, h);
+    g.restore();
+  }
+  // Flores de cempasúchil en las esquinas del arco.
+  const marigold = (x, y, rr) => {
+    for (let k = 3; k >= 1; k--) {
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + k;
+        g.fillStyle = ['#ff7a1a', '#ff9a1f', '#ffcf3a'][k - 1];
+        g.beginPath();
+        g.ellipse(x + Math.cos(a) * rr * k * 0.3, y + Math.sin(a) * rr * k * 0.3, rr * 0.32, rr * 0.18, a, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  };
+  for (const [x, y, rr] of [[ax - aw / 2 - 20, top + ah + 10, 46], [ax + aw / 2 + 20, top + ah + 10, 46], [ax - aw / 2 + 30, top + ah + 34, 34], [ax + aw / 2 - 30, top + ah + 34, 34]]) marigold(x, y, rr);
+  // Textos.
+  g.textAlign = 'center';
+  g.fillStyle = '#8a4b22';
+  g.font = '700 46px Caveat, cursive';
+  g.fillText('En memoria de', ax, top + ah + 96);
+  let size = 120;
+  g.font = `italic 600 ${size}px "Cormorant Garamond", Georgia, serif`;
+  while (g.measureText(m.name).width > W - 160 && size > 60) { size -= 6; g.font = `italic 600 ${size}px "Cormorant Garamond", Georgia, serif`; }
+  g.fillStyle = '#3b2a22';
+  g.fillText(m.name, ax, top + ah + 96 + size * 0.92);
+  let y = top + ah + 96 + size * 0.92 + 50;
+  g.font = '700 30px "DM Sans", sans-serif';
+  g.fillStyle = '#6b5a4c';
+  if (dates) { g.fillText(dates, ax, y); y += 42; }
+  if (years) { g.fillStyle = '#b5302a'; g.fillText(years, ax, y); y += 42; }
+  if (m.message) {
+    g.font = 'italic 500 34px "Cormorant Garamond", Georgia, serif';
+    g.fillStyle = '#4a3428';
+    const words = `“${m.message}”`.split(' ');
+    let line = '';
+    let lines = 0;
+    for (const w of words) {
+      const test = line ? `${line} ${w}` : w;
+      if (g.measureText(test).width > W - 220 && line) {
+        g.fillText(line, ax, y + 6); y += 40; line = w; lines++;
+        if (lines >= 2) { line += '…'; break; }
+      } else line = test;
+    }
+    if (line) g.fillText(line, ax, y + 6);
+  }
+  // Dos velitas a los costados del pie.
+  for (const [vx, col] of [[ax - 380, '#d6246e'], [ax + 380, '#7b2cbf']]) {
+    const vy = H - 74;
+    g.fillStyle = col;
+    g.fillRect(vx - 16, vy - 50, 32, 50);
+    g.fillStyle = '#fff3e0';
+    g.fillRect(vx - 12, vy - 54, 24, 8);
+    const fl = g.createRadialGradient(vx, vy - 74, 2, vx, vy - 74, 34);
+    fl.addColorStop(0, 'rgba(255,240,200,1)');
+    fl.addColorStop(0.35, 'rgba(255,170,60,.9)');
+    fl.addColorStop(1, 'rgba(255,140,40,0)');
+    g.fillStyle = fl;
+    g.beginPath();
+    g.ellipse(vx, vy - 74, 16, 28, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.font = '700 24px "DM Sans", sans-serif';
+  g.fillStyle = '#8a6a4c';
+  g.fillText(`Encendé una huellita${link ? ` · ${link}` : ''}`, ax, H - 62);
+  return c;
+}

@@ -273,6 +273,13 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
       fly = { fromPos: camera.position.clone(), fromLook: lookAt.clone(), toPos: stand.clone(), toLook: target.clone(), curve: path ? [camera.position.clone(), ...path, stand.clone()] : null, t: 0, dur, done, toFocus: true };
     },
     follow,
+    // Vuelo de película: posiciones y miradas por puntos clave, suave de punta a punta.
+    cinematic(keys, duration, done) {
+      mode = 'fixed';
+      const pos = new THREE.CatmullRomCurve3(keys.map((k) => k.pos), false, 'centripetal');
+      const look = new THREE.CatmullRomCurve3(keys.map((k) => k.look), false, 'centripetal');
+      fly = { cine: { pos, look }, t: 0, dur: duration, done };
+    },
     // Cámara quieta (intro).
     teleportCamera(p, target) {
       mode = 'fixed';
@@ -417,7 +424,15 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         offset(yaw, pitch, camDist, wantPos).add(pivot);
       } else followPose(wantPos, wantLook);
 
-      if (fly) {
+      if (fly && fly.cine) {
+        fly.t = Math.min(1, fly.t + dt / fly.dur);
+        const k = 0.5 - Math.cos(fly.t * Math.PI) / 2;
+        fly.cine.pos.getPoint(k, camera.position);
+        fly.cine.look.getPoint(k, lookAt);
+        camera.lookAt(lookAt);
+        if (fly.t >= 1) { const f = fly; fly = null; f.done?.(); }
+        return;
+      } else if (fly) {
         fly.t = Math.min(1, fly.t + dt / fly.dur);
         const k = fly.t < 0.5 ? 4 * fly.t ** 3 : 1 - (-2 * fly.t + 2) ** 3 / 2;
         const toPos = fly.dynamic ? wantPos : fly.toPos;

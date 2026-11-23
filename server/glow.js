@@ -27,9 +27,9 @@ export function stageOf(glow = 0) {
 
 // Regalitos gratis: uno por persona y por huellita cada día.
 export const GIFTS = {
-  Comida: ['🦴 Un hueso', '🧀 Un poco de queso', '🍪 Una galletita', '🥕 Una zanahoria', '🥛 Un platito de leche', '🍗 Un pollito', '🐟 Un pescadito', '🍯 Un tarro de miel'],
-  Juguetes: ['🎾 Una pelota', '🧶 Un ovillo de lana', '🐭 Un ratoncito', '🦆 Un patito de goma', '🥏 Un frisbee', '🪀 Un yoyó', '🧸 Un osito', '📦 Una caja de cartón'],
-  Detalles: ['🎀 Un moño', '🛏️ Una camita', '🎈 Un globo', '🌻 Un girasol', '🍄 Una setita', '🦋 Una mariposa', '🌙 Una lucecita', '💌 Una cartita'],
+  Comida: ['🦴 Un hueso', '🧀 Un poco de queso', '🍪 Una galletita', '🥕 Una zanahoria', '🥛 Un platito de leche', '🍗 Un pollito', '🐟 Un pescadito', '🍯 Un tarro de miel', '🥩 Un bife', '🍎 Una manzana', '🍦 Un helado', '🎂 Una torta de cumpleaños'],
+  Juguetes: ['🎾 Una pelota', '🧶 Un ovillo de lana', '🐭 Un ratoncito', '🦆 Un patito de goma', '🥏 Un frisbee', '🪀 Un yoyó', '🧸 Un osito', '📦 Una caja de cartón', '⚽ Una pelota de fútbol', '🪶 Una plumita', '🪢 Una soguita', '🪁 Un barrilete'],
+  Detalles: ['🎀 Un moño', '🛏️ Una camita', '🎈 Un globo', '🌻 Un girasol', '🍄 Una setita', '🦋 Una mariposa', '🌙 Una lucecita', '💌 Una cartita', '🌹 Una rosa', '👑 Una coronita', '⭐ Una estrellita', '🧣 Una bufandita'],
 };
 export const GIFT_SET = new Set(Object.values(GIFTS).flat());
 

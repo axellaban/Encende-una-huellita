@@ -4,10 +4,11 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { createWatercolorPass } from './scene/watercolor.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
-import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF } from './scene/world.js';
+import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF, onPath, insideHall, onBridge } from './scene/world.js';
 import { buildHall, SLOTS_PER_FLOOR, EASEL_POS } from './scene/hall.js';
 import { createControls } from './scene/controls.js';
 import { createLanterns } from './scene/lanterns.js';
@@ -19,8 +20,8 @@ import { createHeaven, FLOORS } from './scene/heaven.js';
 import { createCharacter } from './scene/character.js';
 import { createOfferFx } from './scene/gifts3d.js';
 import { createSparkles } from './scene/sparkles.js';
-import { FURS, EARS, SIZES } from '../server/looks.js';
-import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard } from './share.js';
+import { FURS, EARS, SIZES, SNOUTS } from '../server/looks.js';
+import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard, drawKeepsake } from './share.js';
 import { polaroid } from './photo.js';
 // Cómo llegó esta persona (link de una huellita, invitación de alguien). Se lee antes de tocar la URL.
 const ARRIVAL = arrival();
@@ -84,7 +85,7 @@ import { GUIDE_STEPS, renderGuide } from './guide.js';
   void PICADO_COLORS;
 }
 import { portraitCanvas } from './scene/textures.js';
-import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver } from './audio.js';
+import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver, setMood, step, boop, clink } from './audio.js';
 import { TIERS, pickTier, savedQuality, saveQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
 import { FEATURED } from '../server/seed.js';
 
@@ -172,10 +173,19 @@ let bloomPass = null;
 let composer = null;
 let adaptive = null;
 let watercolor = null; // estilo acuarela (pase final)
-const watercolorOn = () => store.get('huellita.watercolor') !== '0';
+// Apagada por defecto (en el celular se veía sucia); se prende en Opciones.
+const watercolorOn = () => store.get('huellita.watercolor') === '1';
 
 function setupRenderer() {
   renderer.setSize(innerWidth, innerHeight);
+  // Si el celular se queda sin memoria gráfica, el lienzo queda negro: recargamos un escalón más abajo.
+  renderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    const next = tierName === 'high' ? 'mid' : 'low';
+    saveQuality(next);
+    toast('✨ Ajustamos la calidad para que ande mejor en tu equipo…');
+    setTimeout(() => location.reload(), 1200);
+  }, { once: true });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.12;
   adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: tier.maxPixelRatio, min: tierName === 'low' ? 0.7 : 0.85 });
@@ -185,6 +195,17 @@ function setupRenderer() {
     composer.setPixelRatio(adaptive.ratio);
     composer.setSize(innerWidth, innerHeight);
     composer.addPass(new RenderPass(scene, camera));
+    // Un solo píxel NaN o infinito alcanza para que el bloom ponga toda la pantalla en negro: se limpia acá.
+    composer.addPass(new ShaderPass({
+      uniforms: { tDiffuse: { value: null } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+        void main(){
+          vec4 c = texture2D(tDiffuse, vUv);
+          if (any(isnan(c)) || any(isinf(c))) c = vec4(0.0, 0.0, 0.0, 1.0);
+          gl_FragColor = vec4(clamp(c.rgb, 0.0, 64.0), c.a);
+        }`,
+    }));
     bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.45, 0.9);
     composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
@@ -197,10 +218,12 @@ function setupRenderer() {
 function sizeWatercolor() {
   if (!watercolor) return;
   const pr = adaptive?.ratio || renderer.getPixelRatio();
-  watercolor.setSize(innerWidth * pr, innerHeight * pr, pr);
+  watercolor.setSize(Math.max(1, innerWidth * pr), Math.max(1, innerHeight * pr), pr);
 }
 
 function resize() {
+  // Al cambiar de app o rotar, a veces el tamaño llega en 0 por un instante: no achicar todo a nada.
+  if (!innerWidth || !innerHeight) return;
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer?.setSize(innerWidth, innerHeight);
@@ -259,7 +282,7 @@ async function buildScene() {
     if (!sheetEl.hidden) { closeSheet(); return; }
     const hit = cast(e, [...hall.pickables(), ...cozy.pickables, ...spirits.pickables, elevator.hit, ...world.walkable]);
     if (!hit) return;
-    if (hit.object.userData.kind === 'jar') return openJar();
+    if (hit.object.userData.kind === 'jar') { clink(); return openJar(); }
     if (hit.object.userData.kind === 'elevator') return callElevator();
     if (hit.object.userData.kind === 'spirit') return tapSpirit(spirits.spiritOf(hit.object));
     if (hit.object.userData.kind === 'ball') {
@@ -296,6 +319,9 @@ async function buildScene() {
   const clock = new THREE.Clock();
   let riverT = 0;
   let kickT = 0;
+  let stepT = 0;
+  let moodT = 0;
+  let greetT = 3;
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
     const t = clock.elapsedTime;
@@ -313,6 +339,28 @@ async function buildScene() {
     hall.animate(t);
     lanterns.update(dt, t);
     offerFx.update(dt);
+    // Pasos que suenan según el piso: piedra en el camino y el salón, madera en el puente, pasto o nube.
+    if (P.moving && P.speed > 0.4 && introDone) {
+      stepT -= dt * P.speed / 0.62;
+      if (stepT < 0) {
+        stepT = 1;
+        const x = P.pos.x;
+        const z = P.pos.z;
+        step(world.colliders.up ? 'cloud' : onBridge(x, z, 0.1) ? 'wood' : onPath(x, z, 0.1) || insideHall(x, z) ? 'stone' : 'grass');
+      }
+    }
+    // Si otro visitante pasa cerca, se saludan.
+    greetT -= dt;
+    if (greetT < 0) {
+      greetT = 1;
+      if (introDone && !P.moving && avatars.greetNear(P.pos) && !me.busy) me.wave();
+    }
+    // La música cambia con el lugar: jardín, salón o cielo.
+    moodT -= dt;
+    if (moodT < 0) {
+      moodT = 1;
+      setMood(heaven.k > 0.4 ? 'sky' : insideHall(P.pos.x, P.pos.z) ? 'hall' : 'garden');
+    }
     // Al caminar se levantan pétalos de cempasúchil de los pies (en el jardín y el salón).
     if (P.moving && !world.colliders.up && !reduced) {
       kickT -= dt * Math.min(2, P.speed / 2);
@@ -837,6 +885,41 @@ $('#s-flower').onclick = async () => {
 };
 
 $('#s-share').onclick = () => openShare();
+
+// ---------- recuerdo: la estampita para guardar o compartir ----------
+let keepBlob = null;
+async function openKeepsake() {
+  if (!current) return;
+  const m = current;
+  $('#keep-img').hidden = true;
+  $('#keep-wait').hidden = false;
+  $('#keep-save').removeAttribute('href');
+  $('#keepsake').showModal();
+  const dates = [
+    m.birthday ? `${fmtDay(m.birthday)}${m.birthYear ? ` de ${m.birthYear}` : ''}` : m.birthYear || '',
+    m.passedDay ? `${fmtDay(m.passedDay)}${m.passedYear ? ` de ${m.passedYear}` : ''}` : m.passedYear || '',
+  ].filter(Boolean).join('  –  ');
+  const years = m.birthYear && m.passedYear ? `${m.passedYear - m.birthYear} años de amor` : '';
+  try {
+    const c = await drawKeepsake(m, photoSrc(m), { dates, years, link: `${location.host}/h/${m.id}` });
+    keepBlob = await new Promise((res) => c.toBlob(res, 'image/png'));
+    const url = URL.createObjectURL(keepBlob);
+    $('#keep-img').src = url;
+    $('#keep-img').hidden = false;
+    $('#keep-wait').hidden = true;
+    $('#keep-save').href = url;
+    $('#keep-save').download = `recuerdo-${(m.name || 'huellita').toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, '-')}.png`;
+  } catch { $('#keep-wait').textContent = 'No se pudo pintar la estampita. Probá de nuevo.'; }
+}
+$('#s-keep').onclick = openKeepsake;
+$('#keep-share').onclick = async () => {
+  if (!keepBlob || !current) return;
+  const file = new File([keepBlob], 'recuerdo.png', { type: 'image/png' });
+  try {
+    if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: `En memoria de ${current.name}`, text: `Encendé una vela para ${current.name} 🕯️ ${shareUrl(current.id)}` });
+    else { $('#keep-save').click(); toast('🖼️ Guardamos la estampita en tu equipo'); }
+  } catch { /* el usuario cerró el compartir */ }
+};
 async function shareLinkNow() {
   if (!current) return;
   const url = shareUrl(current.id, { invite: true, name: shareName() });
@@ -1199,6 +1282,10 @@ function timeAgo(at) {
   const HUE_NAMES = ['Rojo', 'Naranja', 'Amarillo', 'Verde', 'Turquesa', 'Azul', 'Violeta', 'Rosa'];
   const box = $('#me-hues');
   const hatOf = (h) => Math.round(h) % 2 === 1;
+  // hue % 8: el bit 0 es el sombrero y los bits 1-2 el peinado (ver character.js).
+  const styleOf = (h) => Math.round(h) % 8;
+  const hairOf = (h) => Math.floor(styleOf(h) / 2);
+  const withStyle = (h, st) => (((Math.round(h) - styleOf(h) + st) % 360) + 360) % 360;
   const swapCharacter = (h) => {
     const old = me;
     me = createCharacter({ hue: h, light: tierName !== 'low' });
@@ -1231,16 +1318,20 @@ function timeAgo(at) {
     sp.setAttribute('aria-label', HUE_NAMES[HUES.indexOf(h)]);
     sp.title = HUE_NAMES[HUES.indexOf(h)];
     l.append(i, sp);
-    i.onchange = () => setHue(h + (hatOf(h) === hatOf(visitorHue) ? 0 : 1));
+    i.onchange = () => setHue(withStyle(h, styleOf(visitorHue)));
     box.append(l);
   }
   $$('input[name="me-head"]').forEach((i) => {
-    i.onchange = () => setHue(hatOf(visitorHue) === (i.value === 'hat') ? visitorHue : visitorHue >= 358 ? visitorHue - 1 : visitorHue + 1);
+    i.onchange = () => setHue(withStyle(visitorHue, hairOf(visitorHue) * 2 + (i.value === 'hat' ? 1 : 0)));
+  });
+  $$('input[name="me-hair"]').forEach((i) => {
+    i.onchange = () => setHue(withStyle(visitorHue, Number(i.value) * 2 + (hatOf(visitorHue) ? 1 : 0)));
   });
   $('#me-chip').onclick = () => {
     $('#me-dialog-name').textContent = visitor.name;
-    $$('input[name="me-hue"]').forEach((i) => { i.checked = Math.abs(Number(i.value) - visitorHue) <= 1; });
+    $$('input[name="me-hue"]').forEach((i) => { i.checked = Math.abs(Number(i.value) - (visitorHue - styleOf(visitorHue))) <= 8; });
     $$('input[name="me-head"]').forEach((i) => { i.checked = (i.value === 'hat') === hatOf(visitorHue); });
+    $$('input[name="me-hair"]').forEach((i) => { i.checked = Number(i.value) === hairOf(visitorHue); });
     $('#me-dialog').showModal();
   };
 }
@@ -2683,6 +2774,7 @@ function updateBallPrompt() {
 
 const SPIRIT_LINES = ['mueve la cola de felicidad', 'te mira con ojitos brillantes', 'da un saltito de alegría', 'te quiere invitar a jugar'];
 function tapSpirit(a) {
+  boop();
   if (!a) return;
   const P0 = controls.player;
   const petting = a.role === 'companion' && P0.pos.distanceTo(a.pos) < 2.2 && !P0.moving;
@@ -2750,10 +2842,11 @@ function lookPicker(box, value = {}) {
   make('Su pelaje', 'fur', FURS, true);
   make('Sus orejas', 'ears', EARS);
   make('Su tamaño', 'size', SIZES);
+  make('Su hocico (perros)', 'snout', SNOUTS);
 }
 function readLook(box) {
   const v = (n) => box.querySelector(`input[name="look-${n}"]:checked`)?.value;
-  const out = { fur: v('fur'), ears: v('ears'), size: v('size') };
+  const out = { fur: v('fur'), ears: v('ears'), size: v('size'), snout: v('snout') };
   return Object.values(out).some(Boolean) ? out : null;
 }
 lookPicker($('#add-look'));
@@ -2799,6 +2892,7 @@ function finishIntro() {
 }
 function skipIntro() {
   if (introDone || !controls) return;
+  $('#intro-cap')?.classList.remove('on');
   controls.snapFollow();
   finishIntro();
 }
@@ -2815,12 +2909,30 @@ $('#enter').onclick = () => {
     finishIntro();
     return;
   }
-  controls.follow({
-    duration: 5.2,
-    path: [new THREE.Vector3(12, 14, 72), new THREE.Vector3(3, 5.5, 61)],
-    done: finishIntro,
-  });
+  // La intro, como el comienzo de una película: el cielo con la Vía Láctea y los cometas, la cámara
+  // baja sobre el salón con sus farolitos, sigue el camino hasta el río y se da vuelta sobre el
+  // puente, a través del arcoíris, hasta quedar detrás tuyo. Tocando la pantalla se saltea.
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  controls.cinematic([
+    { pos: V3(10, 26, -30), look: V3(-70, 130, -220) },
+    { pos: V3(13, 20, -6), look: V3(-20, 40, -120) },
+    { pos: V3(12, 15, 4), look: V3(0, 2, -14) },
+    { pos: V3(7, 9, 22), look: V3(0, 2.5, 38) },
+    { pos: V3(9, 5.5, 46), look: V3(0, 2.6, 40) },
+    { pos: V3(3, 4.2, 56), look: V3(0, 2.2, 38) },
+  ], 13, () => controls.follow({ duration: 1.6, done: finishIntro }));
+  introCaption('Hay un jardín donde siguen brillando', 1200, 4200);
+  introCaption('Cruzá el puente y encendé una luz', 7600, 4200);
 };
+function introCaption(text, at, dur) {
+  setTimeout(() => {
+    if (introDone) return;
+    const el = $('#intro-cap');
+    el.textContent = text;
+    el.classList.add('on');
+    setTimeout(() => el.classList.remove('on'), dur);
+  }, at);
+}
 
 document.addEventListener('visibilitychange', () => pauseAll(document.hidden));
 addEventListener('huellita:storage-full', () => toast('Este navegador ya no tiene lugar para guardar más (modo demo). Lo nuevo se puede perder al cerrar.'));

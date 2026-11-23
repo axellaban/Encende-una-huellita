@@ -85,7 +85,7 @@ function createFx(scene) {
       void main(){ vC = aColor; vA = aAlpha; vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_PointSize = clamp(uScale * aSize / max(-mv.z, 0.1), 1.0, 28.0); gl_Position = projectionMatrix * mv; }`,
     fragmentShader: `varying vec3 vC; varying float vA; void main(){ float d = length(gl_PointCoord - 0.5);
-      float g = smoothstep(0.5, 0.0, d); g *= g; gl_FragColor = vec4(vC * 1.7, g * vA); }`,
+      float g = (1.0 - smoothstep(0.0, 0.5, d)); g *= g; gl_FragColor = vec4(vC * 1.7, g * vA); }`,
   }));
   pts.frustumCulled = false;
   scene.add(pts);
@@ -883,12 +883,12 @@ export function createSpirits(scene, { blocked, tier }) {
     const seen = new Set();
     for (const o of list) {
       if (!o.pet) continue;
-      const key = `${o.sid}:${o.pet.n}:${o.pet.sp}:${o.pet.fur}:${o.pet.ears}:${o.pet.size}`;
+      const key = `${o.sid}:${o.pet.n}:${o.pet.sp}:${o.pet.fur}:${o.pet.ears}:${o.pet.size}:${o.pet.snout}`;
       seen.add(o.sid);
       let a = remotes.get(o.sid);
       if (a && a.d.key !== key) { removeAgent(a); remotes.delete(o.sid); a = null; }
       if (!a) {
-        a = spawnAgent(lookFor({ id: `${o.sid}-${o.pet.n}`, name: o.pet.n, species: o.pet.sp, look: { fur: o.pet.fur, ears: o.pet.ears, size: o.pet.size } }), { name: o.pet.n }, 'remote');
+        a = spawnAgent(lookFor({ id: `${o.sid}-${o.pet.n}`, name: o.pet.n, species: o.pet.sp, look: { fur: o.pet.fur, ears: o.pet.ears, size: o.pet.size, snout: o.pet.snout } }), { name: o.pet.n }, 'remote');
         a.d.key = key;
         a.owner = { pos: o.pos, heading: 0, moving: false, still: 0, vel: new THREE.Vector3(), last: o.pos.clone() };
         a.pos.set(o.pos.x + 1, 0, o.pos.z);

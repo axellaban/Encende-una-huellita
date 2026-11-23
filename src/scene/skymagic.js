@@ -4,6 +4,7 @@
 // `setK(k)`: 0 = piso 1 (noche), 1 = piso 99 (cielo de día).
 import * as THREE from 'three';
 import { glowTexture } from './textures.js';
+import { paperLantern, flickerLantern } from './lanterns.js';
 
 const smooth = (x) => { const c = Math.min(1, Math.max(0, x)); return c * c * (3 - 2 * c); };
 
@@ -83,7 +84,7 @@ const tailShader = (uTime) => new THREE.ShaderMaterial({
       float core = exp(-across * across * 6.0);
       // Filamentos que se mueven a lo largo de la cola.
       float fil = 0.75 + 0.25 * sin(vUv.y * 40.0 + vUv.x * 9.0 - uTime * 0.6 + uSeed);
-      float along = pow(1.0 - vUv.x, 1.6);
+      float along = pow(clamp(1.0 - vUv.x, 0.0, 1.0), 1.6);
       vec3 c = mix(vec3(1.6, 1.5, 1.35), uTint, smoothstep(0.0, 0.5, vUv.x));
       c = mix(c, vec3(1.0, 0.45, 0.8), smoothstep(0.55, 1.0, vUv.x) * 0.6);
       gl_FragColor = vec4(c, core * along * fil * uA * 0.75);
@@ -137,7 +138,7 @@ export function createSkyMagic(scene, { uTime, rnd = Math.random }) {
     fog: false,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `uniform float uA; varying vec2 vUv;
-      void main(){ float a = pow(vUv.x, 2.5) * exp(-pow((vUv.y - 0.5) * 3.2, 2.0)); gl_FragColor = vec4(vec3(1.6, 1.5, 1.3), a * uA); }`,
+      void main(){ float yy = (vUv.y - 0.5) * 3.2; float a = pow(clamp(vUv.x, 0.0, 1.0), 2.5) * exp(-yy * yy); gl_FragColor = vec4(vec3(1.6, 1.5, 1.3), a * uA); }`,
   });
   const shoots = [];
   for (let i = 0; i < 3; i++) {
@@ -222,7 +223,24 @@ export function createSkyMagic(scene, { uTime, rnd = Math.random }) {
       const arch = new THREE.Mesh(new THREE.TorusGeometry(s * 0.22, s * 0.04, 6, 14, Math.PI), stoneMat);
       arch.position.set(-s * 0.25, s * 0.22, s * 0.1);
       g.add(arch);
+    } else {
+      // Una casita blanca con techo rosa y la ventana encendida.
+      const house = new THREE.Group();
+      const walls = new THREE.Mesh(new THREE.BoxGeometry(s * 0.3, s * 0.24, s * 0.26), stoneMat);
+      walls.position.y = s * 0.12;
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(s * 0.25, s * 0.18, 4).rotateY(Math.PI / 4), new THREE.MeshLambertMaterial({ color: '#e0457b', emissive: '#6a1a3a', emissiveIntensity: 0.5, fog: false }));
+      roof.position.y = s * 0.33;
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(s * 0.07, s * 0.07), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.7, 0.8), fog: false }));
+      win.position.set(0, s * 0.13, s * 0.131);
+      house.add(walls, roof, win);
+      house.position.set(s * 0.2, s * 0.18, -s * 0.15);
+      g.add(house);
     }
+    // Un farolito colgando del borde de la isla.
+    const lan = paperLantern({ scale: s * 0.09, tint: [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [0.8, 1.8, 1.6]][i % 3], glow: 1.4 });
+    lan.position.set(-s * 0.85, -s * 0.15, s * 0.2);
+    g.add(lan);
+    g.userData.lantern = lan;
     const fall = new THREE.Mesh(new THREE.PlaneGeometry(s * 0.25, s * 2.4), new THREE.MeshBasicMaterial({ map: glow, color: new THREE.Color(1.2, 1.4, 1.6), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, opacity: 0.6 }));
     fall.position.set(s * 0.9, -s * 1.1, 0);
     g.add(fall);
@@ -303,6 +321,7 @@ export function createSkyMagic(scene, { uTime, rnd = Math.random }) {
       for (const o of islands) {
         o.g.position.y = o.base + Math.sin(t * 0.25 + o.ph) * 1.6;
         o.g.rotation.y += dt * 0.01;
+        if (o.g.userData.lantern) flickerLantern(o.g.userData.lantern, t);
       }
       for (const b of birds) {
         if (b.flock) {

@@ -124,7 +124,7 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
           vec3 N = normalize(vec3(-grad.x, 1.0, -grad.y));
           vec3 V = normalize(cameraPosition - vW);
           vec3 R = reflect(-V, N);
-          float fres = 0.03 + 0.97 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
+          float fres = 0.03 + 0.97 * pow(clamp(1.0 - dot(N, V), 0.0, 1.0), 5.0);
           vec3 refl = skyAt(R);
           // La luna (lejos, detrás del salón) deja un camino de luz que tiembla.
           float km = max(dot(R, normalize(vec3(-150.0, 150.0, -300.0) - vW)), 0.0);
@@ -141,7 +141,7 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
               vec3 P = vW + R * tr;
               float rr = length(P.xy - vec2(${BRIDGE.x.toFixed(2)}, -0.6));
               float kb = (rr - 5.6) / 2.3;
-              float eb = smoothstep(0.0, 0.14, kb) * smoothstep(1.0, 0.86, kb) * smoothstep(-0.3, 1.8, P.y);
+              float eb = smoothstep(0.0, 0.14, kb) * (1.0 - smoothstep(0.86, 1.0, kb)) * smoothstep(-0.3, 1.8, P.y);
               float fb = smoothstep(0.25, 0.7, abs(V.z));
               vec3 bc = mix(vec3(0.55, 0.32, 1.0), vec3(0.28, 0.55, 1.0), smoothstep(0.0, 0.2, kb));
               bc = mix(bc, vec3(0.4, 0.9, 0.5), smoothstep(0.2, 0.4, kb));
@@ -160,7 +160,7 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
           vec2 g = vec2(vUv.x * 1.4 - uTime * 0.45, across * 9.0);
           float sp = h(floor(g));
           float tw = smoothstep(0.94, 1.0, sp) * (0.5 + 0.5 * sin(uTime * 3.0 + sp * 40.0));
-          c += vec3(0.9, 0.85, 0.75) * tw * smoothstep(0.2, 0.0, length(fract(g) - 0.5)) * depth;
+          c += vec3(0.9, 0.85, 0.75) * tw * (1.0 - smoothstep(0.0, 0.2, length(fract(g) - 0.5))) * depth;
           // Espumita contra las orillas, cortada por la corriente.
           float band = (1.0 - smoothstep(0.0, 0.06, across)) + smoothstep(0.94, 1.0, across);
           float foam = band * smoothstep(0.5, 0.75, fbm(vec2(vUv.x * 3.0 - uTime * 0.5, across * 10.0)));
@@ -450,13 +450,15 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
           void main(){
             float r = length(vP);
             float k = (r - ${R0.toFixed(2)}) / ${(R1 - R0).toFixed(2)};
-            float edge = smoothstep(0.0, 0.14, k) * smoothstep(1.0, 0.86, k);
+            float edge = smoothstep(0.0, 0.14, k) * (1.0 - smoothstep(0.86, 1.0, k));
             vec3 V = normalize(cameraPosition - vW);
             float face = smoothstep(0.25, 0.7, abs(dot(V, vN)));
             float foot = smoothstep(-0.3, 1.8, vW.y);
             float th = atan(vP.y, vP.x);
             float ts = 3.14159 * (1.0 - fract(uTime * 0.07));
-            float sp = ${spark ? 'exp(-pow((th - ts) * r * 1.6, 2.0)) * exp(-pow((k - 0.5) * 3.0, 2.0))' : '0.0'};
+            float qa = (th - ts) * r * 1.6;
+            float qb = (k - 0.5) * 3.0;
+            float sp = ${spark ? 'exp(-qa * qa) * exp(-qb * qb)' : '0.0'};
             float a = edge * (${amp.toFixed(2)} + 0.05 * sin(uTime * 0.6 + k * 3.0 + th * 2.0)) + sp * 0.9;
             gl_FragColor = vec4(band(${rev ? '1.0 - k' : 'k'}) + sp * vec3(0.6), a * face * foot);
           }`,
@@ -499,7 +501,7 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
             gl_PointSize = clamp(40.0 / -mv.z, 1.2, 4.0);
           }`,
         fragmentShader: `varying vec3 vC; varying float vA;
-          void main(){ float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vC, smoothstep(0.5, 0.0, d) * vA); }`,
+          void main(){ float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vC, (1.0 - smoothstep(0.0, 0.5, d)) * vA); }`,
       }));
       dust.frustumCulled = false;
       group.add(dust);

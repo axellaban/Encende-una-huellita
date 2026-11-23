@@ -731,3 +731,18 @@ body.sheet-open .ball-prompt, body.walking .ball-prompt { display: none; }
 .install-card .acts { grid-column: 1 / -1; display: flex; justify-content: flex-end; align-items: center; gap: 14px; }
 .install-card .link-btn { background: none; border: 0; color: #8a6a4c; font-weight: 700; text-decoration: underline; cursor: pointer; }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* Recuerdo: la estampita. */
+.keep-img { display: grid; place-items: center; margin: 10px 0 14px; min-height: 200px; }
+.keep-img img { width: min(100%, 340px); border-radius: 10px; box-shadow: 0 16px 36px rgba(0,0,0,.35); }
+.keep-img p { color: var(--ink-soft, #d9c3a0); font-style: italic; }
+.keep-acts { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.keep-acts .btn { text-decoration: none; }
+/* La fila de acciones de la ficha baja a dos renglones en pantallas angostas. */
+.act-row { grid-auto-flow: row !important; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); }
+
+/* Leyendas de la intro, como en el comienzo de una película. */
+.intro-cap { position: fixed; left: 50%; bottom: calc(var(--safe-b, 0px) + 18vh); transform: translate(-50%, 10px); z-index: 30; margin: 0; width: min(90vw, 640px); text-align: center; pointer-events: none;
+  font-family: var(--fiesta, Georgia, serif); font-style: italic; font-size: clamp(24px, 6.4vw, 40px); color: #fff3dc; text-shadow: 0 2px 18px rgba(0,0,0,.65), 0 0 30px rgba(255,190,110,.45);
+  opacity: 0; transition: opacity 1.4s ease, transform 1.4s ease; }
+.intro-cap.on { opacity: 1; transform: translate(-50%, 0); }

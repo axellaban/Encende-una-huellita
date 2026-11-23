@@ -78,6 +78,7 @@
       <button class="btn primary small wide" id="photo-btn">📸 Sacar una foto en el jardín</button>
     </div>
     <div class="glow-toast" id="glow-toast" hidden></div>
+    <p class="intro-cap" id="intro-cap" aria-live="polite"></p>
     <div class="install-card" id="install-card" hidden role="dialog" aria-label="Agregar a la pantalla de inicio">
       <img src="/icon-192.png" alt="" width="48" height="48" />
       <div class="txt"><b>Encendé una huellita desde tu pantalla de inicio</b><small id="install-hint">Abrila con un toque, como una app, y volvé a visitarlos cuando quieras.</small></div>
@@ -232,6 +233,7 @@
             <button class="act" id="s-gift"><i>🎁</i><span>Regalito</span></button>
             <button class="act" id="s-hug"><i>🫂</i><span>Abrazo</span></button>
             <button class="act" id="s-share"><i>💌</i><span>Compartir</span></button>
+            <button class="act" id="s-keep"><i>🖼️</i><span>Recuerdo</span></button>
             <button class="act walk-act-btn" id="s-walk-act" hidden><i>🐾</i><span>Pasear</span></button>
           </div>
         </div>
@@ -314,7 +316,7 @@
       <div class="menu-list">
         <label class="toggle"><span>🎵 Música</span><input type="checkbox" id="opt-music" /><i></i></label>
         <label class="toggle"><span>🦗 Sonidos del jardín</span><input type="checkbox" id="opt-sounds" checked /><i></i></label>
-        <label class="toggle"><span>🎨 Estilo acuarela</span><input type="checkbox" id="opt-watercolor" checked /><i></i></label>
+        <label class="toggle"><span>🎨 Estilo acuarela</span><input type="checkbox" id="opt-watercolor" /><i></i></label>
         <div class="quality">
           <span>✨ Calidad gráfica</span>
           <div class="seg" id="opt-quality">
@@ -457,12 +459,18 @@
       <button class="x" data-close aria-label="Cerrar">✕</button>
       <p class="eyebrow">Así te ven los demás</p>
       <h2><span id="me-dialog-name"></span></h2>
-      <p class="sub">Elegí el color de tu sarape y qué llevás en la cabeza. Los demás visitantes te ven así.</p>
+      <p class="sub">Elegí el color de tu sarape, qué llevás en la cabeza y tu peinado. Los demás visitantes te ven así.</p>
       <div class="look">
         <fieldset class="look-row"><legend>Tu sarape</legend><div id="me-hues" class="look-inline"></div></fieldset>
         <fieldset class="look-row"><legend>En la cabeza</legend>
           <label><input type="radio" name="me-head" value="crown" /><span>🌼 Corona de flores</span></label>
           <label><input type="radio" name="me-head" value="hat" /><span>👒 Sombrero</span></label>
+        </fieldset>
+        <fieldset class="look-row"><legend>Tu peinado</legend>
+          <label><input type="radio" name="me-hair" value="0" /><span>Corto</span></label>
+          <label><input type="radio" name="me-hair" value="1" /><span>Trenzas</span></label>
+          <label><input type="radio" name="me-hair" value="2" /><span>Chongo</span></label>
+          <label><input type="radio" name="me-hair" value="3" /><span>Colita</span></label>
         </fieldset>
       </div>
       <button class="btn primary wide" data-close>Listo</button>
@@ -504,6 +512,15 @@
       <button class="btn soft wide" id="photo-again">🔄 Sacar otra</button>
     </dialog>
     <div class="flash" id="flash" hidden aria-hidden="true"></div>
+
+    <dialog class="modal small-modal keepsake" id="keepsake">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <p class="eyebrow">Un recuerdo</p>
+      <h2>Su <em>estampita</em></h2>
+      <p class="sub">Para guardar, imprimir o compartir en tus historias.</p>
+      <div class="keep-img"><img id="keep-img" alt="Estampita de recuerdo" /><p id="keep-wait">Pintándola…</p></div>
+      <div class="keep-acts"><a class="btn soft" id="keep-save" download="recuerdo.png">⬇️ Guardar</a><button class="btn primary" id="keep-share">💌 Compartir</button></div>
+    </dialog>
 
     <dialog class="modal small-modal" id="share">
       <button class="x" data-close aria-label="Cerrar">✕</button>

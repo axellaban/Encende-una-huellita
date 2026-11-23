@@ -142,27 +142,129 @@ const CHORDS = [
   [41, [57, 60, 65]], [50, [57, 62, 65]], [40, [56, 59, 62, 64]], [45, [57, 60, 64]],
 ];
 const MELODY = [76, 74, 72, 71, 72, 74, 72, 69, 77, 76, 74, 72, 71, 72, 69, null];
+// En el cielo: mayor y luminoso. C – G/B – Am – F – C – F – G – C.
+const SKY_CHORDS = [
+  [48, [64, 67, 72]], [47, [62, 67, 71]], [45, [64, 69, 72]], [41, [65, 69, 72]],
+  [48, [64, 67, 72]], [41, [65, 69, 74]], [43, [62, 67, 71]], [48, [64, 67, 72]],
+];
+const SKY_MELODY = [79, 81, 79, 76, 77, 76, 74, 72, 84, 83, 81, 79, 77, 79, 76, null];
+// Campanita: dos senos con caída larga (para el salón y el cielo).
+function bell(midi, t, vel = 1) {
+  const f = 440 * 2 ** ((midi - 69) / 12);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.05 * vel, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 3.6);
+  for (const [k, m] of [[1, 1], [0.35, 2.003], [0.12, 3.01]]) {
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = f * m;
+    const og = ctx.createGain();
+    og.gain.value = k;
+    o.connect(og).connect(g);
+    o.start(t);
+    o.stop(t + 3.7);
+  }
+  g.connect(music);
+}
+// 'garden' (vals en menor con guitarra), 'hall' (más lento, con campanitas en la melodía)
+// o 'sky' (mayor, campanitas y guitarra suave, más lento).
+let mood = 'garden';
+export function setMood(m) { mood = m; }
 let bar = 0;
 let nextT = 0;
 function scheduleChime() {
   chimeTimer = setTimeout(() => {
     if (musicOn && ctx.state === 'running') {
-      const beat = 60 / 76;
+      const beat = 60 / (mood === 'sky' ? 62 : mood === 'hall' ? 68 : 76);
+      const chords = mood === 'sky' ? SKY_CHORDS : CHORDS;
+      const melody = mood === 'sky' ? SKY_MELODY : MELODY;
       if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.1;
       while (nextT < ctx.currentTime + 1.2) {
-        const [bass, chord] = CHORDS[bar % CHORDS.length];
-        pluck(bass, nextT, 1);
-        chord.forEach((n, i) => pluck(n, nextT + beat + i * 0.025, 0.55));
-        chord.forEach((n, i) => pluck(n, nextT + beat * 2 + i * 0.025, 0.45));
-        // Una melodía suave cada tanto (cada dos vueltas).
-        const mel = MELODY[bar % MELODY.length];
-        if (mel && Math.floor(bar / CHORDS.length) % 2 === 1) pluck(mel, nextT + 0.02, 0.6);
+        const [bass, chord] = chords[bar % chords.length];
+        pluck(bass, nextT, mood === 'sky' ? 0.7 : 1);
+        const soft = mood === 'garden' ? 1 : 0.7;
+        chord.forEach((n, i) => pluck(n, nextT + beat + i * 0.025, 0.55 * soft));
+        chord.forEach((n, i) => pluck(n, nextT + beat * 2 + i * 0.025, 0.45 * soft));
+        const mel = melody[bar % melody.length];
+        if (mood === 'garden') {
+          // Una melodía suave cada tanto (cada dos vueltas).
+          if (mel && Math.floor(bar / chords.length) % 2 === 1) pluck(mel, nextT + 0.02, 0.6);
+        } else if (mel) bell(mel, nextT + 0.02, mood === 'sky' ? 0.9 : 0.6);
         nextT += beat * 3;
         bar++;
       }
     }
     scheduleChime();
   }, 300);
+}
+
+// Un paso: tierra/pasto (roce suave), piedra (golpecito), madera (hueco) o nube (casi nada).
+export function step(surface = 'grass') {
+  if (!ctx || !soundsOn || nature.gain.value < 0.01) return;
+  const t = ctx.currentTime;
+  const len = surface === 'grass' ? 0.08 : 0.05;
+  const b = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * len), ctx.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length) ** 2;
+  const src = ctx.createBufferSource();
+  src.buffer = b;
+  src.playbackRate.value = 0.85 + Math.random() * 0.3;
+  const f = ctx.createBiquadFilter();
+  f.type = surface === 'grass' || surface === 'cloud' ? 'lowpass' : 'bandpass';
+  f.frequency.value = { grass: 900, stone: 1900, wood: 520, cloud: 500 }[surface] || 900;
+  f.Q.value = surface === 'wood' ? 2.2 : 0.9;
+  const g = ctx.createGain();
+  g.gain.value = { grass: 0.05, stone: 0.06, wood: 0.09, cloud: 0.02 }[surface] || 0.05;
+  src.connect(f).connect(g).connect(sfx);
+  src.start(t);
+  if (surface === 'wood') {
+    // El tablón suena hueco.
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(180, t);
+    o.frequency.exponentialRampToValueAtTime(110, t + 0.08);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.05, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    o.connect(og).connect(sfx);
+    o.start(t);
+    o.stop(t + 0.11);
+  }
+}
+
+// Al tocar un espíritu: un "bup" que sube, contento.
+export function boop() {
+  if (!ctx || !soundsOn) return;
+  const t = ctx.currentTime;
+  for (const [f0, dt] of [[520, 0], [780, 0.09]]) {
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f0, t + dt);
+    o.frequency.exponentialRampToValueAtTime(f0 * 1.5, t + dt + 0.08);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t + dt);
+    g.gain.exponentialRampToValueAtTime(0.06, t + dt + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.16);
+    o.connect(g).connect(sfx);
+    o.start(t + dt);
+    o.stop(t + dt + 0.17);
+  }
+}
+
+// Vidrio (el frasco de gracias).
+export function clink() {
+  if (!ctx || !soundsOn) return;
+  const t = ctx.currentTime;
+  for (const f of [2093, 2637, 3136]) {
+    const o = ctx.createOscillator();
+    o.frequency.value = f * (0.995 + Math.random() * 0.01);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.025, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+    o.connect(g).connect(sfx);
+    o.start(t);
+    o.stop(t + 0.95);
+  }
 }
 
 // Grillos: ráfagas cortas de un tono agudo.

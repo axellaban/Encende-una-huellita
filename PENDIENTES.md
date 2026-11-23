@@ -4,7 +4,80 @@ Lista para quien siga el proyecto (persona o IA). Leé primero [`AGENTS.md`](AGE
 Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** = lo que más suma,
 **P2** = completa el relevamiento del sitio de referencia, **P3** = deuda técnica y mejoras.
 
-## ⭐ Empezá por acá: lo que pidió el dueño (23/11/2026) — hecho y lo que falta
+## 🧭 Plan: lo que falta para mejorarlo todo (en orden)
+
+Escrito el 23/11/2026 a la noche, después de las capturas del dueño en su iPhone y del video de
+referencia ("Where Winds Meet"). Cada punto dice qué, por qué y dónde tocar. Antes de mergear: capturas
+en celular (iPhone 13 y SE) y el recorrido de punta a punta (ver AGENTS).
+
+### 1. Publicar lo que está listo
+- [ ] **Arreglo de la pantalla negra** (commit "Arreglo de la pantalla negra…"): está en la rama, falta
+      publicarlo. El recorrido en celular dio 31/35, pero los 4 que fallaron parecen datos de prueba
+      viejos en `data/kv.json` (búsqueda con 3 resultados, huellita repetida que no se borra) y algo con
+      vela y flor que hay que mirar: arrancar con `data/` limpio y repetir. Si se repite lo de la vela,
+      revisar si el aviso de `webglcontextlost` recarga la página en swiftshader.
+- [ ] Después de publicar, preguntarle al dueño si vuelve a ver la pantalla negra.
+
+### 2. Que se vea limpio en el celular
+- [x] **Acuarela apagada por defecto** (`watercolorOn()` en `main.js`, hecho el 23/11). En el iPhone del
+      dueño se veía sucia y lavada (líneas negras y textura de lienzo por todos lados). Dejarla como
+      opción en Más → Opciones; si se quiere el look de littleprince.dev, pedirle capturas al dueño (el
+      juego necesita WebGPU y en el contenedor no carga) y bajarla mucho (`uAmt` ≈ 0.3, sin bordes Sobel).
+- [ ] **HUD "modo juego"** (el dueño: "los juegos tienen muy poquitas cosas en pantalla"). Hoy hay ~11
+      cosas fijas. Propuesta aprobada en la charla, falta hacerla:
+      1. Arriba, nada: sacar `#brand` (ya está en la portada), el chip `acá ahora` y `#me-chip` pasan
+         al menú; `#music-btn` también. Queda un solo botón redondo de menú arriba a la derecha con un
+         anillo de progreso de "Hoy" (3/4).
+      2. **Palanca invisible** (`#joy`): aparece donde apoyás el pulgar en la mitad izquierda y
+         desaparece al soltar.
+      3. **Un botón de acción según el contexto** (abajo a la derecha, reemplaza a `#emote-btn` y al
+         dock): 🕯️ frente a un marco (abre la ficha), 🛗 en el ascensor, 🐾 con tu mascota cerca,
+         🎾 si la pelota está cerca, ➕ en un lugar libre, y si no hay nada, 🤍 gestos y frases. Calcularlo
+         cada ~0,3 s en el ciclo de `main.js` con la posición del personaje (`hall.viewpoint`,
+         `elevator.standPoint`, `spirits.companion`, `spirits.ball`).
+      4. **Sin dock** (`nav.dock`): Huellitas, Luca, Hoy, Sumar mascota, Pisos, Prado, Foto, Opciones van a
+         una hoja de menú con íconos grandes.
+      5. **El HUD se desvanece al caminar** o mientras vuela la cámara, y vuelve al frenar (clase en
+         `body`, `opacity` con transición).
+      6. **Menos avisos**: los `toast` de actividad de otros, cortos y de a uno; nada de avisos encima
+         del personaje mientras camina.
+- [ ] Probar que con el HUD nuevo todo siga a un toque: recorrido de punta a punta ajustado.
+
+### 3. Que se sienta como el video (sin copiarlo)
+Lo que lo hace lindo: bruma en capas, perspectiva aérea (lo lejos se aclara a celeste), vista inmensa
+con capas de profundidad, masas de árboles en flor, y moverse planeando. Etapa A, con lo que tenemos:
+- [ ] **Atmósfera en capas**: niebla de altura (shader propio o `onBeforeCompile` del `fog` de three) y
+      bancos de bruma entre objetos (sprites/planos con ruido que se mueven), más fuerte a lo lejos.
+- [ ] **"Valle del cielo"** en los pisos altos (`heaven.js` / `skymagic.js`): pilares de piedra gigantes
+      (karst) a varias distancias, árboles en flor rosa y lila en masas, puentes colgantes entre pilares,
+      cascadas que caen en la bruma.
+- [ ] **Planear**: saltar desde el borde del piso del cielo (o desde una isla) y planear con el sarape
+      abierto como alas (o agarrado a un barrilete), con estelas de viento y un aterrizaje suave. Nuevo
+      modo en `controls.js` (velocidad hacia adelante, caída lenta, giro con la palanca) y animación en
+      `character.js`.
+- [ ] **Luz de día con sombras de verdad** en esos pisos (`DirectionalLight` con sombras sólo en calidad
+      alta, `shadow.mapSize` 1024, que siga al personaje).
+- [ ] Etapa B (**decide el dueño**): modelos 3D hechos por artistas (glTF) para árboles, rocas, personajes
+      y perros con animaciones de verdad; bibliotecas CC0 (Quaternius, Kenney, Poly Pizza) o encargados.
+      Rompe la regla de "todo generado en código" de AGENTS, suma peso de descarga y hay que medir FPS en
+      gama media. Preguntarle antes de empezar.
+
+### 4. Verificar en teléfonos reales (no se puede desde el contenedor)
+- [ ] FPS con **calidad alta por defecto** en un Android de gama media y en un iPhone viejo; si no da,
+      que `autoTier` vuelva a elegir media en celulares con poca memoria.
+- [ ] Que la intro de película se vea fluida y que las leyendas coincidan con el vuelo (van con
+      `setTimeout`, el vuelo con el reloj del juego).
+- [ ] Sonidos: pasos, música por zona, murmullo del río, burbujas; que no saturen con todo junto.
+- [ ] La pantalla negra (ver punto 1) y que al volver de otra app el 3D siga bien.
+
+### 5. Lo que quedó de antes (sigue valiendo)
+- [ ] Al abrir una huellita, una vista grande del nicho en 3D con las repisas a los costados (como el
+      original), en lugar de la foto plana de la ficha.
+- [ ] Expresiones del personaje (sonrisa al regalar), más ropa a elegir.
+- [ ] Regalitos con su gracia al llegar (la pelota rebota, el globo tira para arriba).
+- [ ] Todo lo de P0 (Upstash, rama de producción de Vercel, moderación), P1, P2 y P3 de abajo.
+
+## ✅ Ya hecho: lo que pidió el dueño (23/11/2026) — hecho y lo que falta
 
 Pedidos del dueño con capturas del original (lightapaw.com) y del juego littleprince.dev. Casi todo
 quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir mejorando. Regla del dueño:
@@ -17,15 +90,15 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       --use-webgpu-adapter=swiftshader --use-vulkan=swiftshader` abre la portada nada más).
 - [x] **Cielo mágico con cometas** (`src/scene/skymagic.js` + shader del cielo en `world.js`): Vía
       Láctea, nebulosas, polvo de estrellas, 3 cometas lentos, estrellas fugaces; arriba cirros, halo
-      del sol, bancos de nubes gigantes, islas flotantes y pájaros de luz. Falta: auroras suaves en
-      pisos intermedios y que las islas tengan algo propio (un farolito, una casita).
+      del sol, bancos de nubes gigantes, islas flotantes (con casitas y farolitos) y pájaros de luz;
+      auroras en los pisos del medio.
 - [x] **Personajes**: parpadean, cachetes, sarape con flecos, rebozo, respiración, aplastar/estirar,
-      miran el cielo. Hoy se elige color del sarape y sombrero o corona desde "Así te ven los demás"
-      (el sombrero viaja como paridad del `hue`). Falta: más peinados, rebozo y farolito de colores a
-      elegir, expresiones (sonrisa al regalar), saludo automático entre visitantes cercanos.
-- [x] **Mascotas**: 5 tamaños bien distintos, ojos con iris y brillos, bigotes, pechera, nariz que
-      brilla; las chiquitas ya no se quedan atrás en el paseo. Falta: más razas (orejas grandes tipo
-      corgi, hocico chato), y que el tamaño se pueda cambiar al editar (hoy se elige al crear).
+      miran el cielo, y peinado a elegir (corto, trenzas, chongo, colita; va codificado en `hue % 8`,
+      ver `character.js`). Al cruzarse con otro visitante, se saludan (`avatars.greetNear`). Falta:
+      expresiones (sonrisa al regalar).
+- [x] **Mascotas**: 5 tamaños bien distintos (se pueden cambiar al editar), ojos con iris y
+      brillos, bigotes, pechera, nariz que brilla, orejas grandotas y hocico largo/mediano/chato.
+      Los espíritus de otros visitantes llevan el mismo pelaje, orejas, tamaño y hocico.
 - [x] **Hall con pasillos y pisos con nombre** (`src/floors.js`, propios, no los del original):
       cartel colgado por muro con el contador, 99 nombres de piso.
 - [x] **Ventanitas en la pared**: cada lugar ocupado es un marco hondo con postigos pintados que se
@@ -35,17 +108,18 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 - [x] **Botonera y cabina del ascensor**: botones de bronce con nombre del piso; al viajar, ojo de
       buey con el cielo que pasa y la plaquita del piso.
 - [x] **Farolitos** (`paperLantern` en `lanterns.js`): papel calado, aros, llama que titila,
-      guirnaldas sobre el camino, más en el cielo y colgando de la pérgola del salón (uno cada dos
-      postes, `hall.js`).
+      guirnaldas sobre el camino, colgando de la pérgola del salón (uno cada dos postes, `hall.js`),
+      en el ahuehuete y más en el cielo.
 - [x] **Arcoíris doble** con polvo de luz y reflejo en el agua (`river.js`).
-- [x] **Jardín**: canteros con borde de piedra, estanque, pétalos que se levantan al caminar. Falta:
-      caminitos secundarios entre canteros, más variedad de árboles (jacarandá en flor, ahuehuete).
+- [x] **Jardín**: canteros con borde de piedra, estanque, caminitos de piedras, jacarandás en flor,
+      un ahuehuete enorme con farolitos y pétalos que se levantan al caminar.
 - [x] **Agregar a la pantalla de inicio**: tarjeta después del primer gesto (iPhone: explica cómo).
-- [ ] **A la altura de Coco (sin copiarla)**: intro cinematográfica más emotiva (la cámara baja por el
-      puente mientras suena la guitarra), música distinta por zona, sonidos al tocar cosas, y una
-      pequeña celebración en 3D por cada gesto. Revisar en celular a 60 fps.
-- [ ] **Del original que falta**: catálogo de regalitos más grande (hoy 24; cada uno nuevo necesita
-      su modelo en `gifts3d.js`) y botón "Recuerdo".
+- [x] **Experiencia de película (sin copiar Coco)**: intro cinematográfica con leyendas
+      (`controls.cinematic`), música por zona (`setMood`: jardín, salón, cielo), pasos según el piso y
+      sonidos al tocar espíritus y el frasco. Falta: revisarlo en un celular real a 60 fps y ajustar los
+      tiempos de las leyendas (van con `setTimeout`, el vuelo con el reloj del juego).
+- [x] **Del original**: 36 regalitos con modelo 3D y botón **Recuerdo** (estampita 1080x1350 para
+      guardar o compartir, `drawKeepsake` en `share.js`).
 
 ## P0 · Verificaciones que nunca se hicieron en el mundo real
 
