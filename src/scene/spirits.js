@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { createPet, lookFor } from './petRig.js';
 import { glowTexture, bubbleTexture } from './textures.js';
-import { HALL_CENTER, HALL_RADIUS, GARDEN_RADIUS, MEADOW, MEADOW_R } from './world.js';
+import { HALL_CENTER, HALL_RADIUS, GARDEN_RADIUS, MEADOW, MEADOW_R, groundY } from './world.js';
 
 export { MEADOW, MEADOW_R };
 
@@ -297,7 +297,7 @@ export function createSpirits(scene, { blocked, tier }) {
       const nx = a.pos.x + Math.sin(a.heading) * st;
       const nz = a.pos.z + Math.cos(a.heading) * st;
       const body = 0.18 * a.s;
-      if (!blocked(nx, nz, body)) a.pos.set(nx, 0, nz);
+      if (!blocked(nx, nz, body)) a.pos.set(nx, groundY(nx, nz), nz);
       else if (!blocked(nx, a.pos.z, body)) a.pos.x = nx;
       else if (!blocked(a.pos.x, nz, body)) a.pos.z = nz;
       else a.speed *= 0.3;

@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { bubbleTexture, emojiTexture } from './textures.js';
 import { createCharacter } from './character.js';
+import { groundY } from './world.js';
 
 export function createAvatars(scene) {
   const group = new THREE.Group();
@@ -94,6 +95,7 @@ export function createAvatars(scene) {
           const step = Math.min(d, Math.max(1.2, d * 1.6) * dt);
           g.position.addScaledVector(p.target.clone().sub(g.position).normalize(), step);
         }
+        g.position.y = groundY(g.position.x, g.position.z);
         const moved = g.position.distanceTo(before) / Math.max(dt, 1e-3);
         p.speed += (moved - p.speed) * Math.min(1, dt * 6);
         const face = d > 0.15 ? Math.atan2(p.target.x - g.position.x, p.target.z - g.position.z) : p.ry;

@@ -33,6 +33,11 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 - [ ] **Más viral**: recordatorio "hoy cumpliría años" con link para compartir; contador público de
       velas de la noche en la entrada; QR imprimible para la ofrenda de casa; video corto del paseo.
 
+- [ ] **Regalitos**: que cada uno tenga su gracia al llegar (la pelota rebota, el globo tira para
+      arriba, la mariposa da una vuelta al marco) y que al tocarlo en la repisa diga quién lo dejó.
+      Si se suma un regalito al catálogo (`server/glow.js`), sumarle su modelo en `src/scene/gifts3d.js`.
+- [ ] **El río**: reflejos de verdad (render a textura) en calidad alta, pececitos de luz, y que el
+      espíritu en el paseo se pare a mirar el agua en el puente.
 - [ ] **Pisos del cielo**: hoy el salón de cada piso es igual (con su muro). Se podría variar la
       decoración según la altura (más flores blancas y luz arriba) y sumar algo único en el piso 99.
 - [ ] **Espíritus**: que tu espíritu juegue con los espíritus que pasean otros visitantes; más acciones

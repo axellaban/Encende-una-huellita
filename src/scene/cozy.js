@@ -3,10 +3,11 @@
 // el Puente del Arcoíris con su arroyo, el Prado de los espíritus y el frasco de gracias.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, CREEK_Z, CREEK_HALF, GARDEN_RADIUS, creekZ, MEADOW, MEADOW_R, nearCreek, insideHall, uTime, rand } from './world.js';
+import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, GARDEN_RADIUS, BRIDGE, outside, MEADOW, MEADOW_R, nearCreek, insideHall, uTime, rand } from './world.js';
 import { EASEL_POS, ALTAR_SCALE, POST_H } from './hall.js';
 import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture, twoSided } from './textures.js';
-import { picadoBanner, marigoldCluster, PALETTE } from './muertos.js';
+import { picadoBanner, PALETTE } from './muertos.js';
+import { buildRiver } from './river.js';
 
 export const JAR_POS = new THREE.Vector3(-4.2, 0, 15.5);
 
@@ -19,7 +20,8 @@ export function createCozy(scene, tier, colliders, ground = scene) {
   // ---------- huellitas en el camino ----------
   {
     const steps = [];
-    for (let z = SPAWN.z + 2, i = 0; z > HALL_CENTER.z + HALL_RADIUS + 1.5; z -= 0.55, i++) {
+    // Del lado de afuera, huellitas que llevan hasta el puente.
+    for (let z = SPAWN.z + 2, i = 0; z > BRIDGE.z + BRIDGE.halfL + 0.3; z -= 0.55, i++) {
       steps.push([(i % 2 ? 0.16 : -0.16) + Math.sin(z * 0.35) * 0.35, z, (r() - 0.5) * 0.3]);
     }
     const mesh = new THREE.InstancedMesh(
@@ -47,7 +49,8 @@ export function createCozy(scene, tier, colliders, ground = scene) {
     const cols = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo].map((c) => new THREE.Color(c));
     for (let i = 0; i < n; i++) {
       const t = r();
-      const z = SPAWN.z + 3 - t * (SPAWN.z + 3 - (EASEL_POS.z + 1.2 * ALTAR_SCALE));
+      const zStart = BRIDGE.z - BRIDGE.halfL - 0.4;
+      const z = zStart - t * (zStart - (EASEL_POS.z + 1.2 * ALTAR_SCALE));
       const spread = (r() + r() + r() - 1.5) * 0.9;
       const x = spread + Math.sin(z * 0.35) * 0.3;
       m.position.set(x, 0.03 + (z < HALL_CENTER.z + HALL_RADIUS + 1.3 ? 0.14 : 0) + r() * 0.01, z);
@@ -65,7 +68,7 @@ export function createCozy(scene, tier, colliders, ground = scene) {
   {
     const poleMat = new THREE.MeshLambertMaterial({ map: woodTexture('#5a3a28') });
     const poleGeo = new THREE.CylinderGeometry(0.045, 0.06, 4.4, 7);
-    for (const [z, seed] of [[41.5, 1], [35, 4], [28.5, 9], [22, 13], [15.5, 2]]) {
+    for (const [z, seed] of [[27.8, 4], [22.6, 9], [17.4, 13], [12.2, 2]]) {
       const b = picadoBanner(new THREE.Vector3(-2.75, 4.3, z), new THREE.Vector3(2.75, 4.3, z - 0.2), { sag: 0.42, flags: 11, size: 0.4, seed });
       ground.add(b);
       animated.push((t) => b.userData.flutter(t));
@@ -91,7 +94,7 @@ export function createCozy(scene, tier, colliders, ground = scene) {
       const d = 14 + r() * (GARDEN_RADIUS - 16);
       const cx = Math.sin(a) * d;
       const cz = Math.cos(a) * d - 4;
-      if ((Math.abs(cx) < PATH_HALF + 1 && cz > -2) || nearCreek(cx, cz, 0.5) || insideHall(cx, cz, 0.5)) continue;
+      if ((Math.abs(cx) < PATH_HALF + 1 && cz > -2) || nearCreek(cx, cz, 0.5) || insideHall(cx, cz, 0.5) || outside(cx, cz)) continue;
       for (let k = 0; k < 3; k++) {
         const x = cx + (r() - 0.5) * 0.5;
         const z = cz + (r() - 0.5) * 0.5;
@@ -204,7 +207,7 @@ export function createCozy(scene, tier, colliders, ground = scene) {
     g.position.set(PATH_HALF + 1.3, 0, SPAWN.z - 3.2);
     g.rotation.y = -0.55;
     const board = twoSided(new THREE.PlaneGeometry(1.1, 0.82), new THREE.MeshLambertMaterial({
-      map: chalkboardTexture([['¡Bienvenidos! 🐾', 64, 92], ['Seguí los pétalos', 50, 186], ['hasta la ofrenda', 50, 246], ['🌼 🕯️ 💀', 54, 330]]),
+      map: chalkboardTexture([['¡Bienvenidos! 🐾', 64, 92], ['Cruzá el puente', 50, 186], ['y entrá al jardín', 50, 246], ['🌈 🕯️ 🌼', 54, 330]]),
       emissive: '#222',
     }));
     board.position.y = 1.05;
@@ -224,278 +227,13 @@ export function createCozy(scene, tier, colliders, ground = scene) {
     colliders.circles.push({ x: g.position.x, z: g.position.z, r: 0.5, ground: true });
   }
 
-  // ---------- el Puente del Arcoíris y su arroyo ----------
-  {
-    // Arroyo: una cinta que serpentea de lado a lado detrás del salón.
-    const pts = [];
-    for (let x = -44; x <= 44; x += 2) pts.push(new THREE.Vector3(x, 0.03, creekZ(x)));
-    const curve = new THREE.CatmullRomCurve3(pts);
-    const segs = 120;
-    const pos = [];
-    const uvs = [];
-    const idx = [];
-    for (let i = 0; i <= segs; i++) {
-      const t = i / segs;
-      const p = curve.getPoint(t);
-      const tan = curve.getTangent(t);
-      const n = new THREE.Vector3(-tan.z, 0, tan.x).normalize();
-      const w = CREEK_HALF + Math.sin(t * 9) * 0.3;
-      pos.push(p.x + n.x * w, 0.03, p.z + n.z * w, p.x - n.x * w, 0.03, p.z - n.z * w);
-      uvs.push(t * 60, 0, t * 60, 1);
-      // Caras mirando hacia arriba (antes quedaban boca abajo y el río no se veía).
-      if (i < segs) idx.push(i * 2, i * 2 + 2, i * 2 + 1, i * 2 + 1, i * 2 + 2, i * 2 + 3);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geo.setIndex(idx);
-    const water = new THREE.Mesh(geo, new THREE.ShaderMaterial({
-      uniforms: { uTime },
-      transparent: true,
-      vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
-      // Un río que se vea de noche: agua turquesa que corre, reflejos de luna y espuma en las orillas.
-      fragmentShader: `uniform float uTime; varying vec2 vUv; varying vec3 vW;
-        float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
-        float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-          return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
-        void main(){
-          float mid = 1.0 - abs(vUv.y - 0.5) * 2.0;
-          vec3 shallow = vec3(0.13, 0.30, 0.42);
-          vec3 deep = vec3(0.04, 0.11, 0.27);
-          vec3 c = mix(shallow, deep, smoothstep(0.05, 0.85, mid));
-          // Corriente: ondas que avanzan río abajo.
-          float flow = vUv.x * 5.0 - uTime * 1.1;
-          float rip = sin(flow + sin(vUv.y * 9.0 + uTime * 0.7) * 1.8) * 0.5 + 0.5;
-          float rip2 = sin(flow * 1.9 + 2.0 + vUv.y * 5.0) * 0.5 + 0.5;
-          c += vec3(0.06, 0.13, 0.18) * pow(rip, 6.0) * mid + vec3(0.02, 0.05, 0.07) * pow(rip2, 10.0);
-          // Camino de luz de la luna sobre el agua.
-          c += vec3(0.30, 0.32, 0.45) * pow(max(0.0, sin(vUv.x * 0.9 + 1.3)), 24.0) * mid;
-          // Destellos que corren con el agua.
-          vec2 g = vec2(vUv.x * 2.0 - uTime * 0.6, vUv.y * 7.0);
-          float s = h(floor(g));
-          float tw = smoothstep(0.9, 1.0, s) * (0.5 + 0.5 * sin(uTime * 3.0 + s * 40.0));
-          c += vec3(1.6, 1.5, 1.3) * tw * smoothstep(0.25, 0.0, length(fract(g) - 0.5)) * mid;
-          // Reflejo del cielo del atardecer: de costado el agua se ve rosada y dorada (fresnel).
-          vec3 V = normalize(cameraPosition - vW);
-          float fres = pow(1.0 - clamp(V.y, 0.0, 1.0), 3.0);
-          vec3 skyRef = mix(vec3(0.26, 0.12, 0.30), vec3(0.55, 0.28, 0.22), smoothstep(0.5, 1.0, fres));
-          c = mix(c, skyRef, fres * 0.4);
-          // Reflejos de los farolitos y velas: manchas cálidas que tiemblan con la corriente.
-          float warm = n2(vec2(vUv.x * 18.0 - uTime * 0.5, vUv.y * 3.0));
-          c += vec3(0.9, 0.5, 0.15) * smoothstep(0.82, 0.98, warm) * 0.35 * mid;
-          // Espuma suave contra las orillas.
-          float foam = (1.0 - smoothstep(0.0, 0.09, vUv.y)) + smoothstep(0.91, 1.0, vUv.y);
-          foam *= 0.6 + 0.4 * sin(vUv.x * 40.0 - uTime * 2.0);
-          c = mix(c, vec3(0.42, 0.52, 0.62), clamp(foam, 0.0, 1.0) * 0.38);
-          gl_FragColor = vec4(c, 0.97);
-        }`,
-    }));
-    ground.add(water);
-    // Piedritas en la orilla.
-    const stones = [];
-    for (let i = 0; i < 160; i++) {
-      const t = r();
-      const p = curve.getPoint(t);
-      const tan = curve.getTangent(t);
-      const n = new THREE.Vector3(-tan.z, 0, tan.x).normalize().multiplyScalar((r() < 0.5 ? -1 : 1) * (CREEK_HALF + 0.15 + r() * 0.45));
-      const sg = new THREE.DodecahedronGeometry(0.12 + r() * 0.15, 0).toNonIndexed();
-      sg.deleteAttribute('uv');
-      sg.scale(1, 0.5, 1);
-      sg.translate(p.x + n.x, 0.05, p.z + n.z);
-      stones.push(sg);
-    }
-    ground.add(new THREE.Mesh(mergeGeometries(stones), new THREE.MeshLambertMaterial({ color: '#8a8290', flatShading: true })));
-
-    // Pétalos de cempasúchil que la corriente lleva (cientos, en un solo dibujo).
-    {
-      const N = tierCount(tier, 420);
-      const petal = new THREE.CircleGeometry(0.06, 5).rotateX(-Math.PI / 2);
-      const mesh = new THREE.InstancedMesh(petal, new THREE.MeshLambertMaterial({ emissive: '#8a3400', emissiveIntensity: 0.7, side: THREE.DoubleSide }), N);
-      const cols = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a'].map((c) => new THREE.Color(c));
-      const data = [];
-      for (let i = 0; i < N; i++) {
-        data.push({ t: r(), side: (r() - 0.5) * CREEK_HALF * 1.7, sp: 0.004 + r() * 0.006, rot: r() * 6, s: 0.6 + r() * 0.9 });
-        mesh.setColorAt(i, cols[i % cols.length]);
-      }
-      mesh.frustumCulled = false;
-      ground.add(mesh);
-      const m = new THREE.Object3D();
-      animated.push((t, dt) => {
-        for (let i = 0; i < N; i++) {
-          const o = data[i];
-          o.t = (o.t + (dt || 0.016) * o.sp * (1.2 - Math.abs(o.side) / CREEK_HALF * 0.5)) % 1;
-          const p = curve.getPoint(o.t);
-          const tan = curve.getTangent(o.t);
-          m.position.set(p.x - tan.z * o.side, 0.045 + Math.sin(t * 2 + i) * 0.006, p.z + tan.x * o.side);
-          m.rotation.set(0, o.rot + t * 0.3 * (i % 2 ? 1 : -1), 0);
-          m.scale.setScalar(o.s);
-          m.updateMatrix();
-          mesh.setMatrixAt(i, m.matrix);
-        }
-        mesh.instanceMatrix.needsUpdate = true;
-      });
-    }
-    // Juncos en las orillas, que se mecen.
-    {
-      const blades = [];
-      for (let i = 0; i < 220; i++) {
-        const t = r();
-        const p = curve.getPoint(t);
-        const tan = curve.getTangent(t);
-        const sd = r() < 0.5 ? -1 : 1;
-        const off = CREEK_HALF + 0.1 + r() * 0.6;
-        const x = p.x - tan.z * off * sd;
-        const z = p.z + tan.x * off * sd;
-        if (Math.abs(x) < 1.6) continue; // el puente
-        const h = 0.6 + r() * 0.9;
-        const b = new THREE.ConeGeometry(0.025, h, 3);
-        b.translate(0, h / 2, 0);
-        b.rotateZ((r() - 0.5) * 0.35);
-        b.rotateX((r() - 0.5) * 0.35);
-        b.translate(x, 0, z);
-        blades.push(b.toNonIndexed());
-        if (r() < 0.3) {
-          const tip = new THREE.CylinderGeometry(0.03, 0.03, 0.16, 6);
-          tip.translate(x, h * 0.92, z);
-          blades.push(tip.toNonIndexed());
-        }
-      }
-      const reeds = new THREE.Mesh(mergeGeometries(blades), new THREE.MeshLambertMaterial({ color: '#3f5a2e', emissive: '#16220f' }));
-      reeds.material.onBeforeCompile = (sh) => {
-        sh.uniforms.uTime = uTime;
-        sh.vertexShader = `uniform float uTime;\n${sh.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
-          transformed.x += sin(uTime * 1.3 + position.z * 0.7) * 0.05 * max(0.0, position.y);`);
-      };
-      reeds.material.customProgramCacheKey = () => 'juncos';
-      ground.add(reeds);
-    }
-    // Bruma baja sobre el agua.
-    {
-      const mist = new THREE.Group();
-      const mat = new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(0.45, 0.4, 0.7), transparent: true, depthWrite: false, opacity: 0.07 });
-      for (let i = 0; i < 26; i++) {
-        const t = (i + r() * 0.5) / 26;
-        const p = curve.getPoint(t);
-        const sp = new THREE.Sprite(mat);
-        sp.position.set(p.x, 0.35 + r() * 0.3, p.z + (r() - 0.5) * 2);
-        sp.scale.set(7 + r() * 5, 1.4 + r(), 1);
-        mist.add(sp);
-      }
-      ground.add(mist);
-      animated.push((t) => { mist.position.x = Math.sin(t * 0.07) * 1.5; });
-    }
-
-    // Velitas que flotan río abajo (como las ofrendas que se dejan al agua).
-    {
-      const N = 18;
-      const cupGeo = new THREE.CylinderGeometry(0.11, 0.08, 0.07, 12);
-      const cupMat = new THREE.MeshLambertMaterial({ color: '#f2b84b', emissive: '#7a3d00', emissiveIntensity: 0.6 });
-      const flameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.7, 0.7) });
-      const glowMat = new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(1.0, 0.7, 0.35), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.55 });
-      const boats = [];
-      for (let i = 0; i < N; i++) {
-        const b = new THREE.Group();
-        const cup = new THREE.Mesh(cupGeo, cupMat);
-        const flame = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6).scale(1, 1.8, 1), flameMat);
-        flame.position.y = 0.1;
-        const glow = new THREE.Sprite(glowMat);
-        glow.scale.setScalar(0.9);
-        glow.position.y = 0.12;
-        const petals = marigoldCluster([[0, 0.02, 0, 0.6]], { r: 0.09, rnd: r });
-        b.add(petals, cup, flame, glow);
-        ground.add(b);
-        boats.push({ b, t: r(), side: (r() - 0.5) * CREEK_HALF * 1.1, sp: 0.006 + r() * 0.006, bob: r() * 6 });
-      }
-      animated.push((t, dt) => {
-        for (const o of boats) {
-          o.t = (o.t + (dt || 0.016) * o.sp) % 1;
-          const p = curve.getPoint(o.t);
-          const tan = curve.getTangent(o.t);
-          o.b.position.set(p.x - tan.z * o.side, 0.06 + Math.sin(t * 1.6 + o.bob) * 0.015, p.z + tan.x * o.side);
-          o.b.rotation.y = t * 0.2 + o.bob;
-        }
-      });
-    }
-
-    // Puente de madera en arco.
-    const bridge = new THREE.Group();
-    bridge.position.set(0, 0, curve.getPoint(0.5).z);
-    const wood = new THREE.MeshLambertMaterial({ map: woodTexture('#7a5236') });
-    const planks = [];
-    const L = 8.2;
-    const ARCH = 1.15; // altura del arco sobre el agua
-    const BW = 1.05; // medio ancho del puente
-    for (let i = 0; i <= 16; i++) {
-      const t = i / 16;
-      const z = (t - 0.5) * L;
-      const y = Math.sin(t * Math.PI) * ARCH + 0.1;
-      const pg = new THREE.BoxGeometry(BW * 2 + 0.06, 0.07, 0.3);
-      pg.rotateX(-Math.cos(t * Math.PI) * 0.42);
-      pg.translate(0, y, z);
-      planks.push(pg);
-    }
-    for (const s of [-1, 1]) {
-      for (let i = 0; i <= 8; i++) {
-        const t = i / 8;
-        const z = (t - 0.5) * L;
-        const y = Math.sin(t * Math.PI) * ARCH + 0.1;
-        const post = new THREE.BoxGeometry(0.07, 0.7, 0.07);
-        post.translate(s * BW, y + 0.35, z);
-        planks.push(post);
-      }
-      const railPts = [];
-      for (let i = 0; i <= 16; i++) {
-        const t = i / 16;
-        railPts.push(new THREE.Vector3(s * BW, Math.sin(t * Math.PI) * ARCH + 0.78, (t - 0.5) * L));
-      }
-      const rail = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPts), 24, 0.035, 5, false);
-      bridge.add(new THREE.Mesh(rail, wood));
-    }
-    bridge.add(new THREE.Mesh(mergeGeometries(planks.map((g) => g.toNonIndexed())), wood));
-    // Faroles chiquitos en las puntas.
-    for (const s of [-1, 1]) for (const e of [-1, 1]) {
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.7, 1.0) }));
-      bulb.position.set(s * BW, 0.9 + 0.08, e * L / 2);
-      bridge.add(bulb);
-    }
-    {
-      const pts = [];
-      for (const s2 of [-1, 1]) for (let i = 0; i <= 30; i++) {
-        const t = i / 30;
-        pts.push([s2 * BW, Math.sin(t * Math.PI) * ARCH + 0.82 + (r() - 0.5) * 0.06, (t - 0.5) * L, 0.8 + r() * 0.5]);
-      }
-      bridge.add(marigoldCluster(pts, { r: 0.07, rnd: r }));
-    }
-    ground.add(bridge);
-
-    // Arcoíris tenue, como el de una noche de luna.
-    const colors = ['#ff8a8a', '#ffb870', '#ffe58a', '#9be38f', '#8ec5ff', '#a99bff', '#e0a0ff'];
-    const rainbow = new THREE.Group();
-    colors.forEach((c, i) => {
-      const arc = new THREE.Mesh(
-        new THREE.TorusGeometry(22 - i * 0.7, 0.38, 6, 64, Math.PI),
-        new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
-      );
-      rainbow.add(arc);
-    });
-    rainbow.position.set(0, -2, CREEK_Z - 5);
-    ground.add(rainbow);
-    animated.push((t) => rainbow.children.forEach((a, i) => { a.material.opacity = 0.065 + Math.sin(t * 0.4 + i * 0.5) * 0.02; }));
-
-    const sign = twoSided(new THREE.PlaneGeometry(1.7, 0.36), new THREE.MeshBasicMaterial({
-      map: labelTexture('Puente del Arcoíris 🌈', { w: 640, h: 136, font: '700 66px Caveat, cursive', bg: 'rgba(74,48,34,0.95)', fg: '#f6e3c4' }),
-    }));
-    sign.position.set(1.6, 1.0, bridge.position.z + L / 2 + 0.6);
-    ground.add(sign);
-    const signPost = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 0.06), wood);
-    signPost.position.set(1.6, 0.5, bridge.position.z + L / 2 + 0.58);
-    ground.add(signPost);
-  }
+  // ---------- el río, el Puente del Arcoíris y el arco de entrada (river.js) ----------
+  buildRiver({ ground, animated, colliders, r, density: tierCount(tier, 100) / 100 });
 
   // ---------- cartel con flecha en la entrada: por acá al Prado ----------
   {
     const g = new THREE.Group();
-    g.position.set(PATH_HALF + 1.5, 0, 24.5);
+    g.position.set(PATH_HALF + 1.7, 0, 28.8);
     const wood = new THREE.MeshLambertMaterial({ map: woodTexture('#6b4630') });
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.8, 0.08), wood);
     post.position.y = 0.9;

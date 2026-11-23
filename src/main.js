@@ -5,7 +5,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
-import { buildWorld, SPAWN, HALL_CENTER, uTime } from './scene/world.js';
+import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF } from './scene/world.js';
 import { buildHall, SLOTS_PER_FLOOR, EASEL_POS } from './scene/hall.js';
 import { createControls } from './scene/controls.js';
 import { createLanterns } from './scene/lanterns.js';
@@ -15,6 +15,7 @@ import { createElevator } from './scene/elevator.js';
 import { createSpirits, MEADOW } from './scene/spirits.js';
 import { createHeaven, FLOORS } from './scene/heaven.js';
 import { createCharacter } from './scene/character.js';
+import { createOfferFx } from './scene/gifts3d.js';
 import { FURS, EARS, SIZES } from '../server/looks.js';
 import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard } from './share.js';
 import { polaroid } from './photo.js';
@@ -80,7 +81,7 @@ import { GUIDE_STEPS, renderGuide } from './guide.js';
   void PICADO_COLORS;
 }
 import { portraitCanvas } from './scene/textures.js';
-import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding } from './audio.js';
+import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver } from './audio.js';
 import { TIERS, pickTier, savedQuality, saveQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
 import { FEATURED } from '../server/seed.js';
 
@@ -146,7 +147,7 @@ try {
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.05, 900);
-const INTRO_FROM = new THREE.Vector3(26, 30, 66);
+const INTRO_FROM = new THREE.Vector3(24, 26, 80);
 const INTRO_LOOK = new THREE.Vector3(HALL_CENTER.x, 1, HALL_CENTER.z);
 const ENTRY_LOOK = new THREE.Vector3(EASEL_POS.x, 2.6, EASEL_POS.z);
 camera.position.copy(INTRO_FROM);
@@ -155,6 +156,7 @@ let world;
 let hall;
 let controls;
 let lanterns;
+let offerFx; // los gestos de la ofrenda en 3D (llamita, flor, regalito, corazones)
 let cozy;
 let avatars;
 let elevator;
@@ -218,6 +220,7 @@ async function buildScene() {
   world = buildWorld(scene, tier);
   hall = buildHall(scene, world.colliders, tier);
   lanterns = createLanterns(scene, tier);
+  offerFx = createOfferFx(scene);
   cozy = createCozy(scene, tier, world.colliders, world.ground);
   avatars = createAvatars(scene);
   elevator = createElevator(scene, world.colliders, Math.random);
@@ -269,11 +272,12 @@ async function buildScene() {
     canvas.style.cursor = hit && hit.distance < 16 && (key !== null || hit.object.userData.kind) ? 'pointer' : '';
   });
   controls.onMove(hideHint);
-  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
+  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
     goFloor: (f) => goFloor(f, true, true),
     ogCard: async (id) => { const m = memorials.find((x) => x.id === id); return (await drawOgCard(m, photoSrc(m))).toDataURL('image/jpeg', 0.88); } };
 
   const clock = new THREE.Clock();
+  let riverT = 0;
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
     const t = clock.elapsedTime;
@@ -290,6 +294,14 @@ async function buildScene() {
     heaven.update(dt, t);
     hall.animate(t);
     lanterns.update(dt, t);
+    offerFx.update(dt);
+    // El murmullo del río sube al acercarte (en los pisos de arriba no hay río).
+    riverT -= dt;
+    if (riverT < 0) {
+      riverT = 0.3;
+      const d = Math.abs(P.pos.z - creekZ(P.pos.x)) - CREEK_HALF;
+      setRiver(world.colliders.up ? 0 : Math.max(0, 1 - d / 16) ** 1.6);
+    }
     cozy.animate(t, dt);
     elevator.animate(t, dt);
     avatars.animate(dt, t);
@@ -756,7 +768,8 @@ $('#s-candle').onclick = async () => {
     if (via && !r.already) store.set('huellita.via', '');
     updateMemorial(r.memorial);
     if (!r.already) {
-      releaseLantern(r.memorial, { burst: true });
+      const lit = r.memorial;
+      if (!offerGesture(lit, 'candle', (from, to, done) => offerFx.candle(from, to, () => { releaseLantern(lit, { burst: true }); done(); }))) releaseLantern(lit, { burst: true });
       sparkle();
       haptic([10, 40, 16]);
       const own = myPet()?.id === r.memorial.id;
@@ -776,7 +789,7 @@ $('#s-flower').onclick = async () => {
     if (r.already) return toast(`🌸 ${r.memorial.name} ya tiene tus flores hoy. Volvé mañana.`);
     tick();
     haptic(10);
-    floatFromCurrent('🌸');
+    if (!offerGesture(r.memorial, 'flower', (from, to, done) => offerFx.flower(from, to, done))) floatFromCurrent('🌸');
     toast(`🌸 ${r.memorial.name} ya tiene tus flores`);
     afterGesture('flower', r);
   } catch (err) { toast(err.message); }
@@ -1263,9 +1276,14 @@ async function applyEvents(list) {
     if (others.some((e) => e.type === 'altar')) api.altar().then(({ ids }) => hall?.setAltar(ids.map((id) => memorials.find((m) => m.id === id)).filter(Boolean))).catch(() => {});
   }
   for (const e of others) {
-    if (e.type !== 'candle' && e.type !== 'created') continue;
     const m = memorials.find((x) => x.id === e.memorialId);
-    if (m) releaseLantern(m);
+    if (!m) continue;
+    if (e.type === 'candle' || e.type === 'created') releaseLantern(m);
+    const key = hall && offerFx ? hall.memorialKey(m) : null;
+    if (key === null || reduced) continue;
+    if (e.type === 'flower') offerFx.petalBurst(hall.offerPos(key, 'flower'), 26);
+    else if (e.type === 'gift') { const at = hall.offerPos(key, 'gift'); offerFx.ring(at, [1.8, 1.5, 0.7], 0.4); offerFx.burst(at, [1.8, 1.4, 0.8], 16, 1); }
+    else if (e.type === 'hug') { const at = hall.offerPos(key, 'photo'); offerFx.hug(at.clone().add(new THREE.Vector3(0, -0.9, 0)), at); }
   }
   // Si tenés abierta la ficha de esa huellita, se actualiza entera (libro, regalitos).
   if (current && others.some((e) => e.memorialId === current.id)) {
@@ -1355,6 +1373,47 @@ function showGlowToast(text) {
   el.hidden = false;
   clearTimeout(showGlowToast.t);
   showGlowToast.t = setTimeout(() => { el.hidden = true; }, 2700);
+}
+
+// ---------- gestos en 3D ----------
+// Tu personaje se vuelve hacia la ofrenda, extiende los brazos (o se abraza) y el gesto sale de su
+// mano hasta el lugar justo: la vela, el jarrito de flores o la repisa de los regalitos.
+// Devuelve false si esa huellita no está a la vista (otro piso), para usar el efecto simple.
+function offerGesture(m, kind, run) {
+  if (!hall || !offerFx || !controls || !m) return false;
+  const key = hall.memorialKey(m);
+  if (key === null) return false;
+  const to = hall.offerPos(key, kind === 'hug' ? 'photo' : kind);
+  if (!to) return false;
+  const P = controls.player;
+  const near = me && P.pos.distanceTo(to) < 10;
+  if (near) {
+    // Girar despacito hacia el marco.
+    const want = Math.atan2(to.x - P.pos.x, to.z - P.pos.z);
+    const from0 = P.heading;
+    const d = Math.atan2(Math.sin(want - from0), Math.cos(want - from0));
+    const t0 = performance.now();
+    const turn = () => {
+      const k = Math.min(1, (performance.now() - t0) / 280);
+      if (!P.moving) P.heading = from0 + d * k;
+      if (k < 1) requestAnimationFrame(turn);
+    };
+    turn();
+    if (kind === 'hug') me.hug(); else me.offer();
+  }
+  const go = () => {
+    let from;
+    if (near && kind === 'hug') from = P.pos.clone().add(new THREE.Vector3(0, 1.05, 0));
+    else if (near) from = me.handWorld(new THREE.Vector3()).add(new THREE.Vector3(0, 0.1, 0));
+    else {
+      const dir = camera.getWorldDirection(new THREE.Vector3());
+      from = camera.position.clone().addScaledVector(dir, 0.9).add(new THREE.Vector3(0, -0.35, 0));
+    }
+    run(from, to, () => {});
+  };
+  if (reduced) { offerFx.ring(to, [1.6, 1.1, 0.5], 0.5); return true; }
+  setTimeout(go, near ? (kind === 'hug' ? 450 : 420) : 0);
+  return true;
 }
 
 function floatFromCurrent(ch) {
@@ -1533,7 +1592,12 @@ async function leaveGift(gft) {
     updateMemorial(r.memorial);
     const full = await api.get(r.memorial.id).catch(() => null);
     if (full && current?.id === full.id) { current = { ...current, ...full }; fillSheet(current); }
-    floatFromCurrent(gft.split(' ')[0]);
+    const emo = gft.split(' ')[0];
+    const gm = r.memorial;
+    const gkey = hall?.memorialKey(gm) ?? null;
+    if (gkey !== null) hall.holdGift(gkey, true);
+    const flew = offerGesture(gm, 'gift', (from, to, done) => offerFx.gift(emo, from, to, hall.giftScale(gkey), () => { hall.holdGift(gkey, false); done(); }));
+    if (!flew) { if (gkey !== null) hall.holdGift(gkey, false); floatFromCurrent(emo); }
     tick();
     haptic(12);
     toast(`🎁 ${r.memorial.name} ya tiene tu ${gft.split(' ').slice(2).join(' ') || 'regalito'} 🤍`);
@@ -1549,7 +1613,7 @@ $('#s-hug').onclick = async () => {
     markToday('h', r.memorial.id);
     fillSheet(current);
     if (r.already) return toast(`🫂 Ya le mandaste un abrazo a la familia de ${r.memorial.name} hoy 🤍`);
-    floatFromCurrent('🫂');
+    if (!offerGesture(r.memorial, 'hug', (from, to, done) => { offerFx.hug(from, to); setTimeout(done, 1200); })) floatFromCurrent('🫂');
     haptic([8, 30, 8]);
     toast(`🫂 Tu abrazo en silencio llegó a la familia de ${r.memorial.name}`);
     afterGesture('hug', r);
@@ -2682,7 +2746,7 @@ $('#enter').onclick = () => {
   }
   controls.follow({
     duration: 5.2,
-    path: [new THREE.Vector3(14, 17, 62), new THREE.Vector3(4, 6.5, 52)],
+    path: [new THREE.Vector3(12, 14, 72), new THREE.Vector3(3, 5.5, 61)],
     done: finishIntro,
   });
 };

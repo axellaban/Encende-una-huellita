@@ -74,8 +74,18 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   arriba se camina sobre las nubes y sólo se ve a quienes están en tu mismo piso.
 - **Paseo con correa**: el espíritu va adelante tuyo con collar de cuero y medallita, la correa va de tu
   mano al collar (floja o tirante según la distancia), mueve la cola y se desvía a olfatear.
-- **El río**: agua que corre con reflejos de luna y del atardecer, espuma en las orillas, juncos, bruma,
-  pétalos de cempasúchil y velitas que flotan río abajo, y el Puente del Arcoíris que lo cruza.
+- **La llegada**: entrás del otro lado del río, por un camino de tierra. Cruzás el **Puente del
+  Arcoíris** (el arcoíris lo envuelve) y entrás por un arco de cempasúchil con papel picado y veladoras
+  ("Bienvenidos al jardín"; al salir dice "Volvé cuando quieras"). Afuera todo es más apagado; adentro,
+  el jardín de colores.
+- **El río**: agua de noche que refleja el cielo, la luna y los faroles del puente, con olitas que
+  corren; orillas de barro húmedo, piedras con musgo, juncos, nenúfares con flor, bruma, pétalos de
+  cempasúchil y velitas que flotan río abajo. Su murmullo (y algún burbujeo) sube cuando te acercás.
+- **La ofrenda en 3D**: los 24 regalitos son objetos de verdad (huesito, quesito, osito, globo,
+  mariposa que aletea, lunita que brilla…) y se apoyan en la repisa de cada marco o en el escalón de la
+  ofrenda. Al dejar algo, tu personaje lo ofrece con los brazos: la llamita viaja hasta la veladora de
+  vidrio de color, la flor estalla en pétalos sobre un jarrito de barro, el regalito vuela desde tu mano
+  y el abrazo suelta corazones de luz. Los gestos de otros visitantes también se ven en el marco.
 - La huellita destacada puede tener una **estampita** (`card` en `server/seed.js`) apoyada en la
   ofrenda y pegada con cintitas en su ficha.
 - Tipografías: Cormorant Garamond y Young Serif (títulos), Caveat (escrito a mano), DM Sans y Nunito.
@@ -178,6 +188,9 @@ src/scene/petRig.js     Cuerpo procedural de los espíritus y su animador (march
 src/scene/spirits.js    Cerebro de los espíritus: el Prado, el paseo, la pelota, huellitas de luz
 server/looks.js         Pelajes, orejas y tamaños (formulario, 3D y validación)
 lab/pets.html           Laboratorio de poses y simulación del Prado (sólo en desarrollo)
+lab/gifts.html          Los 24 regalitos en 3D juntos (sólo en desarrollo)
+src/scene/river.js      El río, el Puente del Arcoíris y el arco de entrada al jardín
+src/scene/gifts3d.js    Regalitos en 3D y efectos de los gestos (vela, flor, regalito, abrazo)
 src/scene/textures.js   Texturas dibujadas en canvas
 server/core.js          La API (independiente del servidor)
 server/store.js         Datos sobre Redis (Upstash o emulador local)

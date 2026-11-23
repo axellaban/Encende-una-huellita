@@ -11,16 +11,33 @@ export const HALL_CENTER = new THREE.Vector3(0, 0, -14);
 export const HALL_RADIUS = 21;
 const HK = HALL_RADIUS / 11.5; // cuánto creció (para lo que estaba medido con el salón viejo)
 export const GARDEN_RADIUS = 58;
-export const SPAWN = new THREE.Vector3(0, 1.6, 40);
+// Llegás del otro lado del río y cruzás el Puente del Arcoíris para entrar al jardín.
+export const SPAWN = new THREE.Vector3(0, 1.6, 50);
 export const PATH_HALF = 1.6;
-export const CREEK_Z = -46;
-export const CREEK_HALF = 2.6; // medio ancho del río
+export const CREEK_Z = 40;
+export const CREEK_HALF = 2.8; // medio ancho del río
 // El Prado de los espíritus: un claro sin árboles donde juegan las mascotas de luz.
 export const MEADOW = new THREE.Vector3(24, 0, 20);
 export const MEADOW_R = 9;
 // El ascensor (al costado de la entrada del salón): sin árboles adelante para que se vea.
 export const ELEVATOR_POS = new THREE.Vector3(-9.5, 0, 17);
-export const creekZ = (x) => CREEK_Z + Math.sin(x * 0.12) * 2.2;
+// El río serpentea (dos ondas, para que no se vea dibujado con regla).
+export const creekZ = (x) => CREEK_Z + Math.sin(x * 0.07) * 3.2 + Math.sin(x * 0.19 + 1) * 0.9;
+// El Puente del Arcoíris: la única forma de cruzar el río (entrar y salir del jardín).
+export const BRIDGE = { x: 0, z: CREEK_Z + Math.sin(1) * 0.9, halfW: 1.05, halfL: 4.3, arch: 1.0 };
+export const onBridge = (x, z, pad = 0) => Math.abs(x - BRIDGE.x) < BRIDGE.halfW + pad && Math.abs(z - BRIDGE.z) < BRIDGE.halfL + pad;
+// ¿Está del lado de afuera (antes de cruzar el río)?
+export const outside = (x, z) => z > creekZ(x) + CREEK_HALF * 0.5;
+// En el agua (no se puede caminar, salvo por el puente).
+export const inWater = (x, z) => Math.abs(z - creekZ(x)) < CREEK_HALF + 0.15 && !onBridge(x, z, -0.12);
+// Altura del piso donde se camina: el arco del puente y el piso de madera del salón.
+export function groundY(x, z) {
+  if (onBridge(x, z, 0.15)) {
+    const k = (z - (BRIDGE.z - BRIDGE.halfL)) / (BRIDGE.halfL * 2);
+    return Math.sin(Math.min(1, Math.max(0, k)) * Math.PI) * BRIDGE.arch + 0.13;
+  }
+  return 0;
+}
 export const nearCreek = (x, z, pad = 0) => Math.abs(z - creekZ(x)) < CREEK_HALF + 0.6 + pad;
 
 // Reloj compartido por todos los shaders animados (viento, luciérnagas, estrellas).
@@ -228,22 +245,24 @@ export function buildWorld(scene, tier) {
     groundRoot.add(buildPueblo(r));
   }
 
-  // Camino de piedra.
-  const pathLen = SPAWN.z - (HALL_CENTER.z + HALL_RADIUS) + 7;
-  const pathTex = stoneTexture();
-  pathTex.repeat.set(1, pathLen / 4);
-  const path = new THREE.Mesh(new THREE.PlaneGeometry(PATH_HALF * 2, pathLen), new THREE.MeshLambertMaterial({ map: pathTex }));
-  path.rotation.x = -Math.PI / 2;
-  path.position.set(0, 0.012, HALL_CENTER.z + HALL_RADIUS - 1 + pathLen / 2);
-  path.name = 'ground';
-  groundRoot.add(path);
-  walkable.push(path);
-  // Bordes del camino.
-  for (const s of [-1, 1]) {
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, pathLen), new THREE.MeshLambertMaterial({ color: '#6d625a' }));
-    edge.position.set(s * (PATH_HALF + 0.05), 0.04, path.position.z);
-    groundRoot.add(edge);
-  }
+  // Camino: de piedra adentro del jardín y de tierra afuera (cortado por el río y el puente).
+  const pathPiece = (z0, z1, tex, color, edgeColor) => {
+    const len = z1 - z0;
+    tex.repeat.set(1, len / 4);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(PATH_HALF * 2, len), new THREE.MeshLambertMaterial({ map: tex, color }));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(0, 0.012, (z0 + z1) / 2);
+    mesh.name = 'ground';
+    groundRoot.add(mesh);
+    walkable.push(mesh);
+    for (const s of [-1, 1]) {
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, len), new THREE.MeshLambertMaterial({ color: edgeColor }));
+      edge.position.set(s * (PATH_HALF + 0.05), 0.04, mesh.position.z);
+      groundRoot.add(edge);
+    }
+  };
+  pathPiece(HALL_CENTER.z + HALL_RADIUS - 1, BRIDGE.z - BRIDGE.halfL + 0.25, stoneTexture(), '#ffffff', '#6d625a');
+  pathPiece(BRIDGE.z + BRIDGE.halfL - 0.25, SPAWN.z + 6, stoneTexture(), '#8a7864', '#4a4038');
 
   // Piso de madera del salón y borde de piedra.
   const floorTex = floorTexture();
@@ -299,7 +318,8 @@ export function buildWorld(scene, tier) {
       m.scale.set(1 + r(), s, 1);
       m.updateMatrix();
       grass.setMatrixAt(placed, m.matrix);
-      tint.setHSL(0.22 + r() * 0.08, 0.35 + r() * 0.2, 0.45 + r() * 0.2);
+      if (outside(x, z)) tint.setHSL(0.36 + r() * 0.06, 0.12 + r() * 0.08, 0.22 + r() * 0.1);
+      else tint.setHSL(0.22 + r() * 0.08, 0.35 + r() * 0.2, 0.45 + r() * 0.2);
       grass.setColorAt(placed, tint);
       placed++;
     }
@@ -325,7 +345,7 @@ export function buildWorld(scene, tier) {
     for (let i = 0; i < tier.flowers * 6 && placed < tier.flowers; i++) {
       const x = (r() - 0.5) * 2 * GARDEN_RADIUS;
       const z = (r() - 0.5) * 2 * GARDEN_RADIUS - 2;
-      if (onPath(x, z, 0.3) || insideHall(x, z, 0.2) || nearCreek(x, z, 0.3) || Math.hypot(x, z) > GARDEN_RADIUS - 1) continue;
+      if (onPath(x, z, 0.3) || insideHall(x, z, 0.2) || nearCreek(x, z, 0.3) || outside(x, z) || Math.hypot(x, z) > GARDEN_RADIUS - 1) continue;
       // Agrupadas en manchones.
       if (Math.sin(x * 0.35) * Math.cos(z * 0.3) < 0.15 && r() < 0.8) continue;
       m.position.set(x, 0.16 + r() * 0.2, z);
@@ -360,6 +380,7 @@ export function buildWorld(scene, tier) {
       if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 6) continue;
       if (Math.hypot(x - MEADOW.x, z - MEADOW.z) < MEADOW_R + 2.5) continue;
       if (Math.hypot(x - ELEVATOR_POS.x, z - ELEVATOR_POS.z) < 6) continue;
+      if (Math.hypot(x - BRIDGE.x, z - BRIDGE.z) < 9) continue;
       if (Math.hypot(x, z) > GARDEN_RADIUS - 2.5 || nearCreek(x, z, 1.5)) continue;
       if (colliders.circles.some((c) => Math.hypot(c.x - x, c.z - z) < 4)) continue;
       const blossom = r() < 0.28;
@@ -426,7 +447,7 @@ export function buildWorld(scene, tier) {
   const poleMat = new THREE.MeshLambertMaterial({ color: '#1d1a1c' });
   const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 2.0, 0.9) });
   const lampSpots = [
-    [-2.7, 38], [2.7, 31.5], [-2.7, 25], [2.7, 18.5], [-2.7, 12],
+    [2.7, 31], [-2.7, 25.5], [2.7, 20], [-2.7, 15], [2.7, 10],
     [HALL_CENTER.x - 5.5 * HK, HALL_CENTER.z + 5.5 * HK], [HALL_CENTER.x + 5.5 * HK, HALL_CENTER.z + 5.5 * HK],
     [HALL_CENTER.x - 6.5 * HK, HALL_CENTER.z - 4.5 * HK], [HALL_CENTER.x + 6.5 * HK, HALL_CENTER.z - 4.5 * HK],
   ];
@@ -471,6 +492,7 @@ export function buildWorld(scene, tier) {
     for (let z = PATH_START; z < SPAWN.z + 4; z += 3.2) {
       for (const s of [-1, 1]) {
         const x = s * (PATH_HALF + 0.35);
+        if (Math.abs(z + (s > 0 ? 1.6 : 0) - BRIDGE.z) < BRIDGE.halfL + 1.4) continue;
         const g = new THREE.CylinderGeometry(0.06, 0.07, 0.42, 8);
         g.translate(x, 0.21, z + (s > 0 ? 1.6 : 0));
         posts.push(g);
@@ -482,11 +504,13 @@ export function buildWorld(scene, tier) {
     let i = 0;
     for (let z = PATH_START; z < SPAWN.z + 4; z += 3.2) {
       for (const s of [-1, 1]) {
+        if (Math.abs(z + (s > 0 ? 1.6 : 0) - BRIDGE.z) < BRIDGE.halfL + 1.4) continue;
         m.position.set(s * (PATH_HALF + 0.35), 0.46, z + (s > 0 ? 1.6 : 0));
         m.updateMatrix();
         tops.setMatrixAt(i++, m.matrix);
       }
     }
+    tops.count = i;
     groundRoot.add(tops);
   }
 
@@ -494,7 +518,7 @@ export function buildWorld(scene, tier) {
   {
     const parts = [];
     const metal = [];
-    const benchSpots = [[-3.8, 34.5, Math.PI / 2], [3.8, 28, -Math.PI / 2], [-3.8, 21, Math.PI / 2], [3.8, 14.5, -Math.PI / 2]];
+    const benchSpots = [[-3.8, 29, Math.PI / 2], [3.8, 26, -Math.PI / 2], [-3.8, 21.5, Math.PI / 2], [3.8, 14, -Math.PI / 2]];
     for (const [x, z, rot] of benchSpots) {
       const tr = new THREE.Matrix4().makeRotationY(rot).setPosition(x, 0, z);
       for (let s = 0; s < 4; s++) {
