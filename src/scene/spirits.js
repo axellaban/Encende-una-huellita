@@ -248,6 +248,12 @@ export function createSpirits(scene, { blocked, tier }) {
 
   // ---------- moverse ----------
   function move(a, dt) {
+    if (!Number.isFinite(a.speed) || !Number.isFinite(a.heading) || !Number.isFinite(a.turn)) {
+      a.speed = 0;
+      a.turn = 0;
+      a.heading = Number.isFinite(a.heading) ? a.heading : 0;
+      a.goal = null;
+    }
     const g = a.goal;
     let dSpeed = 0;
     let dHead = a.heading;
@@ -258,7 +264,7 @@ export function createSpirits(scene, { blocked, tier }) {
       const stop = g.stop ?? 0.15;
       if (d > stop) {
         dHead = Math.atan2(dx, dz);
-        dSpeed = Math.min(g.speed, (d - stop) * 2.4 + 0.25 * a.s);
+        dSpeed = Math.min(g.speed ?? 2 * a.s, (d - stop) * 2.4 + 0.25 * a.s);
       } else if (g.face) dHead = Math.atan2(g.face.x - a.pos.x, g.face.z - a.pos.z);
     }
     if (dSpeed > 0.05) {
@@ -702,6 +708,9 @@ export function createSpirits(scene, { blocked, tier }) {
     a.pos.set(o.pos.x - Math.sin(o.heading) * 1.4, 0, o.pos.z - Math.cos(o.heading) * 1.4);
     if (blocked(a.pos.x, a.pos.z, 0.2)) a.pos.set(o.pos.x, 0, o.pos.z);
     a.heading = o.heading;
+    a.goal = null;
+    a.speed = 0;
+    a.turn = 0;
     a.fade = 0;
     fx.emit(tmp.copy(a.pos).setY(0.4), a.rim, 20, { up: 1 });
   }
@@ -932,7 +941,7 @@ export function createSpirits(scene, { blocked, tier }) {
     handFn(leashA);
     a.pet.collarWorld(leashB);
     const d = leashA.distanceTo(leashB);
-    if (d > 4.2) { leash.visible = false; if (leashTube) leashTube.visible = false; return; }
+    if (!Number.isFinite(d) || d > 4.2) { leash.visible = false; if (leashTube) leashTube.visible = false; return; }
     // Comba de una cuerda de ~2,4 m: cuanto más cerca, más cuelga.
     const slack = Math.max(0.03, (2.4 - d) * 0.45);
     const pts = [];

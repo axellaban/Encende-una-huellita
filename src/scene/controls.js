@@ -65,7 +65,17 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   let pinch = null;
   let enabled = true;
   const joy = { x: 0, y: 0 };
-  const listeners = { tap: [], hover: [], move: [], leave: [] };
+  const listeners = { tap: [], hover: [], move: [], leave: [], stick: [] };
+  // Palanca invisible (celular): aparece donde apoyás el pulgar dentro de `stickZone` y se va al
+  // soltar. Si sólo tocás (sin arrastrar), cuenta como un toque normal (caminar hasta ahí, abrir un marco).
+  const STICK_R = 46;
+  let stick = null;
+  let stickZone = null;
+  const setJoy = (x, y) => {
+    joy.x = x;
+    joy.y = y;
+    if (x || y) { walkTarget = null; marker.visible = false; if (mode === 'focus') leaveFocus(); }
+  };
   const lookAt = new THREE.Vector3();
   let now = 0;
 
@@ -105,6 +115,11 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     if (!enabled) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     dom.setPointerCapture(e.pointerId);
+    if (e.pointerType !== 'mouse' && !stick && mode !== 'fixed' && !fly && stickZone?.(e.clientX, e.clientY)) {
+      stick = { id: e.pointerId, ox: e.clientX, oy: e.clientY, t: e.timeStamp, moved: false };
+      listeners.stick.forEach((fn) => fn({ type: 'start', x: e.clientX, y: e.clientY }));
+      return;
+    }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 2) {
       drag = null;
@@ -113,10 +128,28 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     }
     vYaw = 0;
     vPitch = 0;
-    drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), id: e.pointerId, moved: false, lastT: performance.now() };
+    drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: e.timeStamp, id: e.pointerId, moved: false, lastT: performance.now() };
   });
 
   dom.addEventListener('pointermove', (e) => {
+    if (stick && e.pointerId === stick.id) {
+      let dx = e.clientX - stick.ox;
+      let dy = e.clientY - stick.oy;
+      let d = Math.hypot(dx, dy);
+      if (!stick.moved && d > 9) stick.moved = true;
+      if (!stick.moved) return;
+      // Si el dedo se va lejos, la palanca lo sigue (no hay que volver al centro para frenar).
+      if (d > STICK_R) {
+        stick.ox = e.clientX - (dx / d) * STICK_R;
+        stick.oy = e.clientY - (dy / d) * STICK_R;
+        dx = e.clientX - stick.ox;
+        dy = e.clientY - stick.oy;
+        d = STICK_R;
+      }
+      setJoy(dx / STICK_R, dy / STICK_R);
+      listeners.stick.forEach((fn) => fn({ type: 'move', x: stick.ox, y: stick.oy, dx, dy }));
+      return;
+    }
     if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pinch && pointers.size === 2) {
       zoomTo(pinch.dist * (pinch.d / Math.max(20, pinchDist())));
@@ -145,10 +178,19 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   });
 
   const end = (e) => {
+    if (stick && e.pointerId === stick.id) {
+      // Se mide con la hora del evento (no la de ahora): en un equipo lento el cuadro puede tardar.
+      const wasTap = !stick.moved && e.timeStamp - stick.t < 450;
+      stick = null;
+      setJoy(0, 0);
+      listeners.stick.forEach((fn) => fn({ type: 'end' }));
+      if (wasTap && e.type === 'pointerup') listeners.tap.forEach((fn) => fn(e));
+      return;
+    }
     pointers.delete(e.pointerId);
     if (pointers.size < 2) pinch = null;
     if (!drag || drag.id !== e.pointerId) return;
-    const wasTap = !drag.moved && performance.now() - drag.t < 500;
+    const wasTap = !drag.moved && e.timeStamp - drag.t < 500;
     if (performance.now() - drag.lastT > 60) { vYaw = 0; vPitch = 0; }
     drag = null;
     if (wasTap && e.type === 'pointerup') listeners.tap.forEach((fn) => fn(e));
@@ -250,15 +292,21 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     onHover: (fn) => listeners.hover.push(fn),
     onMove: (fn) => listeners.move.push(fn),
     onLeaveFocus: (fn) => listeners.leave.push(fn),
-    set enabled(v) { enabled = v; if (!v) { drag = null; pinch = null; pointers.clear(); } },
+    onStick: (fn) => listeners.stick.push(fn),
+    // (x, y) en pantalla → true si ahí arranca la palanca invisible.
+    set stickZone(fn) { stickZone = fn; },
+    get sticking() { return !!stick?.moved; },
+    set enabled(v) {
+      enabled = v;
+      if (!v) {
+        drag = null; pinch = null; pointers.clear();
+        if (stick) { stick = null; setJoy(0, 0); listeners.stick.forEach((fn) => fn({ type: 'end' })); }
+      }
+    },
     get flying() { return !!fly; },
     get mode() { return mode; },
     get yaw() { return yaw; },
-    setJoystick(x, y) {
-      joy.x = x;
-      joy.y = y;
-      if (x || y) { walkTarget = null; marker.visible = false; if (mode === 'focus') leaveFocus(); }
-    },
+    setJoystick: setJoy,
     walkTo(point) {
       if (mode === 'focus') leaveFocus();
       walkTarget = new THREE.Vector3(point.x, 0, point.z);

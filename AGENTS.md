@@ -56,7 +56,7 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
   Si se agranda algo, revisar que no quede encimado (camino, faroles, bancos, frasco, carteles en
   `cozy.js`, árboles) y sacar una captura desde arriba (`H.controls.teleportCamera(...)`).
 - **Frontend** (Vite + Three.js, sin framework): `index.html` + `src/`.
-  - `src/main.js` (≈2.980 líneas, el más grande): arranque, UI, ficha, modales, gamificación, guía,
+  - `src/main.js` (≈3.090 líneas, el más grande): arranque, UI, ficha, modales, gamificación, guía,
     ascensor, presencia, paseo. **Candidato a dividir** (ver PENDIENTES).
   - `src/scene/`: `world.js` (cielo, pasto, árboles, faroles, luciérnagas), `hall.js` (muro de
     marcos, pérgola, ofrenda central de Luca, estampita), `muertos.js` (papel picado, cempasúchil,
@@ -71,6 +71,15 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     el regalito que sale de la mano y se apoya en la repisa (`hall.holdGift` lo esconde mientras vuela)
     y los corazones del abrazo. `hall.offerPos(key, kind)` dice dónde cae cada gesto; en `main.js`,
     `offerGesture()` gira al personaje, hace `me.offer()`/`me.hug()` y lanza el efecto.
+  - **Interfaz "modo juego"** (casi nada fijo en pantalla): arriba a la derecha `#hub-btn` abre la hoja
+    de menú `#hub` (íconos grandes; ahí están "acá ahora", tu personaje, la música y todo lo que era
+    la barra de abajo, que ya no existe). Abajo a la derecha, **un solo botón de acción** (`#act-btn`):
+    `computeAction()` en `main.js` decide cada 0,3 s qué ofrece según lo que haya cerca (pelota,
+    ofrenda, marco, lugar libre, ascensor, frasco, tu mascota; si no, gestos). Si sumás algo tocable
+    al jardín, sumalo ahí. `body.moving` desvanece la interfaz al caminar; `toast(texto, acción, true)`
+    es un aviso "suave" que no sale mientras caminás. Los avisos van arriba: abajo está el pulgar.
+  - **Palanca invisible**: en `controls.js` (`stickZone`, `onStick`, `sticking`). Un toque sin arrastrar
+    en esa zona es un toque normal. Los toques se miden con `e.timeStamp` (no con `performance.now()`).
   - **Tercera persona**: `controls.js` mueve a tu personaje (`player.pos`, `player.heading`) y maneja la
     cámara en tres modos: `follow` (detrás del personaje; arrastrar orbita, pellizcar acerca),
     `focus` (mira un punto fijo, p. ej. un marco: `flyTo(stand, target)`) y `fixed` (intro:
@@ -124,6 +133,9 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
 - Cambios de API: agregar el test en `server/api.test.js` (corre contra local y contra la función de Vercel).
 - Colores HDR (>1) en materiales emisivos para que el *bloom* los haga brillar; cuidado con valores
   enormes (ya hubo un bug de pantalla blanca por luciérnagas gigantes cerca de la cámara).
+- **Nada de NaN en el ciclo**: un `NaN` en un espíritu o en la correa hace que el cuadro tire un error y el 3D
+  se congele (pasó con `reappear()` en `spirits.js`). Si algo puede dividir por cero o quedar sin un
+  campo (p. ej. un `goal` sin `speed`), poné un valor por defecto.
 - **Shaders sin NaN** (ya hubo pantalla negra por esto): nunca `pow()` con una base que pueda ser negativa
   (para un cuadrado usar `x * x`), `clamp` en bases tipo `1.0 - dot(...)`, `smoothstep(a, b, x)` siempre con
   `a < b` (si hace falta al revés: `1.0 - smoothstep(b, a, x)`), y cuidado con `atan(0,0)` y `normalize(0)`.
@@ -139,7 +151,11 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
 
 ## Recorrido de punta a punta
 
-Antes de mergear algo grande, recorré todo con Playwright (como en la auditoría del 23/11/2026):
+Antes de mergear algo grande, corré **`scripts/recorrido.mjs`** (con `npm run build && npm start` y
+`data/` limpio; `NODE_PATH=$(npm root -g) node scripts/recorrido.mjs http://localhost:8787 celular`, o sin
+el último argumento para los 6 dispositivos; `RECORRIDO_SHOTS=<carpeta>` guarda capturas de lo que falle
+y `RECORRIDO_DEBUG=1` muestra las trazas de errores de JS). Tarda: con swiftshader cada dispositivo son
+5 a 8 minutos. Si agregás algo a la app, agregalo al recorrido. Lo que cubre (como en la auditoría del 23/11/2026):
 entrar, bienvenida, visitar a Luca, vela (y que no sume dos veces), flor, abrazo, regalito, libro,
 compartir, sumar una mascota con foto y "cómo era", editar, diario, pasear, caminar, pelota, llamar,
 Hoy, lista con búsqueda, menú → Prado, gestos y frases, guía, frasco, farolillo, consuelo, "Así te
@@ -168,7 +184,9 @@ Para los espíritus sin entrar al jardín: `npm run dev` y `/lab/pets.html?t=1.5
 Prado y deja en `__lab.log` qué hacía cada espíritu).
 
 Con swiftshader todo anda a pocos FPS: los vuelos de cámara tardan mucho más que en un teléfono real
-(esperar 8–10 s antes de sacar captura). Los 99 pisos están abiertos: `H.goFloor(98)` lleva al cielo de una (`src/scene/heaven.js` mezcla los
+(esperar 8–10 s antes de sacar captura). Para simular toques, mandá `Input.dispatchTouchEvent` por CDP **con
+`timestamp`** (si no, el emulador lento los toma como "mantener apretado" y no cuentan como toque); hay
+un ejemplo en `touchDrag()` de `scripts/recorrido.mjs`. Los 99 pisos están abiertos: `H.goFloor(98)` lleva al cielo de una (`src/scene/heaven.js` mezcla los
 colores del cielo, la niebla y las luces según el piso; `world.ground` es lo que se esconde arriba y
 `colliders.up` desactiva los choques del suelo). Antes, para probar el ascensor hacía falta una huellita en el piso 2
 (`POST /api/memorials` con `"slot": 95`).

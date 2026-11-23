@@ -44,10 +44,6 @@
             <span>Encendé una huellita</span>
           </button>
         </div>
-        <div class="chips">
-          <span class="chip"><i class="dot"></i><b id="here">1</b>&nbsp;<span>acá ahora</span></span>
-          <button class="chip" id="me-chip" title="Así te ven los demás"><span class="avatar" id="me-initial">·</span><span id="me-name">…</span></button>
-        </div>
         <nav class="chips filters desk" aria-label="Explorar">
           <button class="chip featured-chip" data-featured>🕯️ Visitar a <span class="featured-name">Luca</span></button>
           <button class="chip today-chip" data-today>✨ Hoy <b class="today-count">0/4</b></button>
@@ -63,15 +59,20 @@
         <button class="btn ghost round" id="music-btn" aria-pressed="false" aria-label="Música">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9 18.5A2.5 2.5 0 1 1 6.5 16c.53 0 1.02.17 1.42.45V5.6l11-2.2v12.1A2.5 2.5 0 1 1 16.5 13c.53 0 1.02.17 1.42.45V6.27L9.92 7.87V18.5H9z"/></svg>
         </button>
-        <button class="btn ghost round desk" id="menu-btn" aria-label="Más opciones">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 7h16v2H4zm0 4h16v2H4zm0 4h16v2H4z"/></svg>
+        <button class="hub-btn" id="hub-btn" aria-label="Menú (gestos de hoy: 0 de 4)">
+          <svg class="ring" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" /><circle class="fill" cx="24" cy="24" r="21" pathLength="100" /></svg>
+          <svg class="ic" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 7h16v2H4zm0 4h16v2H4zm0 4h16v2H4z"/></svg>
+          <i class="hub-dot" hidden></i>
         </button>
       </div>
     </header>
 
-    <!-- palanca para caminar (celular) y gestos -->
+    <!-- palanca invisible (celular): aparece donde apoyás el pulgar -->
     <div class="joy" id="joy" aria-hidden="true"><i></i></div>
-    <button class="emote-btn" id="emote-btn" aria-label="Gestos y frases">🤍</button>
+    <div class="joy-ghost" id="joy-ghost" aria-hidden="true" hidden><i></i><span>Arrastrá acá<br />para caminar</span></div>
+    <!-- un solo botón de acción según lo que tengas cerca, y los gestos -->
+    <button class="act-btn" id="act-btn" aria-label="Gestos y frases"><span class="ic" id="act-ic">🤍</span><span class="lbl" id="act-lbl">Gestos</span></button>
+    <button class="emote-btn" id="emote-btn" aria-label="Gestos y frases" hidden>🤍</button>
     <div class="emote-tray" id="emote-tray" hidden>
       <div class="emotes" id="emotes"></div>
       <div class="sayings" id="sayings"></div>
@@ -88,12 +89,10 @@
     <!-- paseo con el espíritu de tu mascota -->
     <div class="walk-hud" id="walk-hud" hidden>
       <button class="walk-who" id="walk-who" aria-label="Ver su lugar"><img id="walk-photo" alt="" /><span><small>Paseando con</small><b id="walk-name"></b></span></button>
-      <button class="walk-act" id="walk-ball" aria-label="Tirar la pelota">🎾</button>
       <button class="walk-act" id="walk-photo-btn" aria-label="Sacar una foto juntos">📸</button>
       <button class="walk-act" id="walk-call" aria-label="Llamarlo">📣</button>
       <button class="walk-act x-act" id="walk-stop" aria-label="Terminar el paseo">✕</button>
     </div>
-    <button class="ball-prompt" id="ball-prompt" hidden>🎾 Tirar la pelota</button>
     <div class="confetti" id="confetti" aria-hidden="true"></div>
 
     <div class="hint" id="hint"><span class="hand">👆</span><span id="hint-text">Tocá el piso para caminar · Arrastrá para mirar</span></div>
@@ -105,18 +104,10 @@
       <button class="btn ghost" id="floors-btn">🛗 Piso <b class="floor-num">1</b></button>
     </footer>
 
-    <!-- ---------- barra inferior (celular) ---------- -->
-    <nav class="dock" aria-label="Acciones">
-      <button data-list="all"><span class="ic">🐾</span><span>Huellitas</span></button>
-      <button data-featured><span class="ic">🕯️</span><span class="featured-name">Luca</span></button>
-      <button class="dock-add" id="dock-add" aria-label="Sumar a mi mascota"><span>＋</span></button>
-      <button data-today class="dock-today"><span class="ic">✨<i class="badge today-count">0/4</i></span><span>Hoy</span></button>
-      <button id="dock-menu"><span class="ic">☰</span><span>Más</span></button>
-    </nav>
 
     <!-- ---------- la hora de las velas ---------- -->
     <div class="candle-hour" id="candle-hour" hidden>
-      <div><b>🕯️ La hora de las velas.</b> Cada noche a las 21, quienes visitan el jardín encienden una vela al mismo tiempo.</div>
+      <div><b>🕯️ La hora de las velas.</b> <span class="more">Cada noche a las 21, quienes visitan el jardín encienden una vela al mismo tiempo.</span></div>
       <button class="btn primary small" id="candle-hour-btn">Encender la mía</button>
       <button class="x" id="candle-hour-x" aria-label="Cerrar">✕</button>
     </div>
@@ -151,8 +142,8 @@
       <h2>Te damos la <em>bienvenida</em></h2>
       <p class="sub">Un jardín tranquilo para recordar a las mascotas que amamos.</p>
       <ul class="steps">
-        <li><span>👆</span><div><b>Caminá.</b> Tocá el piso o usá la palanca. Deslizá para girar la cámara.</div></li>
-        <li><span>🕯️</span><div><b>Encendé una vela.</b> Tocá una foto del muro: vela, flores y su libro de visitas.</div></li>
+        <li><span>👆</span><div><b>Caminá.</b> Apoyá el pulgar a la izquierda y arrastrá (o tocá el piso). A la derecha, deslizá para mirar.</div></li>
+        <li><span>🕯️</span><div><b>Encendé una vela.</b> Acercate a un marco y tocá el botón grande de abajo (o la foto): vela, flores y su libro.</div></li>
         <li><span>🖼️</span><div><b>Dale un lugar.</b> Tocá un marco libre para sumar a tu mascota.</div></li>
         <li><span>🐾</span><div><b>Sacalo a pasear.</b> Su espíritu te acompaña y juega en el Prado.</div></li>
       </ul>
@@ -309,9 +300,43 @@
       <div class="floor-list" id="floor-list"></div>
     </dialog>
 
+    <!-- ---------- menú (hoja con íconos grandes) ---------- -->
+    <dialog class="modal hub" id="hub" aria-label="Menú">
+      <div class="hub-grab" aria-hidden="true"><span></span></div>
+      <div class="hub-head">
+        <button class="chip" id="me-chip" title="Así te ven los demás"><span class="avatar" id="me-initial">·</span><span id="me-name">…</span></button>
+        <span class="chip here-chip"><i class="dot"></i><b id="here">1</b>&nbsp;<span>acá ahora</span></span>
+        <button class="chip round-chip" id="hub-music" aria-pressed="false" aria-label="Música">🎵</button>
+      </div>
+      <div class="hub-grid">
+        <button data-list="all"><span class="ic">🐾</span><span>Huellitas</span></button>
+        <button data-featured><span class="ic">🕯️</span><span class="featured-name">Luca</span></button>
+        <button data-today><span class="ic">✨<i class="badge today-count">0/4</i></span><span>Hoy</span></button>
+        <button class="hub-add" data-then="add"><span class="ic">＋</span><span>Sumar mascota</span></button>
+        <button data-then="floors"><span class="ic">🛗</span><span>Piso <b class="floor-num">1</b></span></button>
+        <button data-then="meadow"><span class="ic">🌼</span><span>Prado</span></button>
+        <button data-then="photo"><span class="ic">📸</span><span>Foto</span></button>
+        <button data-then="options"><span class="ic">⚙️</span><span>Opciones</span></button>
+      </div>
+      <p class="hub-sub">Para el corazón</p>
+      <div class="hub-row">
+        <button data-guide><span>🕯️</span>La sexta etapa</button>
+        <button data-jar><span>🫙</span>Frasco de gracias</button>
+        <button data-then="farolillo"><span>🏮</span>Un farolillo</button>
+        <button data-then="comfort"><span>💌</span>Consuelo</button>
+      </div>
+      <div class="hub-links">
+        <button data-list="waiting">🌙 Esperando una vela</button>
+        <button data-list="birthday">🎂 Cumpleaños</button>
+        <button data-then="help">💡 Cómo funciona</button>
+        <button data-then="home">🚪 Volver a la entrada</button>
+        <button data-then="install" id="install-item" hidden>📲 Agregar a la pantalla de inicio</button>
+      </div>
+    </dialog>
     <!-- ---------- más opciones ---------- -->
     <dialog class="modal small-modal" id="menu">
       <button class="x" data-close aria-label="Cerrar">✕</button>
+      <p class="eyebrow">Ajustes</p>
       <h2><em>Opciones</em></h2>
       <div class="menu-list">
         <label class="toggle"><span>🎵 Música</span><input type="checkbox" id="opt-music" /><i></i></label>
@@ -327,19 +352,6 @@
           </div>
         </div>
         <label class="toggle"><span>🙈 Modo tranquilo (ocultar visitantes)</span><input type="checkbox" id="opt-quiet" /><i></i></label>
-        <button class="menu-item" data-then="photo">📸 Sacar una foto en el jardín</button>
-        <button class="menu-item" data-then="meadow">🐾 Ir al Prado de los espíritus</button>
-        <button class="menu-item" data-then="floors">🛗 Pisos</button>
-        <button class="menu-item" data-guide>🕯️ La sexta etapa: crear significado</button>
-        <button class="menu-item" data-jar>🫙 Frasco de gracias</button>
-        <button class="menu-item" data-then="farolillo">🏮 Enviar un farolillo</button>
-        <button class="menu-item" data-then="comfort">💌 Palabras de consuelo</button>
-        <button class="menu-item" data-then="add">🐾 Sumar a mi mascota</button>
-        <button class="menu-item" data-list="waiting">🌙 Esperando una vela</button>
-        <button class="menu-item" data-list="birthday">🎂 Cumpleaños de hoy</button>
-        <button class="menu-item" data-then="help">💡 Cómo funciona</button>
-        <button class="menu-item" data-then="home">🚪 Volver a la entrada</button>
-        <button class="menu-item" data-then="install" id="install-item" hidden>📲 Agregar a la pantalla de inicio</button>
       </div>
       <p class="menu-foot" id="menu-foot"></p>
     </dialog>

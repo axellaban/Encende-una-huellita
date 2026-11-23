@@ -39,7 +39,7 @@ body { position: fixed; inset: 0; }
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; touch-action: manipulation; }
 input, textarea, select { font: inherit; color: var(--ink); }
 [hidden] { display: none !important; }
-.sheet, .dock, .joy, .emote-tray, .act, .chip { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.sheet, .joy, .emote-tray, .act, .chip, .act-btn, .hub-btn { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .sheet textarea, .sheet input, .msg, #gb-list li { -webkit-user-select: text; user-select: text; }
 .sr { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 :focus-visible { outline: 3px solid #b9a7ee; outline-offset: 2px; }
@@ -96,7 +96,6 @@ button.featured-chip:hover { background: rgba(201, 112, 78, .95); }
 .mode { font-size: 12px; font-weight: 700; padding: 6px 11px; border-radius: 999px; background: rgba(140,123,184,.65); }
 
 /* ---------- barra inferior (celular) ---------- */
-.dock { display: none; }
 
 /* ---------- hora de las velas ---------- */
 .candle-hour { position: fixed; left: 50%; bottom: calc(var(--dock-h) + var(--safe-b) + 18px); transform: translateX(-50%); width: min(460px, calc(100vw - 24px)); background: var(--cream); color: var(--ink); border-radius: var(--radius); padding: 16px 52px 16px 18px; box-shadow: var(--shadow); display: grid; gap: 10px; font-size: 14px; z-index: 6; animation: rise .5s var(--ease); }
@@ -122,7 +121,7 @@ button.featured-chip:hover { background: rgba(201, 112, 78, .95); }
 .nogl[hidden] { display: none; }
 /* Sin 3D, la ficha y los avisos van por encima del cartel (z 15). */
 body.no-gl .sheet { z-index: 20; }
-body.no-gl .dock, body.no-gl .top { z-index: 16; }
+body.no-gl .top { z-index: 16; }
 body.no-gl .joy, body.no-gl .emote-btn, body.no-gl .hint { display: none !important; }
 .nogl h2 { font-family: var(--serif); margin: 0; }
 
@@ -259,7 +258,7 @@ dialog[open] { animation: pop .3s var(--ease); }
 body.sheet-open .toast { bottom: auto; top: calc(var(--safe-t) + 16px); animation-name: drop; }
 @keyframes drop { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
-body.intro .top, body.intro .bottom, body.intro .dock { opacity: 0; pointer-events: none; }
+body.intro .top, body.intro .bottom { opacity: 0; pointer-events: none; }
 
 /* ---------- acciones de la ficha ---------- */
 .act-row { grid-column: 1 / -1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
@@ -317,7 +316,6 @@ body.intro .top, body.intro .bottom, body.intro .dock { opacity: 0; pointer-even
 .jar-cta > span { font-size: 30px; }
 .jar-cta small { display: block; color: var(--ink-soft); font-weight: 700; font-size: 12.5px; }
 .jar-cta i { font-style: normal; font-size: 22px; color: var(--ink-soft); }
-.dock-today .ic { position: relative; }
 .badge { position: absolute; top: -6px; left: 58%; font-style: normal; font-size: 9.5px; font-weight: 900; background: #8c7bb8; color: #fff; border-radius: 999px; padding: 1px 5px; white-space: nowrap; border: 2px solid #241b30; }
 .badge.full { background: #7fb07a; }
 
@@ -334,7 +332,6 @@ body.intro .top, body.intro .bottom, body.intro .dock { opacity: 0; pointer-even
 .jar-notes small { display: block; font-family: var(--sans); font-size: 12px; font-weight: 700; color: var(--ink-soft); }
 
 /* ---------- palanca, gestos y celebraciones ---------- */
-.joy { display: none; }
 .emote-btn { position: fixed; right: 16px; bottom: calc(var(--dock-h) + var(--safe-b) + 72px); width: 50px; height: 50px; border-radius: 50%; background: var(--glass-2); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-size: 23px; z-index: 5; box-shadow: 0 6px 20px rgba(0,0,0,.3); transition: transform .2s var(--ease); }
 .emote-btn:active { transform: scale(.9); }
 .emote-tray { position: fixed; right: 12px; bottom: calc(var(--dock-h) + var(--safe-b) + 132px); width: min(340px, calc(100vw - 24px)); padding: 12px; border-radius: 22px; background: var(--cream); color: var(--ink); box-shadow: var(--shadow); z-index: 7; animation: rise2 .3s var(--ease); }
@@ -345,7 +342,7 @@ body.intro .top, body.intro .bottom, body.intro .dock { opacity: 0; pointer-even
 .emotes button:active { transform: scale(.85); }
 .sayings { display: flex; flex-wrap: wrap; gap: 6px; }
 .sayings button { padding: 8px 12px; border-radius: 999px; background: var(--cream-2); font-weight: 800; font-size: 13px; }
-body.sheet-open .emote-btn, body.intro .emote-btn, body.sheet-open .joy, body.intro .joy { opacity: 0; pointer-events: none; }
+body.sheet-open .emote-btn, body.intro .emote-btn, body.sheet-open .act-btn, body.intro .act-btn, body.sheet-open .joy-ghost, body.intro .joy-ghost { opacity: 0; pointer-events: none; }
 .glow-toast { position: fixed; left: 50%; top: calc(var(--safe-t) + 74px); transform: translateX(-50%); z-index: 41; padding: 10px 18px; border-radius: 999px; background: linear-gradient(135deg, #fff1cf, #ffd9b8); color: #6b3d16; font-weight: 900; font-size: 14.5px; box-shadow: 0 0 0 2px rgba(255,210,140,.6), 0 10px 30px rgba(255,170,80,.45); animation: glowIn 2.6s var(--ease) forwards; white-space: nowrap; max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
 .glow-toast[hidden] { display: none; }
 @media (pointer: coarse) and (max-height: 540px) and (orientation: landscape) {
@@ -506,7 +503,6 @@ dialog.guide[open] { display: flex; }
 
 /* ============ celular ============ */
 @media (max-width: 760px), (pointer: coarse) and (max-height: 540px) {
-  :root { --dock-h: 68px; }
   .desk { display: none !important; }
   .top { padding: calc(var(--safe-t) + 10px) 12px 0; }
   .brand { font-size: 18.5px; }
@@ -515,25 +511,9 @@ dialog.guide[open] { display: flex; }
   .ticker { min-height: 30px; }
   .tick { font-size: 12.5px; padding: 6px 11px; }
   .top-right .btn.round { width: 42px; min-height: 42px; }
-
-  .dock { position: fixed; left: 10px; right: 10px; bottom: calc(var(--safe-b) + 10px); height: 64px; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; background: rgba(28, 21, 38, .82); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3); border: 1px solid var(--line); border-radius: 24px; z-index: 5; box-shadow: 0 10px 30px rgba(0,0,0,.35); transition: transform .35s var(--ease), opacity .3s; }
-  .dock button { display: grid; justify-items: center; align-content: center; gap: 1px; font-size: 11px; font-weight: 800; height: 100%; color: rgba(251,244,234,.92); }
-  .dock button .ic { font-size: 21px; line-height: 1.15; }
-  .dock button:active { transform: scale(.92); }
-  .dock .featured-name { max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dock-add span { width: 56px; height: 56px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; font-size: 30px; font-weight: 400; color: #fff; box-shadow: 0 6px 18px rgba(240,130,28,.55); margin-top: -20px; border: 4px solid #241b30; }
-  body.sheet-open .dock { transform: translateY(140%); opacity: 0; }
   body.sheet-open .top { opacity: 0; transform: translateY(-20px); pointer-events: none; }
 
   .hint { font-size: 12.5px; }
-  .joy { display: block; position: fixed; left: 18px; bottom: calc(var(--dock-h) + var(--safe-b) + 18px); width: 112px; height: 112px; border-radius: 50%; background: radial-gradient(circle, rgba(255,240,220,.08), rgba(26,20,36,.5)); border: 1.5px solid rgba(255,240,220,.22); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 5; touch-action: none; transition: opacity .3s; }
-  .joy i { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff8ec, #e9c9a4); box-shadow: 0 4px 14px rgba(0,0,0,.35), 0 0 16px rgba(255,200,140,.35); transform: translate(var(--jx, 0px), var(--jy, 0px)); transition: transform .12s; }
-  .joy.active i { transition: none; }
-  .joy::after { content: '🐾'; position: absolute; left: 50%; top: -22px; transform: translateX(-50%); font-size: 13px; opacity: .7; }
-
-  .emote-btn { bottom: calc(var(--dock-h) + var(--safe-b) + 18px); }
-  .emote-tray { bottom: calc(var(--dock-h) + var(--safe-b) + 78px); }
-  .hint { left: auto; right: 78px; transform: none; max-width: calc(100vw - 220px); white-space: normal; text-align: left; }
   .act { font-size: 11.5px; padding: 9px 2px 7px; }
   .gift-grid { grid-template-columns: repeat(4, 1fr); }
   .today-body { padding-bottom: calc(var(--safe-b) + 24px); }
@@ -575,8 +555,8 @@ dialog.guide[open] { display: flex; }
 /* ---------- paseo con su espíritu ---------- */
 .walk-btn { background: linear-gradient(135deg, #14b3b0, #7b2cbf); color: #fff; box-shadow: 0 6px 22px rgba(20,179,176,.35); margin-top: 12px; }
 /* Modo foto. */
-body.photo-mode .top, body.photo-mode .dock, body.photo-mode .joy, body.photo-mode .emote-btn, body.photo-mode .walk-hud,
-body.photo-mode .hint, body.photo-mode .bottom, body.photo-mode .ball-prompt { opacity: 0 !important; pointer-events: none !important; transition: opacity .3s; }
+body.photo-mode .top, body.photo-mode .joy, body.photo-mode .emote-btn, body.photo-mode .walk-hud, body.photo-mode .act-btn,
+body.photo-mode .hint, body.photo-mode .bottom, body.photo-mode .joy-ghost { opacity: 0 !important; pointer-events: none !important; transition: opacity .3s; }
 body.photo-mode::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 30; box-shadow: inset 0 0 0 10px rgba(255,255,255,.18); border-radius: 18px; }
 .flash { position: fixed; inset: 0; background: #fff; z-index: 60; pointer-events: none; animation: flash .5s ease-out forwards; }
 @keyframes flash { from { opacity: .9; } to { opacity: 0; } }
@@ -616,9 +596,6 @@ body.photo-mode::after { content: ''; position: fixed; inset: 0; pointer-events:
 .walk-act:active { transform: scale(.88); }
 .walk-act.x-act { font-size: 15px; opacity: .8; }
 body.sheet-open .walk-hud, body.intro .walk-hud { opacity: 0; pointer-events: none; transform: translate(-50%, 30px); }
-.ball-prompt { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 84px); transform: translateX(-50%); padding: 12px 20px; border-radius: 999px; background: linear-gradient(135deg, #d8f06a, #8fd35a); color: #233313; font-weight: 900; font-size: 15px; box-shadow: 0 0 24px rgba(200,240,100,.45), var(--shadow); z-index: 5; animation: rise .3s var(--ease); }
-.ball-prompt:active { transform: translateX(-50%) scale(.94); }
-body.sheet-open .ball-prompt, body.walking .ball-prompt { display: none; }
 .toast.has-action { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 18px; text-align: left; }
 .toast button { flex-shrink: 0; padding: 8px 14px; border-radius: 999px; background: var(--ink); color: var(--cream); font-weight: 800; font-size: 13.5px; }
 
@@ -637,28 +614,16 @@ body.sheet-open .ball-prompt, body.walking .ball-prompt { display: none; }
 #me-dialog .look { margin-bottom: 8px; }
 
 @media (max-width: 760px), (pointer: coarse) and (max-height: 540px) {
-  /* Encima de la palanca: paseo, pelota, pista y avisos no se pisan. */
-  /* Paseo y pelota: a la derecha de la palanca, sin tapar al personaje. */
-  .walk-hud, .ball-prompt { left: 140px; right: auto; transform: none; bottom: calc(var(--dock-h) + var(--safe-b) + 22px); }
   .walk-hud { gap: 4px; padding: 5px; }
   .walk-who { padding-right: 0; }
   .walk-who span { display: none; }
   .walk-who img, .walk-act { width: 40px; height: 40px; }
   body.sheet-open .walk-hud, body.intro .walk-hud { transform: translateY(30px); }
-  .ball-prompt { padding: 12px 16px; font-size: 14.5px; }
-  body.walking .emote-btn { bottom: calc(var(--dock-h) + var(--safe-b) + 84px); }
-  .emote-btn { transition: transform .2s var(--ease), bottom .3s var(--ease); }
-  .ball-prompt:active { transform: scale(.94); }
-  .hint { bottom: calc(var(--dock-h) + var(--safe-b) + 142px); white-space: normal; text-align: center; max-width: min(300px, calc(100vw - 40px)); }
-  /* Avisos arriba (debajo de los chips): abajo están la palanca y el personaje. */
-  .toast { bottom: auto; top: calc(var(--safe-t) + 120px); animation-name: drop; }
 }
 @media (max-width: 380px) {
   /* Pantallas angostas (iPhone SE): la botonera del paseo entra al lado de la palanca. */
-  .walk-hud { left: 134px; gap: 3px; padding: 4px; }
   .walk-who img, .walk-act { width: 36px; height: 36px; font-size: 18px; }
   .walk-who { display: none; }
-  .ball-prompt { left: 134px; padding: 11px 13px; font-size: 13.5px; }
 }
 
 /* Celular acostado: ficha a un costado. */
@@ -666,8 +631,6 @@ body.sheet-open .ball-prompt, body.walking .ball-prompt { display: none; }
   .sheet { left: auto; top: 0; width: min(420px, 55vw); height: 100dvh; border-radius: 26px 0 0 26px; transform: none; }
   .sheet-grab { display: none; }
   .sheet-head { touch-action: auto; }
-  .dock { left: 50%; right: auto; width: min(460px, 70vw); transform: translateX(-50%); }
-  body.sheet-open .dock { transform: translate(-50%, 140%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -746,3 +709,133 @@ body.sheet-open .ball-prompt, body.walking .ball-prompt { display: none; }
   font-family: var(--fiesta, Georgia, serif); font-style: italic; font-size: clamp(24px, 6.4vw, 40px); color: #fff3dc; text-shadow: 0 2px 18px rgba(0,0,0,.65), 0 0 30px rgba(255,190,110,.45);
   opacity: 0; transition: opacity 1.4s ease, transform 1.4s ease; }
 .intro-cap.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* ============ interfaz "modo juego" ============
+   Casi nada fijo: arriba a la derecha un solo botón de menú (con el anillo de los gestos de Hoy),
+   abajo a la derecha un botón de acción que cambia según lo que tengas cerca, y la palanca que aparece
+   donde apoyás el pulgar. Todo se desvanece mientras caminás y vuelve al frenar. */
+.hub-btn { position: relative; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--glass-2); border: 1px solid var(--line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 6px 20px rgba(0,0,0,.3); transition: transform .2s var(--ease); }
+.hub-btn:active { transform: scale(.92); }
+.hub-btn .ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; }
+.hub-btn .ring circle { fill: none; stroke: rgba(255, 240, 220, .14); stroke-width: 3; }
+.hub-btn .ring .fill { stroke: #ffc46b; stroke-linecap: round; stroke-dasharray: calc(var(--ring, 0) * 1) 100; filter: drop-shadow(0 0 3px rgba(255, 190, 100, .8)); transition: stroke-dasharray .6s var(--ease); }
+.hub-btn.full .ring .fill { stroke: #9be29a; filter: drop-shadow(0 0 4px rgba(150, 230, 150, .8)); }
+.hub-btn .ic { position: relative; }
+.hub-btn.zero .ring .fill { stroke-opacity: 0; }
+
+.act-btn { position: fixed; right: 16px; bottom: calc(var(--safe-b) + 22px); width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; align-content: center; gap: 0; background: radial-gradient(circle at 50% 35%, rgba(70, 34, 78, .92), rgba(34, 14, 44, .92)); border: 1.5px solid rgba(255, 214, 150, .45); box-shadow: 0 0 0 4px rgba(255, 190, 110, .08), 0 0 26px rgba(255, 170, 80, .28), 0 8px 24px rgba(0,0,0,.4); z-index: 5; transition: transform .2s var(--ease), opacity .4s, box-shadow .3s; touch-action: manipulation; }
+.act-btn .ic { font-size: 29px; line-height: 1; }
+.act-btn .lbl { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: rgba(20, 10, 28, .62); text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.act-btn:active { transform: scale(.9); }
+.act-btn.pop { animation: actPop .45s var(--ease); }
+.act-btn[data-kind="visit"] { border-color: rgba(255, 214, 120, .8); box-shadow: 0 0 0 4px rgba(255, 200, 110, .14), 0 0 34px rgba(255, 180, 80, .5), 0 8px 24px rgba(0,0,0,.4); }
+.act-btn[data-kind="add"] { background: radial-gradient(circle at 50% 35%, #f79a3a, #d9601c); border-color: rgba(255, 230, 190, .7); }
+.act-btn[data-kind="ball"] { border-color: rgba(210, 240, 110, .75); box-shadow: 0 0 30px rgba(200, 240, 100, .4), 0 8px 24px rgba(0,0,0,.4); }
+@keyframes actPop { 0% { transform: scale(.82); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+/* En la compu, arriba del botón de pisos del pie. */
+@media (min-width: 761px) and (pointer: fine) {
+  .act-btn { bottom: calc(var(--safe-b) + 84px); width: 64px; height: 64px; }
+  .act-btn .ic { font-size: 26px; }
+  .emote-btn { bottom: calc(var(--safe-b) + 94px) !important; right: 90px !important; }
+  .emote-tray { bottom: calc(var(--safe-b) + 176px) !important; }
+}
+/* Los gestos, en una burbujita al lado cuando el botón grande hace otra cosa. */
+.emote-btn { right: 98px; bottom: calc(var(--safe-b) + 34px); width: 44px; height: 44px; font-size: 20px; transition: transform .2s var(--ease), opacity .4s; }
+.emote-tray { right: 12px; bottom: calc(var(--safe-b) + 120px); }
+
+/* Palanca invisible: sólo se ve mientras el dedo la usa. */
+.joy { position: fixed; left: 0; top: 0; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%; background: radial-gradient(circle, rgba(255,240,220,.06), rgba(26,20,36,.42)); border: 1.5px solid rgba(255,240,220,.24); z-index: 5; pointer-events: none; opacity: 0; transition: opacity .25s; }
+.joy.on { opacity: 1; }
+.joy i { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff8ec, #e9c9a4); box-shadow: 0 4px 14px rgba(0,0,0,.35), 0 0 16px rgba(255,200,140,.35); transform: translate(var(--jx, 0px), var(--jy, 0px)); }
+/* La primera vez: una palanca fantasma que enseña dónde apoyar el dedo. */
+.joy-ghost { position: fixed; left: 26px; bottom: calc(var(--safe-b) + 46px); width: 104px; height: 104px; border-radius: 50%; border: 1.5px dashed rgba(255,240,220,.4); display: grid; place-items: center; pointer-events: none; z-index: 4; animation: ghostPulse 2.2s ease-in-out infinite; transition: opacity .4s; }
+.joy-ghost i { width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 244, 226, .35); box-shadow: 0 0 14px rgba(255,210,150,.4); animation: ghostKnob 2.2s ease-in-out infinite; }
+.joy-ghost span { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); white-space: nowrap; text-align: center; font-size: 11.5px; font-weight: 800; line-height: 1.25; opacity: .85; text-shadow: 0 1px 6px rgba(0,0,0,.7); }
+@keyframes ghostPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes ghostKnob { 0%, 100% { transform: translate(0, 0); } 40% { transform: translate(0, -22px); } 70% { transform: translate(14px, -10px); } }
+@media (pointer: fine) { .joy-ghost { display: none; } }
+
+/* Al caminar (o mientras vuela la cámara) se desvanece; vuelve al frenar. */
+.top, .act-btn, .emote-btn, .walk-hud, .joy-ghost { transition: opacity .45s, transform .3s var(--ease); }
+body.moving .top { opacity: 0; pointer-events: none; }
+body.moving .act-btn, body.moving .emote-btn { opacity: .28; }
+body.moving .walk-hud { opacity: .45; }
+body.moving .joy-ghost { opacity: 0; }
+body.moving .emote-tray { display: none; }
+body.moving .install-card { opacity: 0; pointer-events: none; transition: opacity .45s; }
+
+/* La hoja de menú */
+dialog.hub { width: min(460px, calc(100vw - 24px)); padding: 18px 18px 20px; }
+.hub-grab { display: none; }
+.hub-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; padding-right: 0; }
+.hub-head .chip { background: rgba(255, 240, 220, .08); color: inherit; }
+.hub-head .round-chip { width: 34px; padding: 0; justify-content: center; margin-left: auto; }
+.hub-head .round-chip[aria-pressed="false"] { opacity: .7; }
+.hub-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.hub-grid button { position: relative; display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 84px; padding: 10px 4px; border-radius: 18px; background: rgba(255, 240, 220, .07); border: 1px solid rgba(255, 240, 220, .08); font-size: 12.5px; font-weight: 800; line-height: 1.15; text-align: center; transition: transform .15s var(--ease), background .2s; }
+.hub-grid button:active { transform: scale(.94); }
+.hub-grid button:hover { background: rgba(255, 240, 220, .12); }
+.hub-grid .ic { position: relative; font-size: 27px; line-height: 1; }
+.hub-grid .featured-name { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-grid .hub-add .ic { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, #f7951f, #e0482f); color: #fff; font-size: 24px; box-shadow: 0 4px 14px rgba(240, 110, 30, .45); }
+.hub-grid .badge { top: -8px; left: 70%; border-color: transparent; }
+.hub-sub { margin: 16px 2px 8px; font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--em); }
+.hub-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.hub-row button { display: flex; align-items: center; gap: 9px; min-height: 50px; padding: 0 12px; border-radius: 16px; background: rgba(255, 240, 220, .07); font-weight: 800; font-size: 13.5px; text-align: left; }
+.hub-row button span { font-size: 20px; }
+.hub-links { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; margin-top: 16px; }
+.hub-links button { font-size: 13px; font-weight: 700; opacity: .8; padding: 6px 2px; text-decoration: underline; text-decoration-color: rgba(255,255,255,.25); text-underline-offset: 3px; }
+.hub-links button[hidden] { display: none; }
+
+/* ---- celular ---- */
+@media (max-width: 760px), (pointer: coarse) and (max-height: 540px) {
+  .top .brand-row, #music-btn { display: none; }
+  .top { padding: calc(var(--safe-t) + 12px) 14px 0; }
+  .top-left { gap: 6px; }
+  /* La pista, abajo entre la palanca y el botón de acción (no tapa al personaje). */
+  .hint { bottom: calc(var(--safe-b) + 40px); white-space: normal; text-align: center; font-size: 12px; padding: 8px 12px; max-width: calc(100vw - 250px); min-width: 120px; }
+  .hint .hand { display: none; }
+  /* Avisos arriba: abajo están la palanca y el personaje. */
+  .toast { bottom: auto; top: calc(var(--safe-t) + 70px); animation-name: drop; }
+  /* El paseo, arriba a la izquierda: abajo es lugar del pulgar. */
+  .walk-hud { left: 12px; right: auto; top: calc(var(--safe-t) + 12px); bottom: auto; transform: none; gap: 4px; padding: 5px; animation-name: drop; }
+  .walk-who span { display: block; }
+  .walk-who img, .walk-act { width: 38px; height: 38px; font-size: 18px; }
+  body.walking .top-left { padding-top: 56px; }
+  body.sheet-open .walk-hud, body.intro .walk-hud { opacity: 0; pointer-events: none; transform: translateY(-30px); }
+  /* "Agregar a la pantalla de inicio": arriba, que abajo es lugar del pulgar y del botón de acción. */
+  .install-card { top: calc(var(--safe-t) + 70px); bottom: auto; animation-name: drop; }
+  body.walking .install-card { top: calc(var(--safe-t) + 120px); }
+  /* La hora de las velas (y el aviso de Día de Muertos): una tira arriba, chiquita. */
+  .candle-hour { top: calc(var(--safe-t) + 70px); bottom: auto; width: calc(100vw - 24px); padding: 8px 44px 8px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; line-height: 1.3; animation-name: drop; }
+  .candle-hour > div:first-child { flex: 1 1 140px; }
+  .candle-hour .more { display: none; }
+  .candle-hour .btn { min-height: 34px; padding: 0 14px; font-size: 13px; }
+  .candle-hour .x { top: 50%; right: 6px; transform: translateY(-50%); width: 32px; height: 32px; }
+  body.walking .candle-hour { top: calc(var(--safe-t) + 120px); }
+  /* La hoja de menú sube desde abajo. */
+  dialog.hub { width: 100vw; max-width: 100vw; margin: auto 0 0; border-radius: 28px 28px 0 0; padding: 8px 16px calc(var(--safe-b) + 18px); max-height: 88dvh; }
+  dialog.hub[open] { animation: hubUp .34s var(--ease); }
+  .hub-grab { display: flex; justify-content: center; padding: 4px 0 10px; }
+  .hub-grab span { width: 42px; height: 5px; border-radius: 3px; background: rgba(255, 240, 220, .25); }
+  .hub-grid button { min-height: 80px; font-size: 12px; }
+}
+@keyframes hubUp { from { transform: translateY(40%); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 380px) {
+  .hub-grid { gap: 6px; }
+  .hub-grid button { min-height: 72px; font-size: 11.5px; padding: 8px 2px; }
+  .hub-grid .ic { font-size: 24px; }
+  .walk-who span { display: none; }
+  .act-btn { width: 66px; height: 66px; }
+  .emote-btn { right: 90px; }
+}
+/* Celular acostado: la hoja de menú a la derecha, más angosta. */
+@media (pointer: coarse) and (max-height: 540px) and (orientation: landscape) {
+  dialog.hub { width: min(460px, 70vw); margin: auto 0 0 auto; border-radius: 26px 0 0 0; max-height: 100dvh; }
+  .hub-grid button { min-height: 64px; }
+  .hint { bottom: calc(var(--safe-b) + 24px); }
+  .act-btn { right: calc(16px + env(safe-area-inset-right, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .joy-ghost, .joy-ghost i, .act-btn.pop { animation: none; }
+}

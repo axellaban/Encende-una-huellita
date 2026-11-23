@@ -8,11 +8,11 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
-import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF, onPath, insideHall, onBridge } from './scene/world.js';
+import { buildWorld, SPAWN, HALL_CENTER, ELEVATOR_POS, uTime, creekZ, CREEK_HALF, onPath, insideHall, onBridge } from './scene/world.js';
 import { buildHall, SLOTS_PER_FLOOR, EASEL_POS } from './scene/hall.js';
 import { createControls } from './scene/controls.js';
 import { createLanterns } from './scene/lanterns.js';
-import { createCozy } from './scene/cozy.js';
+import { createCozy, JAR_POS } from './scene/cozy.js';
 import { createAvatars } from './scene/avatars.js';
 import { createElevator } from './scene/elevator.js';
 import { createSpirits, MEADOW } from './scene/spirits.js';
@@ -322,6 +322,10 @@ async function buildScene() {
   let stepT = 0;
   let moodT = 0;
   let greetT = 3;
+  let actT = 0;
+  let calmT = 0;
+  let hudAway = false;
+  setupStick();
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
     const t = clock.elapsedTime;
@@ -334,7 +338,14 @@ async function buildScene() {
     me.update(dt, { speed: P.speed, turn: P.turn });
     spirits.setPlayer(P.pos, P.heading, P.moving, dt);
     spirits.update(dt, camera.position);
-    updateBallPrompt();
+    // Botón de acción según lo que haya cerca, y la interfaz que se desvanece al caminar o mientras
+    // vuela la cámara (vuelve medio segundo después de frenar).
+    stillFor = P.moving ? 0 : stillFor + dt;
+    actT -= dt;
+    if (actT < 0) { actT = 0.3; updateAction(); }
+    const busy = introDone && (P.moving || controls.sticking || controls.flying);
+    calmT = busy ? 0.6 : calmT - dt;
+    if ((calmT > 0) !== hudAway) { hudAway = calmT > 0; document.body.classList.toggle('moving', hudAway); }
     heaven.update(dt, t);
     hall.animate(t);
     lanterns.update(dt, t);
@@ -1010,7 +1021,6 @@ function addHere() {
   return openAdd(null);
 }
 $('#add-btn').onclick = () => addHere();
-$('#dock-add').onclick = () => { haptic(8); addHere(); };
 
 async function takePhoto(file) {
   if (!file || !file.type.startsWith('image/')) return toast('Elegí una imagen (JPG, PNG o similar).');
@@ -1180,8 +1190,25 @@ $$('[data-featured]').forEach((b) => { b.onclick = visitFeatured; });
 // ---------- pisos, menú y modales ----------
 $('#floors-btn').onclick = () => { renderFloors(); $('#floors').showModal(); };
 $('#floors').addEventListener('close', () => { if (!riding) elevator?.setOpen(false); });
-$('#dock-menu').onclick = () => openMenu();
-$('#menu-btn').onclick = () => openMenu();
+$('#hub-btn').onclick = () => openHub();
+
+// La hoja de menú: todo lo que antes estaba en la barra de abajo, con íconos grandes.
+function openHub() {
+  closeModals();
+  hideHint();
+  $('#emote-tray').hidden = true;
+  syncMusicBtn();
+  updateTodayBadge();
+  $('#hub').showModal();
+  haptic(6);
+}
+// Cualquier botón de la hoja la cierra antes de hacer lo suyo (menos la música).
+$('#hub').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b && b.id !== 'hub-music') $('#hub').close();
+}, true);
+$$('#hub [data-then]').forEach((b) => { b.onclick = () => THEN[b.dataset.then]?.(); });
+$('#hub-music').onclick = () => $('#music-btn').click();
 
 function openMenu() {
   closeModals();
@@ -1223,6 +1250,7 @@ const THEN = {
   install: () => installPrompt?.prompt(),
   photo: () => photoMode(),
   meadow: () => goMeadow(),
+  options: () => openMenu(),
 };
 $$('dialog [data-close]').forEach((b) => {
   b.onclick = () => {
@@ -1230,7 +1258,6 @@ $$('dialog [data-close]').forEach((b) => {
     THEN[b.dataset.then]?.();
   };
 });
-$$('#menu .menu-item[data-then]').forEach((b) => { b.onclick = () => { $('#menu').close(); THEN[b.dataset.then]?.(); }; });
 $$('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
 
 function goHome() {
@@ -1244,7 +1271,9 @@ function goHome() {
 $('#brand').onclick = goHome;
 
 let toastTimer;
-function toast(text, action = null) {
+// `soft`: avisos que no hacen falta mientras caminás (no se muestran si la interfaz está desvanecida).
+function toast(text, action = null, soft = false) {
+  if (soft && document.body.classList.contains('moving')) return;
   const el = $('#toast');
   el.hidden = true;
   void el.offsetWidth;
@@ -1266,7 +1295,7 @@ function hideHint() {
   $('#hint').classList.add('gone');
   clearTimeout(hintTimer);
 }
-$('#hint-text').textContent = coarse ? 'Tocá el piso o usá la palanca · Deslizá para girar' : 'Clic en el piso o WASD para caminar · Arrastrá para girar la cámara';
+$('#hint-text').textContent = coarse ? 'Deslizá a la derecha para mirar alrededor' : 'Clic en el piso o WASD para caminar · Arrastrá para girar la cámara';
 
 function timeAgo(at) {
   const s = Math.round((Date.now() - at) / 1000);
@@ -1338,6 +1367,8 @@ function timeAgo(at) {
 
 function syncMusicBtn() {
   $('#music-btn').setAttribute('aria-pressed', String(isMusicOn()));
+  $('#hub-music').setAttribute('aria-pressed', String(isMusicOn()));
+  $('#hub-music').textContent = isMusicOn() ? '🎵' : '🔇';
 }
 $('#music-btn').onclick = () => {
   setMusic(!isMusicOn());
@@ -1375,7 +1406,7 @@ function showTick(e) {
   };
   box.append(b);
   clearTimeout(tickerTimer);
-  tickerTimer = setTimeout(() => { box.innerHTML = ''; }, 12_000);
+  tickerTimer = setTimeout(() => { box.innerHTML = ''; }, 7_000);
 }
 
 // Un solo pedido periódico (el "latido"): dice dónde está tu personaje y trae a los demás visitantes
@@ -1478,7 +1509,7 @@ function checkCandleHour() {
     api.night().then((n) => {
       const el = $('#candle-hour > div');
       const extra = n.candles ? ` <b>${n.candles} ${n.candles === 1 ? 'vela' : 'velas'}${n.countries > 1 ? ` de ${n.countries} países` : ''} esta noche.</b>` : '';
-      el.innerHTML = `<b>🕯️ La hora de las velas.</b> Cada noche a las 21, quienes visitan el jardín encienden una vela al mismo tiempo.${extra}`;
+      el.innerHTML = `<b>🕯️ La hora de las velas.</b> <span class="more">Cada noche a las 21, quienes visitan el jardín encienden una vela al mismo tiempo.</span>${extra}`;
     }).catch(() => {});
   }
 }
@@ -1639,6 +1670,11 @@ function updateTodayBadge() {
     el.textContent = `${p.done}/${p.total}`;
     el.classList.toggle('full', p.done === p.total);
   });
+  const hb = $('#hub-btn');
+  hb.style.setProperty('--ring', String(Math.round((p.done / Math.max(1, p.total)) * 100)));
+  hb.classList.toggle('full', p.done === p.total);
+  hb.classList.toggle('zero', p.done === 0);
+  hb.setAttribute('aria-label', `Menú (gestos de hoy: ${p.done} de ${p.total})`);
 }
 
 function renderToday() {
@@ -1863,6 +1899,22 @@ $$('[data-jar]').forEach((b) => { b.onclick = () => { b.closest('dialog')?.close
   }
   $('#emote-btn').onclick = () => { tray.hidden = !tray.hidden; haptic(6); };
   canvas.addEventListener('pointerdown', () => { tray.hidden = true; });
+  // Atajo: mantener apretado el botón de acción abre siempre los gestos.
+  let pressT = 0;
+  const act = $('#act-btn');
+  act.addEventListener('pointerdown', () => { pressT = setTimeout(() => { pressT = -1; tray.hidden = false; haptic(10); }, 520); });
+  const clear = () => { if (pressT > 0) clearTimeout(pressT); };
+  act.addEventListener('pointerup', clear);
+  act.addEventListener('pointercancel', clear);
+  act.addEventListener('pointerleave', clear);
+  act.onclick = () => {
+    if (pressT === -1) { pressT = 0; return; }
+    haptic(8);
+    const c = actionNow;
+    if (!c || c.kind === 'gestures') { tray.hidden = !tray.hidden; return; }
+    tray.hidden = true;
+    c.run();
+  };
 }
 function gesture(g) {
   $('#emote-tray').hidden = true;
@@ -1888,40 +1940,112 @@ $('#opt-quiet').onchange = (e) => {
   toast(e.target.checked ? '🙈 Modo tranquilo: ahora sólo estás vos.' : 'Volvés a ver a los demás visitantes.');
 };
 
-// ---------- palanca para caminar (celular) ----------
-{
+// ---------- palanca invisible (celular) ----------
+// La maneja controls.js: acá sólo se dibuja donde apoyaste el pulgar. La primera vez se ve una
+// "palanca fantasma" que enseña dónde va el dedo; después de usarla una vez, no aparece más.
+function setupStick() {
   const joy = $('#joy');
   const knob = joy.querySelector('i');
-  let id = null;
-  const R = 40;
-  const setKnob = (x, y) => { knob.style.setProperty('--jx', `${x}px`); knob.style.setProperty('--jy', `${y}px`); };
-  const move = (e) => {
-    const r = joy.getBoundingClientRect();
-    let dx = e.clientX - (r.left + r.width / 2);
-    let dy = e.clientY - (r.top + r.height / 2);
-    const d = Math.hypot(dx, dy);
-    if (d > R) { dx = (dx / d) * R; dy = (dy / d) * R; }
-    setKnob(dx, dy);
-    controls?.setJoystick(dx / R, dy / R);
+  const ghost = $('#joy-ghost');
+  const learned = () => store.get('huellita.stick') === '1';
+  if (coarse && !learned()) ghost.hidden = false;
+  controls.stickZone = (x, y) => {
+    if (!coarse || !sheetEl.hidden || document.body.classList.contains('intro') || document.body.classList.contains('photo-mode')) return false;
+    const w = innerWidth;
+    const h = innerHeight;
+    return x < w * (w > h ? 0.42 : 0.5) && y > h * 0.22 && y < h - 30;
   };
-  joy.addEventListener('pointerdown', (e) => {
-    id = e.pointerId;
-    joy.setPointerCapture(id);
-    joy.classList.add('active');
-    hideHint();
-    haptic(5);
-    move(e);
+  controls.onStick((ev) => {
+    if (ev.type === 'start') {
+      joy.style.left = `${ev.x}px`;
+      joy.style.top = `${ev.y}px`;
+      knob.style.setProperty('--jx', '0px');
+      knob.style.setProperty('--jy', '0px');
+    } else if (ev.type === 'move') {
+      if (!joy.classList.contains('on')) {
+        joy.classList.add('on');
+        hideHint();
+        haptic(5);
+        if (!learned()) { store.set('huellita.stick', '1'); ghost.hidden = true; }
+      }
+      joy.style.left = `${ev.x}px`;
+      joy.style.top = `${ev.y}px`;
+      knob.style.setProperty('--jx', `${ev.dx}px`);
+      knob.style.setProperty('--jy', `${ev.dy}px`);
+    } else joy.classList.remove('on');
   });
-  joy.addEventListener('pointermove', (e) => { if (e.pointerId === id) move(e); });
-  const end = (e) => {
-    if (e.pointerId !== id) return;
-    id = null;
-    joy.classList.remove('active');
-    setKnob(0, 0);
-    controls?.setJoystick(0, 0);
-  };
-  joy.addEventListener('pointerup', end);
-  joy.addEventListener('pointercancel', end);
+}
+
+// ---------- botón de acción según lo que tengas cerca ----------
+// Cada ~0,3 s mira qué hay alrededor de tu personaje y cambia el único botón de acción:
+// 🎾 la pelota, 🕯️ un marco, ＋ un lugar libre, 🛗 el ascensor, 🫙 el frasco, 🤍 tu mascota… y si no hay
+// nada, 🤍 gestos y frases. Mantenerlo apretado abre siempre los gestos.
+let actionNow = null;
+let actionKey = '';
+let stillFor = 0; // cuánto hace que tu personaje está quieto
+const _v = new THREE.Vector3();
+function nearestFrame(P) {
+  if (!hall) return null;
+  let best = null;
+  const hx = Math.sin(P.heading);
+  const hz = Math.cos(P.heading);
+  hall.slots.forEach((s, i) => {
+    s.photo.getWorldPosition(_v);
+    const dx = _v.x - P.pos.x;
+    const dz = _v.z - P.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d > 5.2) return;
+    const facing = (dx * hx + dz * hz) / Math.max(d, 1e-3);
+    if (facing < 0.25) return;
+    // Mejor el ocupado y a la altura de los ojos; entre iguales, el más cerca y de frente.
+    const score = d - facing * 1.6 + (s.memorial ? 0 : 1.2) + Math.max(0, _v.y - 2.2) * 0.35;
+    if (!best || score < best.score) best = { i, s, score };
+  });
+  return best;
+}
+function computeAction() {
+  if (!controls || !hall || !introDone) return null;
+  const P = controls.player;
+  const b = spirits?.ball;
+  if (b && !b.held && !b.inAir && P.pos.distanceTo(_v.set(b.pos.x, 0, b.pos.z)) < 2.6) return { kind: 'ball', ic: '🎾', lbl: 'Tirar', key: 'ball', run: throwBall };
+  // La ofrenda de la destacada es enorme: se la ofrece desde la entrada del salón si la mirás.
+  const fd = Math.hypot(EASEL_POS.x - P.pos.x, EASEL_POS.z - P.pos.z);
+  const ff = ((EASEL_POS.x - P.pos.x) * Math.sin(P.heading) + (EASEL_POS.z - P.pos.z) * Math.cos(P.heading)) / Math.max(fd, 1e-3);
+  if (hall.featured && (fd < 6 || (fd < 11.5 && ff > 0.5))) {
+    const f = hall.featured;
+    return { kind: 'visit', ic: '🕯️', lbl: f.name, key: `f:${f.id}`, run: () => visit(f) };
+  }
+  const fr = nearestFrame(P);
+  if (fr) {
+    const m = fr.s.memorial;
+    if (m) return { kind: 'visit', ic: '🕯️', lbl: m.name, key: `m:${m.id}`, run: () => visit(m) };
+    return { kind: 'add', ic: '＋', lbl: 'Sumar acá', key: `a:${fr.i}`, run: () => openAdd(hall.floor * SLOTS_PER_FLOOR + fr.i) };
+  }
+  if (P.pos.distanceTo(_v.set(ELEVATOR_POS.x, 0, ELEVATOR_POS.z)) < 5.5) return { kind: 'lift', ic: '🛗', lbl: 'Ascensor', key: 'lift', run: callElevator };
+  if (currentFloor() === 0 && P.pos.distanceTo(_v.set(JAR_POS.x, 0, JAR_POS.z)) < 3.2) return { kind: 'jar', ic: '🫙', lbl: 'Frasco', key: 'jar', run: () => { clink(); openJar(); } };
+  const c = spirits?.companion;
+  // Paseando, el botón es la pelota; si te quedás quieto un rato al lado de tu mascota, acariciarla.
+  if (c && c.fade > 0.5 && stillFor > 2.5 && P.pos.distanceTo(c.pos) < 2.4) return { kind: 'pet', ic: '🐾', lbl: 'Acariciar', key: 'pet', run: () => { stillFor = 0; tapSpirit(c); } };
+  if (walking) return { kind: 'ball', ic: '🎾', lbl: 'Tirar', key: 'ball-w', run: throwBall };
+  return { kind: 'gestures', ic: '🤍', lbl: 'Gestos', key: 'g', run: null };
+}
+function updateAction() {
+  const a = computeAction();
+  actionNow = a;
+  const key = a ? a.key + a.lbl : '';
+  if (key === actionKey) return;
+  actionKey = key;
+  const btn = $('#act-btn');
+  if (!a) return;
+  $('#act-ic').textContent = a.ic;
+  $('#act-lbl').textContent = a.lbl;
+  btn.dataset.kind = a.kind;
+  btn.setAttribute('aria-label', a.kind === 'visit' ? `Visitar a ${a.lbl}` : a.kind === 'gestures' ? 'Gestos y frases' : a.lbl);
+  btn.classList.remove('pop');
+  void btn.offsetWidth;
+  btn.classList.add('pop');
+  // Cuando el botón hace otra cosa, los gestos quedan en una burbujita al lado.
+  $('#emote-btn').hidden = a.kind === 'gestures';
 }
 
 // ---------- fotos, voz, luz eterna, encuentro, diario y familia ----------
@@ -2750,7 +2874,6 @@ function throwBall() {
   const P = controls.player;
   setTimeout(() => spirits.throwBall(me.handWorld(), P.heading), 230);
 }
-$('#walk-ball').onclick = throwBall;
 $('#walk-call').onclick = () => { spirits?.call(); haptic(8); if (walking) toast(`📣 ¡${walking.name}, vení!`); };
 $('#walk-stop').onclick = stopWalk;
 $('#walk-who').onclick = () => { if (walking) visit(memorials.find((m) => m.id === walking.id) || walking); };
@@ -2760,17 +2883,6 @@ $('#s-walk').onclick = () => {
   if (walking?.id === current.id) stopWalk();
   else startWalk(current);
 };
-$('#ball-prompt').onclick = throwBall;
-
-let ballPromptOn = false;
-function updateBallPrompt() {
-  const b = spirits.ball;
-  const near = !b.held && !b.inAir && controls.player.pos.distanceTo(new THREE.Vector3(b.pos.x, 0, b.pos.z)) < 2.6 && sheetEl.hidden;
-  if (near !== ballPromptOn) {
-    ballPromptOn = near;
-    $('#ball-prompt').hidden = !near;
-  }
-}
 
 const SPIRIT_LINES = ['mueve la cola de felicidad', 'te mira con ojitos brillantes', 'da un saltito de alegría', 'te quiere invitar a jugar'];
 function tapSpirit(a) {
@@ -2810,9 +2922,9 @@ function wireSpirits() {
       once('tip-ball', () => setTimeout(() => toast('🎾 Tocá la pelota para tirársela'), 4200));
     }
     if (type === 'dropped' && (a.role === 'companion' || a.role === 'joined')) once('drop', () => toast(`🎾 ${a.name} te trajo la pelota. ¡Tirala de nuevo!`));
-    if (type === 'dropped' && a.role === 'pack' && a.name) toast(`🎾 ${a.name} te devolvió la pelota`);
+    if (type === 'dropped' && a.role === 'pack' && a.name) toast(`🎾 ${a.name} te devolvió la pelota`, null, true);
     if (type === 'join') once('join', () => toast(`🐾 ${a.name} se fue a jugar con los del Prado. Cuando camines, vuelve con vos.`));
-    if (type === 'greet' && a.name && a.role === 'pack') once(`greet-${a.name}`, () => toast(`🐶 ${a.name} vino a saludarte`));
+    if (type === 'greet' && a.name && a.role === 'pack') once(`greet-${a.name}`, () => toast(`🐶 ${a.name} vino a saludarte`, null, true));
   });
 }
 

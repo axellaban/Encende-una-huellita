@@ -22,25 +22,28 @@ en celular (iPhone 13 y SE) y el recorrido de punta a punta (ver AGENTS).
       dueño se veía sucia y lavada (líneas negras y textura de lienzo por todos lados). Dejarla como
       opción en Más → Opciones; si se quiere el look de littleprince.dev, pedirle capturas al dueño (el
       juego necesita WebGPU y en el contenedor no carga) y bajarla mucho (`uAmt` ≈ 0.3, sin bordes Sobel).
-- [ ] **HUD "modo juego"** (el dueño: "los juegos tienen muy poquitas cosas en pantalla"). Hoy hay ~11
-      cosas fijas. Propuesta aprobada en la charla, falta hacerla:
-      1. Arriba, nada: sacar `#brand` (ya está en la portada), el chip `acá ahora` y `#me-chip` pasan
-         al menú; `#music-btn` también. Queda un solo botón redondo de menú arriba a la derecha con un
-         anillo de progreso de "Hoy" (3/4).
-      2. **Palanca invisible** (`#joy`): aparece donde apoyás el pulgar en la mitad izquierda y
-         desaparece al soltar.
-      3. **Un botón de acción según el contexto** (abajo a la derecha, reemplaza a `#emote-btn` y al
-         dock): 🕯️ frente a un marco (abre la ficha), 🛗 en el ascensor, 🐾 con tu mascota cerca,
-         🎾 si la pelota está cerca, ➕ en un lugar libre, y si no hay nada, 🤍 gestos y frases. Calcularlo
-         cada ~0,3 s en el ciclo de `main.js` con la posición del personaje (`hall.viewpoint`,
-         `elevator.standPoint`, `spirits.companion`, `spirits.ball`).
-      4. **Sin dock** (`nav.dock`): Huellitas, Luca, Hoy, Sumar mascota, Pisos, Prado, Foto, Opciones van a
-         una hoja de menú con íconos grandes.
-      5. **El HUD se desvanece al caminar** o mientras vuela la cámara, y vuelve al frenar (clase en
-         `body`, `opacity` con transición).
-      6. **Menos avisos**: los `toast` de actividad de otros, cortos y de a uno; nada de avisos encima
-         del personaje mientras camina.
-- [ ] Probar que con el HUD nuevo todo siga a un toque: recorrido de punta a punta ajustado.
+- [x] **Interfaz "modo juego"** (hecho el 23/11 a la noche; el dueño: "los juegos tienen muy poquitas
+      cosas en pantalla"). Arriba sólo un botón de menú con el anillo de los gestos de Hoy (`#hub-btn`);
+      la marca, "acá ahora", tu personaje y la música se mudaron a la hoja de menú (`#hub`, íconos
+      grandes, sube desde abajo en el celular). **Palanca invisible**: la maneja `controls.js`
+      (`stickZone`, `onStick`, `sticking`); aparece donde apoyás el pulgar en la mitad izquierda y un
+      toque sin arrastrar sigue siendo "caminar hasta ahí". La primera vez se ve una palanca fantasma
+      (`#joy-ghost`) que enseña dónde va el dedo. **Un botón de acción** (`#act-btn`, `computeAction()` en
+      `main.js`, cada 0,3 s): 🎾 pelota cerca (o paseando), 🕯️ la ofrenda o un marco al que mirás, ＋ un
+      lugar libre, 🛗 ascensor, 🫙 frasco, 🐾 acariciar (quieto 2,5 s al lado de tu mascota) y si no,
+      🤍 gestos; cuando hace otra cosa, los gestos quedan en una burbujita al lado (y mantenerlo
+      apretado también los abre). **Sin dock.** Al caminar o mientras vuela la cámara, `body.moving`
+      desvanece todo y vuelve medio segundo después de frenar. Avisos arriba (abajo va el pulgar);
+      los "suaves" (`toast(..., null, true)`) no salen mientras caminás; la hora de las velas y
+      "Agregar a la pantalla de inicio" son tiras chicas arriba.
+- [x] **Recorrido de punta a punta como script**: `scripts/recorrido.mjs` (ver AGENTS). Dio 129/129 en
+      celular, iPhone SE, acostado, compu, modo demo y sin WebGL.
+- [x] **Arreglado: el 3D se congelaba** si saltabas lejos mientras paseabas a tu mascota (ascensor,
+      volver a la entrada, un marco lejano) estando quieto: el espíritu reaparecía con un destino sin
+      velocidad, daba NaN y la correa tiraba un error en cada cuadro. Ahora `reappear()` limpia el destino,
+      `move()` se recompone si algo es NaN y la correa no se dibuja con puntos inválidos.
+- [ ] Probar la palanca invisible y el botón de acción en un teléfono de verdad (que el pulgar no
+      choque con el borde ni con el gesto de "atrás" de Android; ajustar `stickZone` si hace falta).
 
 ### 3. Que se sienta como el video (sin copiarlo)
 Lo que lo hace lindo: bruma en capas, perspectiva aérea (lo lejos se aclara a celeste), vista inmensa
@@ -200,7 +203,7 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 
 ## P3 · Deuda técnica
 
-- [ ] **Dividir `src/main.js`** (≈2.980 líneas y creciendo) en módulos: ficha, formularios, familia,
+- [ ] **Dividir `src/main.js`** (≈3.090 líneas y creciendo) en módulos: ficha, formularios, familia,
       juego, guía, ascensor, presencia.
 - [ ] **Archivos fuera de Redis**: fotos (≈100–150 KB) y voces (hasta 600 KB) se guardan en base64 en
       Upstash; pasar a Vercel Blob/S3 y dejar sólo la URL.
@@ -214,8 +217,8 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       lo que está lejos de la entrada (pisos del cielo, `skymagic.js`, ascensor, regalitos).
 - [ ] `GET /api/activity/:since` ya no lo usa la app (todo va por `POST /api/now` con `since`); queda por
       compatibilidad y tiene test. Se puede quitar junto con `api.activity` en `src/api.js`.
-- [ ] **Tests de frontend**: sólo hay tests de API. Convertir los recorridos de Playwright (ver
-      `AGENTS.md`) en una suite que se pueda correr.
+- [x] **Tests de frontend**: `scripts/recorrido.mjs` recorre todo en 6 dispositivos (ver AGENTS). Falta
+      correrlo en CI (necesita Chromium; con swiftshader tarda unos 25 minutos en total).
 - [x] Encabezados de seguridad (CSP, Permissions-Policy) en `vercel.json` y en el servidor local
       (un test controla que coincidan). Si sumás un dominio externo (fuentes, CDN), agregalo al CSP.
 - [ ] Accesibilidad: lector de pantalla para el 3D (hoy la lista "Huellitas" es la alternativa),

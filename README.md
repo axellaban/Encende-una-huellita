@@ -24,10 +24,10 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
 - **Farolitos**: cada vela que se enciende (tuya o de cualquier visitante) suelta un farolito de papel
   que sube al cielo.
 - **Tercera persona**: tenés tu propio personaje (cara de calaverita pintada, sarape de colores,
-  sombrero o corona de cempasúchil y un farolito en la mano). Tocá el piso o usá la palanca para
-  caminar; deslizá para girar la cámara y pellizcá (o la rueda) para acercarla. En compu, WASD /
+  sombrero o corona de cempasúchil y un farolito en la mano). Apoyá el pulgar a la izquierda y
+  arrastrá (o tocá el piso) para caminar; deslizá para girar la cámara y pellizcá (o la rueda) para acercarla. En compu, WASD /
   flechas (Shift corre) y Q/E giran la cámara. La cámara esquiva muros y postes, y al visitar una
-  huellita enfoca su marco mientras tu personaje se para al lado. Tocá tu nombre para elegir el color
+  huellita enfoca su marco mientras tu personaje se para al lado. En el menú, tocá tu nombre para elegir el color
   de tu sarape y si llevás sombrero o corona de flores.
 - **Prado de los espíritus**: un claro a la derecha del camino donde juegan los espíritus de las
   huellitas del muro (Luca incluido): zoomies, se persiguen, se invitan a jugar con una reverencia,
@@ -145,7 +145,13 @@ tarjeta para historias, farolillo que se va volando y palabras de consuelo.
 
 ### Pensado para el celular
 
-- Barra inferior al alcance del pulgar: Huellitas · Luca · ＋ · Hoy · Más, y **palanca** para caminar.
+- **Interfaz de juego, casi sin nada en pantalla**: arriba, un botón de menú con un anillo que se va
+  llenando con los gestos de Hoy; abajo a la izquierda, una **palanca invisible** que aparece donde
+  apoyás el pulgar; abajo a la derecha, **un solo botón** que cambia según lo que tengas cerca (🕯️ la
+  ofrenda o un marco, ＋ un lugar libre, 🎾 la pelota, 🛗 el ascensor, 🫙 el frasco, 🐾 tu mascota o 🤍
+  gestos). Mientras caminás, todo se desvanece y vuelve cuando frenás.
+- El menú es una hoja con íconos grandes: Huellitas, Luca, Hoy, Sumar mascota, Pisos, Prado, Foto,
+  Opciones y lo "para el corazón" (la sexta etapa, frasco, farolillo, consuelo).
 - La ficha de cada huellita es una hoja que se desliza: a media altura se ve el marco en 3D arriba;
   la arrastrás para abrirla entera o hacia abajo para cerrarla.
 - Formularios a pantalla completa con el botón siempre visible, campos de 16 px (sin zoom en iPhone),
@@ -232,6 +238,7 @@ server/page.js          Vista previa de cada huellita en /h/<id> (local y Vercel
 server/index.js         Servidor local
 api/handler.js          Función de Vercel
 scripts/dev.mjs         Levanta Vite y la API juntos (npm run dev)
+scripts/recorrido.mjs   Recorrido de punta a punta con Playwright (6 dispositivos)
 lab/pets.html           Laboratorio de poses y simulación del Prado (sólo en desarrollo)
 lab/gifts.html          Los 36 regalitos en 3D juntos (sólo en desarrollo)
 ```
