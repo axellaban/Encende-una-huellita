@@ -9,6 +9,7 @@ import {
 import { stageOf } from '../../server/glow.js';
 import { giftMesh, idleGift } from './gifts3d.js';
 import { CORRIDOR_NAMES } from '../floors.js';
+import { paperLantern, flickerLantern } from './lanterns.js';
 import { PALETTE, paintedWallTexture, talaveraTexture, marigoldGeometry, marigoldMaterial, marigoldCluster, picadoBanner, sugarSkull, panDeMuerto, backgroundTexture } from './muertos.js';
 
 // Ramo del jarrito: [x, y, z, tamaño] de cada flor (se van sumando con las flores que le dejan).
@@ -447,6 +448,28 @@ export function buildHall(scene, colliders, tier) {
     }
   }
   for (const pt of posts) strand(new THREE.Vector3(pt.x, POST_H + 0.1, pt.z), top, tier.bulbsPerStrand, 0.9);
+  // Farolitos de papel colgando de las guías de luces de la pérgola (uno cada dos postes, a dos alturas).
+  {
+    const TINTS = [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [0.8, 1.8, 1.6], [2.2, 1.7, 0.6], [1.3, 0.9, 2.0]];
+    posts.forEach((pt, i) => {
+      if (i % 2) return;
+      const a = new THREE.Vector3(pt.x, POST_H + 0.1, pt.z);
+      for (const [j, t] of [0.32, 0.62].entries()) {
+        const p = new THREE.Vector3().lerpVectors(a, top, t);
+        p.y -= Math.sin(Math.PI * t) * 0.9;
+        const hang = new THREE.Group();
+        hang.position.copy(p);
+        const string = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 4), new THREE.MeshBasicMaterial({ color: '#2a1d16' }));
+        string.position.y = -0.25;
+        const l = paperLantern({ scale: 1.9, tint: TINTS[(i + j) % TINTS.length], glow: 1.4 });
+        l.position.y = -0.85;
+        hang.add(string, l);
+        scene.add(hang);
+        const ph = i * 1.3 + j;
+        animators.push((tt) => { hang.rotation.z = Math.sin(tt * 0.9 + ph) * 0.06; hang.rotation.x = Math.sin(tt * 0.7 + ph) * 0.04; flickerLantern(l, tt); });
+      }
+    });
+  }
   // Papel picado entre los postes y cruzando hacia el poste central.
   for (let i = 0; i < posts.length - 1; i++) {
     const b = picadoBanner(new THREE.Vector3(posts[i].x, POST_H - 0.12, posts[i].z), new THREE.Vector3(posts[i + 1].x, POST_H - 0.12, posts[i + 1].z), { sag: 0.35, flags: 9, size: 0.36, seed: i });
