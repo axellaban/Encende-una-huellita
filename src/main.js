@@ -295,6 +295,17 @@ async function refresh() {
   const r = await api.list();
   lastFull = Date.now();
   memorials = r.memorials;
+  if (walking) {
+    const w = memorials.find((m) => m.id === walking.id);
+    if (!w) stopWalk();
+    else if (w.name !== walking.name || JSON.stringify(w.look) !== JSON.stringify(walking.look) || w.species !== walking.species) {
+      // Cambió cómo es (lo editaron): su espíritu vuelve a aparecer con el aspecto nuevo.
+      walking = w;
+      spirits?.walk(w, null);
+      $('#walk-name').textContent = w.name;
+      $('#walk-photo').src = photoSrc(w);
+    } else walking = w;
+  }
   hall?.render(memorials);
   spirits?.setPack(memorials, walking?.id);
   renderStats(r.stats);
@@ -404,7 +415,7 @@ function callElevator() {
   closeSheet();
   hideHint();
   const { stand, target } = elevator.standPoint();
-  placeNear(stand, target, 0.9);
+  placeNear(stand, target, 0.9, 2.8);
   controls.flyTo(stand, target, () => {
     elevator.setOpen(true);
     ding();
@@ -439,14 +450,15 @@ function visit(m) {
       target.y -= 0.42 * stand.distanceTo(frame) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     }
     hideHint();
-    placeNear(stand, frame, key === 'featured' ? 1.0 : 0.85);
+    if (key === 'featured') placeNear(stand, frame, 1.3, 4.1);
+    else placeNear(stand, frame, 0.85);
     controls.flyTo(stand, target, () => hall.pulse(key));
   }
   openSheet(m);
 }
 
 // Pone a tu personaje parado frente a un marco (o al ascensor), a un costado para no taparlo.
-function placeNear(stand, frame, side = 0.85) {
+function placeNear(stand, frame, side = 0.85, dist = 1.45) {
   if (!controls) return;
   const front = new THREE.Vector3(stand.x - frame.x, 0, stand.z - frame.z);
   if (front.lengthSq() < 1e-4) return;
@@ -456,7 +468,7 @@ function placeNear(stand, frame, side = 0.85) {
   const camSide = Math.sign((stand.x - frame.x) * sideV.x + (stand.z - frame.z) * sideV.z) || 1;
   const away = -camSide * side;
   for (const s of [away, away * 1.5, -away, 0]) {
-    const spot = new THREE.Vector3(frame.x, 0, frame.z).addScaledVector(front, 1.45).addScaledVector(sideV, s);
+    const spot = new THREE.Vector3(frame.x, 0, frame.z).addScaledVector(front, dist).addScaledVector(sideV, s);
     if (controls.blocked(spot.x, spot.z)) continue;
     teleportPlayer(spot, new THREE.Vector3(frame.x, 0, frame.z));
     return;
@@ -893,7 +905,9 @@ $('#add-form').onsubmit = async (e) => {
       visitor: visitor.name,
       pendingGlow: game.pendingGlow,
     });
-    if (game.pendingGlow) setTimeout(() => showGlowToast(`✨ +${game.pendingGlow} Glow · tu Glow guardado ya hace brillar a ${m.name}`), 2600);
+    // Guardar el número antes de vaciar el banco (si no, el aviso decía "+0 Glow").
+    const banked = game.pendingGlow;
+    if (banked) setTimeout(() => showGlowToast(`✨ +${banked} Glow · tu Glow guardado ya hace brillar a ${m.name}`), 2600);
     game.clearBank();
     if (!store.get('huellita.myPet')) store.set('huellita.myPet', m.id);
     // Al ponerla en el muro le encendemos su primera vela: cuenta como la vela de hoy.
@@ -1074,6 +1088,7 @@ function timeAgo(at) {
 // Así te ven los demás: color del sarape y sombrero o corona.
 {
   const HUES = [8, 32, 50, 140, 176, 210, 262, 318];
+  const HUE_NAMES = ['Rojo', 'Naranja', 'Amarillo', 'Verde', 'Turquesa', 'Azul', 'Violeta', 'Rosa'];
   const box = $('#me-hues');
   const hatOf = (h) => Math.round(h) % 2 === 1;
   const swapCharacter = (h) => {
@@ -1105,7 +1120,8 @@ function timeAgo(at) {
     const sp = document.createElement('span');
     sp.className = 'swatch';
     sp.style.setProperty('--c', `hsl(${h} 55% 46%)`);
-    sp.setAttribute('aria-label', `Color ${h}`);
+    sp.setAttribute('aria-label', HUE_NAMES[HUES.indexOf(h)]);
+    sp.title = HUE_NAMES[HUES.indexOf(h)];
     l.append(i, sp);
     i.onchange = () => setHue(h + (hatOf(h) === hatOf(visitorHue) ? 0 : 1));
     box.append(l);
@@ -1179,7 +1195,8 @@ async function applyEvents(list) {
     if (last && Date.now() - last.at < 3 * 3600_000) showTick(last);
     return;
   }
-  const others = fresh.filter((e) => e.visitor !== visitor.name);
+  // Lo que hice yo no me lo avisa (el diario se firma "La familia": es mío si tengo su permiso).
+  const others = fresh.filter((e) => e.visitor !== visitor.name && !(e.type === 'diary' && myTokens()[e.memorialId]));
   if (!others.length) return;
   others.forEach((e, i) => setTimeout(() => showTick(e), i * 2600));
   let needFull = false;
@@ -1779,6 +1796,8 @@ $$('[data-tool]').forEach((b) => { b.onclick = () => current && TOOLS[b.dataset.
 async function ownAction(what, body, okMsg) {
   try {
     const r = await api.own(current.id, what, body);
+    // Mostrar el cambio enseguida con lo que devuelve el servidor; después se completa.
+    if (r && r.id === current?.id) { current = { ...current, ...r }; fillSheet(current); }
     await refresh();
     const fresh = memorials.find((x) => x.id === current.id);
     if (fresh) {
@@ -2089,10 +2108,12 @@ async function drawShareCard(m) {
   }
   g.textAlign = 'center';
   g.fillStyle = '#ffe0b0';
-  g.font = '64px Lobster, cursive';
+  // Fuentes que la página ya carga (antes usaba Lobster, que no se carga, y salía en letra genérica).
+  await document.fonts?.load('italic 600 150px "Cormorant Garamond"').catch(() => {});
+  g.font = 'italic 600 70px "Cormorant Garamond", Georgia, serif';
   g.fillText('En memoria de', W / 2, 1290);
   g.fillStyle = '#ffffff';
-  g.font = '150px Lobster, cursive';
+  g.font = 'italic 600 160px "Cormorant Garamond", Georgia, serif';
   g.fillText(m.name, W / 2, 1450, W - 120);
   g.font = '800 52px Nunito, sans-serif';
   g.fillStyle = '#fff3e0';
@@ -2266,7 +2287,7 @@ $('#muertos-add').onclick = () => {
 
 // ---------- el Prado y el paseo con su espíritu ----------
 let walking = null; // la huellita cuyo espíritu te acompaña
-const canWalk = (m) => !!m && (m.featured || isMine(m));
+const canWalk = (m) => !!renderer && !!m && (m.featured || isMine(m));
 const walkHud = $('#walk-hud');
 
 function startWalk(m, { quiet = false } = {}) {
@@ -2437,7 +2458,8 @@ function finishIntro() {
   if (canWalk(wm) && !walking) setTimeout(() => startWalk(wm, { quiet: true }), 600);
   checkCandleHour();
   if (openFromHash()) return;
-  if (!store.get('huellita.welcomed')) {
+  // Sin 3D no tiene sentido explicar cómo caminar: el aviso ya ofrece ver las huellitas.
+  if (!store.get('huellita.welcomed') && renderer) {
     store.set('huellita.welcomed', '1');
     setTimeout(() => $('#help').showModal(), 250);
   }
@@ -2475,6 +2497,7 @@ $('#enter').onclick = () => {
 };
 
 document.addEventListener('visibilitychange', () => pauseAll(document.hidden));
+addEventListener('huellita:storage-full', () => toast('Este navegador ya no tiene lugar para guardar más (modo demo). Lo nuevo se puede perder al cerrar.'));
 addEventListener('hashchange', openFromHash);
 addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheetEl.hidden && !$$('dialog[open]').length) closeSheet(); });
 
@@ -2494,7 +2517,10 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheetEl.hidden &
       renderer = null;
     }
   }
-  if (!renderer) $('#nogl').hidden = false;
+  if (!renderer) {
+    $('#nogl').hidden = false;
+    document.body.classList.add('no-gl');
+  }
   await refresh().catch((err) => toast(err.message));
   label.textContent = 'Entrar al jardín 🕯️';
   $('#enter').disabled = false;

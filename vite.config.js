@@ -9,5 +9,14 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        // three.js en su propio archivo: cambia poco, así quien vuelve no lo descarga de nuevo.
+        manualChunks(id) {
+          if (id.includes('node_modules/three')) return 'three';
+          return undefined;
+        },
+      },
+    },
   },
 });

@@ -93,8 +93,15 @@ function makeLocal() {
   // Las destacadas siempre vienen del código; acá sólo guardamos sus contadores.
   const featured = () => FEATURED.map((f) => ({ ...f, candles: 0, flowers: 0, gifts: 0, glow: 0, lastGifts: [], createdAt: 0, ...(db.counters[f.id] || {}) }));
   const all = () => [...featured(), ...db.memorials];
+  let warned = false;
   const persist = () => {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(db)); } catch { /* lleno */ }
+    try { localStorage.setItem(LS_KEY, JSON.stringify(db)); } catch {
+      // Lleno (las fotos ocupan mucho): avisar una vez en vez de perder datos en silencio.
+      if (!warned) {
+        warned = true;
+        dispatchEvent(new CustomEvent('huellita:storage-full'));
+      }
+    }
   };
   const find = (id) => all().find((m) => m.id === id);
   const bump = (id, field) => {

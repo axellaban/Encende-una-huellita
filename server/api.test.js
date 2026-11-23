@@ -292,3 +292,13 @@ test('latido barato: 3 comandos, trae novedades y limpia a quien se fue', async 
   assert.equal(r2.events[0].c, r.memorial.candles);
   assert.ok(r2.seq > r1.seq);
 });
+
+test('los encabezados de seguridad del servidor local y de Vercel coinciden', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { CSP } = await import('./index.js');
+  const v = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const all = v.headers.find((h) => h.source === '/(.*)').headers;
+  assert.equal(all.find((h) => h.key === 'Content-Security-Policy').value, CSP);
+  const r = await targets.local('/');
+  assert.equal(r.headers.get('content-security-policy'), CSP);
+});

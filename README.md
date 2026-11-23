@@ -58,7 +58,7 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   de puertas con "ding" al cambiar de piso. Cada piso nuevo se abre cuando se llena el de abajo.
 - La huellita destacada puede tener una **estampita** (`card` en `server/seed.js`) apoyada en la
   ofrenda y pegada con cintitas en su ficha.
-- Tipografías: Lobster (títulos), Caveat (escrito a mano) y Nunito.
+- Tipografías: Cormorant Garamond y Young Serif (títulos), Caveat (escrito a mano), DM Sans y Nunito.
 
 ### La sexta etapa del duelo
 

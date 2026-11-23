@@ -120,6 +120,10 @@ button.featured-chip:hover { background: rgba(201, 112, 78, .95); }
 
 .nogl { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 24px; text-align: center; background: #1a1428; z-index: 15; }
 .nogl[hidden] { display: none; }
+/* Sin 3D, la ficha y los avisos van por encima del cartel (z 15). */
+body.no-gl .sheet { z-index: 20; }
+body.no-gl .dock, body.no-gl .top { z-index: 16; }
+body.no-gl .joy, body.no-gl .emote-btn, body.no-gl .hint { display: none !important; }
 .nogl h2 { font-family: var(--serif); margin: 0; }
 
 /* ---------- modales ---------- */
@@ -340,6 +344,10 @@ body.intro .top, body.intro .bottom, body.intro .dock { opacity: 0; pointer-even
 body.sheet-open .emote-btn, body.intro .emote-btn, body.sheet-open .joy, body.intro .joy { opacity: 0; pointer-events: none; }
 .glow-toast { position: fixed; left: 50%; top: calc(var(--safe-t) + 74px); transform: translateX(-50%); z-index: 41; padding: 10px 18px; border-radius: 999px; background: linear-gradient(135deg, #fff1cf, #ffd9b8); color: #6b3d16; font-weight: 900; font-size: 14.5px; box-shadow: 0 0 0 2px rgba(255,210,140,.6), 0 10px 30px rgba(255,170,80,.45); animation: glowIn 2.6s var(--ease) forwards; white-space: nowrap; max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
 .glow-toast[hidden] { display: none; }
+@media (pointer: coarse) and (max-height: 540px) and (orientation: landscape) {
+  /* Acostado, la ficha ocupa la derecha: los avisos van en la mitad izquierda. */
+  body.sheet-open .glow-toast, body.sheet-open .toast { left: calc((100vw - min(420px, 55vw)) / 2); max-width: calc(100vw - min(420px, 55vw) - 24px); white-space: normal; }
+}
 @keyframes glowIn { 0% { opacity: 0; transform: translate(-50%, -10px) scale(.9); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1.04); } 20% { transform: translate(-50%, 0) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -6px); } }
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 45; overflow: hidden; }
 .confetti span { position: absolute; left: var(--x); top: -40px; font-size: var(--s); animation: fall var(--d) cubic-bezier(.3,.6,.4,1) forwards; animation-delay: var(--delay); opacity: 0; }
@@ -610,6 +618,12 @@ body.sheet-open .ball-prompt, body.walking .ball-prompt { display: none; }
   .hint { bottom: calc(var(--dock-h) + var(--safe-b) + 142px); white-space: normal; text-align: center; max-width: min(300px, calc(100vw - 40px)); }
   /* Avisos arriba (debajo de los chips): abajo están la palanca y el personaje. */
   .toast { bottom: auto; top: calc(var(--safe-t) + 120px); animation-name: drop; }
+}
+@media (max-width: 380px) {
+  /* Pantallas angostas (iPhone SE): la botonera del paseo entra al lado de la palanca. */
+  .walk-hud { left: 134px; gap: 3px; padding: 4px; }
+  .walk-who img, .walk-act { width: 36px; height: 36px; font-size: 18px; }
+  .ball-prompt { left: 134px; padding: 11px 13px; font-size: 13.5px; }
 }
 
 /* Celular acostado: ficha a un costado. */

@@ -72,18 +72,22 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
       3 comandos de Redis cada uno; nada con la pestaña oculta. Una visita de 10 min gasta ≈150–400
       comandos (el plan gratis de Upstash da 500.000/mes). Con mucho más tráfico: WebSockets/SSE
       (Ably, Pusher, PartyKit) para que los demás se muevan en tiempo real y gastar todavía menos.
-- [ ] **Paquete JS de ~900 KB**: separar three/addons y cargar diferido lo que no hace falta al entrar.
+- [ ] **Paquete JS**: three.js ya va en su propio archivo (≈190 KB comprimido, queda en caché entre
+      versiones) y la app en otro (≈76 KB). Falta cargar diferido lo que no hace falta al entrar
+      (guía, compartir, voz).
 - [ ] **Tests de frontend**: sólo hay tests de API. Convertir los recorridos de Playwright (ver
       `AGENTS.md`) en una suite que se pueda correr.
-- [ ] Encabezados de seguridad (CSP) en `vercel.json`; límite de tamaño de fotos también en el cliente.
+- [x] Encabezados de seguridad (CSP, Permissions-Policy) en `vercel.json` y en el servidor local
+      (un test controla que coincidan). Si sumás un dominio externo (fuentes, CDN), agregalo al CSP.
 - [ ] Accesibilidad: lector de pantalla para el 3D (hoy la lista "Huellitas" es la alternativa),
       foco en modales, contraste del tema vino.
 - [ ] Service worker para abrir sin conexión (manifest e íconos ya están).
-- [ ] Modo demo: las fotos en localStorage pueden llenar la cuota (~5 MB); avisar mejor.
+- [x] Modo demo: si se llena el almacenamiento del navegador, avisa en vez de perder datos en silencio.
 
 ## Detalles visuales conocidos
 
-- [ ] `public/og.jpg` (imagen para compartir el link) tiene un anillito blanco de "caminar acá" sobre el camino.
+- [x] `public/og.jpg` rehecha en tercera persona (el camino hacia la ofrenda), con dirección absoluta en las
+      etiquetas `og:image`/`twitter:image` para que WhatsApp y redes la muestren.
 - [ ] La ilustración de la estampita del Principito tiene firma de su autora: si el sitio es público,
       pedir permiso o darle crédito.
 - [ ] En teléfonos lentos, al abrir un link directo (`#h/luca`) la cámara puede tardar en llegar a la ofrenda.

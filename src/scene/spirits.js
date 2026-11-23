@@ -601,7 +601,7 @@ export function createSpirits(scene, { blocked, tier }) {
       tick(a, dt) {
         const o = companionOwner(a);
         const d = dist2(a.pos, o.pos);
-        if (d > 24 && a.role === 'companion') { reappear(a, o); return false; }
+        if (d > 24 && (a.role === 'companion' || a.role === 'remote')) { reappear(a, o); return false; }
         const fx2 = Math.sin(o.heading);
         const fz2 = Math.cos(o.heading);
         if (o.moving) {
@@ -763,7 +763,9 @@ export function createSpirits(scene, { blocked, tier }) {
     const hx = ball.pos.x - HALL_CENTER.x;
     const hz = ball.pos.z - HALL_CENTER.z;
     const hd = Math.hypot(hx, hz);
-    if (hd < HALL_RADIUS + 1.4 && ball.pos.y < 3) { const dot = (v.x * hx + v.z * hz) / hd; if (dot < 0) { v.x -= 1.6 * dot * hx / hd; v.z -= 1.6 * dot * hz / hd; } }
+    const inHall = hd < HALL_RADIUS + 1.4;
+    if (inHall && !ball.wasInHall && ball.thrower !== 'player' && ball.pos.y < 3) { const dot = (v.x * hx + v.z * hz) / hd; if (dot < 0) { v.x -= 1.6 * dot * hx / hd; v.z -= 1.6 * dot * hz / hd; } }
+    else ball.wasInHall = inHall;
     if (blocked(ball.pos.x, ball.pos.z, 0.02) && ball.pos.y < 1.2) { v.x *= -0.5; v.z *= -0.5; ball.pos.addScaledVector(v, dt * 2); }
     const sp = Math.hypot(v.x, v.z);
     if (sp > 0.01) {
@@ -772,7 +774,8 @@ export function createSpirits(scene, { blocked, tier }) {
     }
     if (sp < 0.08 && !ball.inAir) ball.idle += dt; else ball.idle = 0;
     // Si quedó olvidada lejos del Prado, vuelve sola.
-    if (ball.idle > 25 && dist2(ball.pos, MEADOW) > MEADOW_R + 3) {
+    // (Si estás cerca jugando con ella, no se la lleva.)
+    if (ball.idle > 25 && dist2(ball.pos, MEADOW) > MEADOW_R + 3 && dist2(ball.pos, player.pos) > 8) {
       fx.emit(ball.pos, new THREE.Color(1.3, 1.5, 0.5), 12, { up: 1 });
       ball.pos.copy(meadowPoint(3)).setY(1.6);
       ball.vel.set(0, 0, 0);
