@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { glowTexture, lightConeTexture } from './textures.js';
 import { HALL_CENTER, HALL_RADIUS, uTime } from './world.js';
+import { createSkyMagic } from './skymagic.js';
 
 export const FLOORS = 99;
 
@@ -107,6 +108,8 @@ export function createHeaven(scene, world, { renderer, bloom = null, hideUp = []
   let seed = 31;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const sea = cloudSea();
+  // Cometas, estrellas fugaces, nubes gigantes, islas y pájaros de luz (en todos los pisos).
+  const magic = createSkyMagic(scene, { uTime, rnd });
   const clouds = puffyClouds(rnd);
   scene.add(sea, clouds);
 
@@ -189,6 +192,7 @@ export function createHeaven(scene, world, { renderer, bloom = null, hideUp = []
     sun.material.opacity = smooth(Math.max(0, (kk - 0.15) / 0.85)) * 0.9;
     rays.visible = kk > 0.25;
     rayMat.opacity = smooth(Math.max(0, (kk - 0.25) / 0.75)) * 0.16;
+    magic.setK(kk);
   }
   apply();
 
@@ -205,6 +209,7 @@ export function createHeaven(scene, world, { renderer, bloom = null, hideUp = []
         if (Math.abs(target - k) < 0.0005) k = target;
         apply();
       }
+      magic.update(dt, t);
       if (clouds.visible) clouds.position.x = Math.sin(t * 0.03) * 4;
       if (rays.visible) rays.rotation.y = t * 0.02;
     },

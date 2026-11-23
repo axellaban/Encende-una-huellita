@@ -134,6 +134,23 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
             float k = max(dot(R, normalize(uLamps[i] - vW)), 0.0);
             refl += vec3(1.0, 0.55, 0.18) * (pow(k, 300.0) * 3.5 + pow(k, 30.0) * 0.1);
           }
+          // El arcoíris reflejado: donde el rayo reflejado cruza el plano del arco.
+          if (abs(R.z) > 0.001) {
+            float tr = (${BRIDGE.z.toFixed(3)} - vW.z) / R.z;
+            if (tr > 0.0) {
+              vec3 P = vW + R * tr;
+              float rr = length(P.xy - vec2(${BRIDGE.x.toFixed(2)}, -0.6));
+              float kb = (rr - 5.6) / 2.3;
+              float eb = smoothstep(0.0, 0.14, kb) * smoothstep(1.0, 0.86, kb) * smoothstep(-0.3, 1.8, P.y);
+              float fb = smoothstep(0.25, 0.7, abs(V.z));
+              vec3 bc = mix(vec3(0.55, 0.32, 1.0), vec3(0.28, 0.55, 1.0), smoothstep(0.0, 0.2, kb));
+              bc = mix(bc, vec3(0.4, 0.9, 0.5), smoothstep(0.2, 0.4, kb));
+              bc = mix(bc, vec3(1.0, 0.92, 0.38), smoothstep(0.4, 0.6, kb));
+              bc = mix(bc, vec3(1.0, 0.58, 0.26), smoothstep(0.6, 0.8, kb));
+              bc = mix(bc, vec3(1.0, 0.36, 0.42), smoothstep(0.8, 1.0, kb));
+              refl += bc * eb * fb * 0.35;
+            }
+          }
           // Lo que se ve a través del agua: barro cerca de la orilla, azul muy oscuro en el medio.
           vec3 body = mix(vec3(0.035, 0.032, 0.022), vec3(0.01, 0.03, 0.035), smoothstep(0.0, 0.3, mid));
           body = mix(body, vec3(0.003, 0.012, 0.028), depth);
@@ -407,13 +424,19 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
   }
 
   // ---------- el arcoíris sobre el puente ----------
-  // Una cinta plana con los colores fundidos y un destello que la recorre. Como un arcoíris de
-  // verdad, sólo se ve de frente: de canto se apaga (si no, desde la orilla quedaba una franja
-  // de luz vertical en el cielo). Las puntas se pierden en la bruma del agua.
+  // Una cinta plana con los colores fundidos y un destello que la recorre; afuera, un segundo
+  // arcoíris más tenue con los colores al revés (como en los arcoíris de verdad), y polvo de luz de
+  // colores que cae de los dos. Sólo se ve de frente: de canto se apaga (si no, desde la orilla
+  // quedaba una franja de luz vertical en el cielo). Las puntas nacen de la bruma del agua.
   {
-    const R0 = 5.6;
-    const R1 = 7.9;
-    const rainbow = new THREE.Mesh(
+    const BAND = `vec3 band(float k){
+        vec3 c = mix(vec3(0.55, 0.32, 1.0), vec3(0.28, 0.55, 1.0), smoothstep(0.0, 0.2, k));
+        c = mix(c, vec3(0.4, 0.9, 0.5), smoothstep(0.2, 0.4, k));
+        c = mix(c, vec3(1.0, 0.92, 0.38), smoothstep(0.4, 0.6, k));
+        c = mix(c, vec3(1.0, 0.58, 0.26), smoothstep(0.6, 0.8, k));
+        return mix(c, vec3(1.0, 0.36, 0.42), smoothstep(0.8, 1.0, k));
+      }`;
+    const arc = (R0, R1, rev, amp, spark) => new THREE.Mesh(
       new THREE.RingGeometry(R0, R1, 120, 1, 0, Math.PI),
       new THREE.ShaderMaterial({
         uniforms: { uTime },
@@ -423,13 +446,7 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
         blending: THREE.AdditiveBlending,
         vertexShader: 'varying vec2 vP; varying vec3 vW; varying vec3 vN; void main(){ vP = position.xy; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * vec3(0.0, 0.0, 1.0)); gl_Position = projectionMatrix * viewMatrix * w; }',
         fragmentShader: `uniform float uTime; varying vec2 vP; varying vec3 vW; varying vec3 vN;
-          vec3 band(float k){
-            vec3 c = mix(vec3(0.55, 0.32, 1.0), vec3(0.28, 0.55, 1.0), smoothstep(0.0, 0.2, k));
-            c = mix(c, vec3(0.4, 0.9, 0.5), smoothstep(0.2, 0.4, k));
-            c = mix(c, vec3(1.0, 0.92, 0.38), smoothstep(0.4, 0.6, k));
-            c = mix(c, vec3(1.0, 0.58, 0.26), smoothstep(0.6, 0.8, k));
-            return mix(c, vec3(1.0, 0.36, 0.42), smoothstep(0.8, 1.0, k));
-          }
+          ${BAND}
           void main(){
             float r = length(vP);
             float k = (r - ${R0.toFixed(2)}) / ${(R1 - R0).toFixed(2)};
@@ -437,18 +454,58 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
             vec3 V = normalize(cameraPosition - vW);
             float face = smoothstep(0.25, 0.7, abs(dot(V, vN)));
             float foot = smoothstep(-0.3, 1.8, vW.y);
-            // Un destello que baja por el arco, de un lado al otro.
             float th = atan(vP.y, vP.x);
             float ts = 3.14159 * (1.0 - fract(uTime * 0.07));
-            float spark = exp(-pow((th - ts) * r * 1.6, 2.0)) * exp(-pow((k - 0.5) * 3.0, 2.0));
-            float a = edge * (0.22 + 0.05 * sin(uTime * 0.6 + k * 3.0)) + spark * 0.9;
-            gl_FragColor = vec4(band(k) + spark * vec3(0.6), a * face * foot);
+            float sp = ${spark ? 'exp(-pow((th - ts) * r * 1.6, 2.0)) * exp(-pow((k - 0.5) * 3.0, 2.0))' : '0.0'};
+            float a = edge * (${amp.toFixed(2)} + 0.05 * sin(uTime * 0.6 + k * 3.0 + th * 2.0)) + sp * 0.9;
+            gl_FragColor = vec4(band(${rev ? '1.0 - k' : 'k'}) + sp * vec3(0.6), a * face * foot);
           }`,
       }),
     );
-    rainbow.position.set(BRIDGE.x, -0.6, BRIDGE.z);
-    rainbow.renderOrder = 2;
-    ground.add(rainbow);
+    const group = new THREE.Group();
+    group.position.set(BRIDGE.x, -0.6, BRIDGE.z);
+    group.add(arc(5.6, 7.9, false, 0.22, true), arc(9.0, 10.4, true, 0.09, false));
+    // Polvo de luz de colores que cae de los arcos (todo en el shader).
+    {
+      const N = Math.round(220 * density);
+      const t = new Float32Array(N);
+      const sd = new Float32Array(N);
+      for (let i = 0; i < N; i++) { t[i] = r(); sd[i] = r(); }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+      geo.setAttribute('aT', new THREE.BufferAttribute(t, 1));
+      geo.setAttribute('aS', new THREE.BufferAttribute(sd, 1));
+      const dust = new THREE.Points(geo, new THREE.ShaderMaterial({
+        uniforms: { uTime },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        vertexShader: `uniform float uTime; attribute float aT; attribute float aS; varying vec3 vC; varying float vA;
+          ${BAND}
+          void main(){
+            float outer = step(0.78, aS);
+            float k = fract(aS * 7.13);
+            float rr = outer > 0.5 ? mix(9.0, 10.4, k) : mix(5.6, 7.9, k);
+            float th = 3.14159 * aT;
+            float f = fract(uTime * (0.035 + aS * 0.03) + aS * 5.0);
+            vec3 p = vec3(cos(th) * rr + sin(uTime * 0.7 + aS * 30.0) * 0.25 * f, sin(th) * rr - f * 3.2, (aS - 0.5) * 0.8);
+            vec4 w = modelMatrix * vec4(p, 1.0);
+            vec4 mv = viewMatrix * w;
+            gl_Position = projectionMatrix * mv;
+            vec3 V = normalize(cameraPosition - w.xyz);
+            float face = smoothstep(0.25, 0.7, abs(dot(V, normalize(mat3(modelMatrix) * vec3(0.0, 0.0, 1.0)))));
+            vC = band(outer > 0.5 ? 1.0 - k : k) * 1.4;
+            vA = (1.0 - f) * smoothstep(0.0, 0.15, f) * face * smoothstep(-0.3, 1.5, w.y) * (outer > 0.5 ? 0.5 : 1.0);
+            gl_PointSize = clamp(60.0 / -mv.z, 1.5, 6.0);
+          }`,
+        fragmentShader: `varying vec3 vC; varying float vA;
+          void main(){ float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vC, smoothstep(0.5, 0.0, d) * vA); }`,
+      }));
+      dust.frustumCulled = false;
+      group.add(dust);
+    }
+    group.children.forEach((c) => { c.renderOrder = 2; });
+    ground.add(group);
   }
 
   // Cartel del puente (del lado de afuera).

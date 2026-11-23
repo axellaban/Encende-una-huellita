@@ -134,9 +134,15 @@ export function buildWorld(scene, tier) {
         low: { value: new THREE.Color('#a3337a') },
         horizon: { value: new THREE.Color('#ff8a3d') },
         uK: { value: 0 },
+        uTime,
       },
       vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 low; uniform vec3 horizon; uniform float uK; varying vec3 vP;
+      fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 low; uniform vec3 horizon; uniform float uK; uniform float uTime; varying vec3 vP;
+        float h3(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+        float n3(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
+                     mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }
+        float fbm3(vec3 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * n3(p); p = p * 2.03 + 1.7; a *= 0.5; } return v; }
         void main(){
           float h = vP.y;
           vec3 c = mix(mid, top, smoothstep(0.18, 0.75, h));
@@ -151,6 +157,48 @@ export function buildWorld(scene, tier) {
           // Arriba de todo: luz de cielo, más clara cerca del sol.
           float sun = pow(max(0.0, dot(normalize(vP), normalize(vec3(0.35, 0.55, -0.75)))), 12.0);
           c += vec3(1.0, 0.95, 0.85) * sun * 0.55 * uK;
+          float night = 1.0 - smoothstep(0.0, 0.4, uK);
+          float day = smoothstep(0.4, 0.9, uK);
+          vec3 d = normalize(vP);
+          float alt = smoothstep(0.02, 0.25, h);
+          if (night > 0.0) {
+            // La Vía Láctea: una franja de polvo de estrellas que cruza el cielo, con nubes
+            // brillantes, una veta oscura en el medio y colores lila, rosa y celeste.
+            vec3 nmw = normalize(vec3(0.42, 0.5, 0.76));
+            float dm = dot(d, nmw);
+            float band = exp(-dm * dm * 26.0);
+            float f1 = fbm3(d * 5.0);
+            float f2 = fbm3(d * 13.0 + 4.0);
+            float lane = 1.0 - 0.75 * exp(-pow(dm * 9.0 + (f1 - 0.5) * 1.6, 2.0)) * smoothstep(0.35, 0.7, f2);
+            vec3 mw = mix(vec3(0.28, 0.24, 0.55), vec3(0.62, 0.36, 0.52), f1);
+            mw = mix(mw, vec3(0.35, 0.55, 0.75), smoothstep(0.55, 0.8, f2) * 0.5);
+            c += mw * band * (0.25 + 0.75 * f2) * lane * 0.55 * alt * night;
+            // Polvo de estrellas finito, más tupido dentro de la franja.
+            vec3 q = d * 420.0;
+            float sh = h3(floor(q));
+            float dens = 0.988 - band * 0.035;
+            float sd = smoothstep(dens, 1.0, sh) * smoothstep(0.5, 0.0, length(fract(q) - 0.5));
+            float tw = 0.6 + 0.4 * sin(uTime * (1.0 + sh * 3.0) + sh * 50.0);
+            c += vec3(1.2, 1.15, 1.25) * sd * tw * 0.9 * alt * night;
+            // Nebulosas suaves, rosa y turquesa.
+            float neb = fbm3(d * 2.2 + vec3(3.0, 1.0, 0.0));
+            float neb2 = fbm3(d * 3.1 + vec3(-2.0, 5.0, 1.0));
+            c += vec3(0.42, 0.1, 0.32) * smoothstep(0.55, 0.85, neb) * 0.35 * alt * night;
+            c += vec3(0.06, 0.28, 0.32) * smoothstep(0.58, 0.88, neb2) * 0.3 * alt * night;
+          }
+          if (day > 0.0) {
+            // Cirros: velos blancos estirados que se mueven despacio.
+            vec3 cq = vec3(d.x * 3.0 + uTime * 0.004, d.y * 9.0, d.z * 3.0);
+            float ci = smoothstep(0.5, 0.85, fbm3(cq)) * smoothstep(0.08, 0.35, h) * (1.0 - smoothstep(0.7, 0.95, h));
+            c = mix(c, vec3(1.0, 1.0, 1.02), ci * 0.45 * day);
+            // Halo de 22° alrededor del sol, con un leve arcoíris.
+            float ang = acos(clamp(dot(d, normalize(vec3(0.35, 0.55, -0.75))), -1.0, 1.0));
+            float ring = exp(-pow((ang - 0.38) * 26.0, 2.0));
+            vec3 rc = mix(vec3(1.0, 0.55, 0.45), vec3(0.6, 0.75, 1.0), smoothstep(0.36, 0.41, ang));
+            c += rc * ring * 0.22 * day;
+            // Cenit luminoso, como si el cielo no terminara nunca.
+            c += vec3(0.25, 0.35, 0.5) * pow(max(0.0, h), 3.0) * 0.25 * day;
+          }
           gl_FragColor = vec4(c, 1.0);
         }`,
     }),
