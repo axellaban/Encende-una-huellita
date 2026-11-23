@@ -5,21 +5,23 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { grassTexture, stoneTexture, woodTexture, floorTexture, glowTexture, blobShadowTexture, moonTexture } from './textures.js';
 import { marigoldGeometry, marigoldMaterial, buildPueblo, PALETTE } from './muertos.js';
 
-export const HALL_CENTER = new THREE.Vector3(0, 0, -10);
+// Plano del jardín (en metros). Todo lo demás se ubica a partir de estos números.
+export const HALL_CENTER = new THREE.Vector3(0, 0, -14);
 // El salón es grande: con la cámara en tercera persona tiene que sentirse amplio (antes 11,5).
-export const HALL_RADIUS = 15;
+export const HALL_RADIUS = 21;
 const HK = HALL_RADIUS / 11.5; // cuánto creció (para lo que estaba medido con el salón viejo)
-export const GARDEN_RADIUS = 37;
-export const SPAWN = new THREE.Vector3(0, 1.6, 24);
+export const GARDEN_RADIUS = 58;
+export const SPAWN = new THREE.Vector3(0, 1.6, 40);
 export const PATH_HALF = 1.6;
-export const CREEK_Z = -31;
+export const CREEK_Z = -46;
+export const CREEK_HALF = 2.6; // medio ancho del río
 // El Prado de los espíritus: un claro sin árboles donde juegan las mascotas de luz.
-export const MEADOW = new THREE.Vector3(15, 0, 12.5);
-export const MEADOW_R = 7;
+export const MEADOW = new THREE.Vector3(24, 0, 20);
+export const MEADOW_R = 9;
 // El ascensor (al costado de la entrada del salón): sin árboles adelante para que se vea.
-export const ELEVATOR_POS = new THREE.Vector3(-8.6, 0, 7.8);
+export const ELEVATOR_POS = new THREE.Vector3(-9.5, 0, 17);
 export const creekZ = (x) => CREEK_Z + Math.sin(x * 0.12) * 2.2;
-export const nearCreek = (x, z, pad = 0) => Math.abs(z - creekZ(x)) < 2.1 + pad;
+export const nearCreek = (x, z, pad = 0) => Math.abs(z - creekZ(x)) < CREEK_HALF + 0.6 + pad;
 
 // Reloj compartido por todos los shaders animados (viento, luciérnagas, estrellas).
 export const uTime = { value: 0 };
@@ -82,7 +84,7 @@ export function buildWorld(scene, tier) {
   const walkable = [];
   const r = rand(7);
 
-  scene.fog = new THREE.FogExp2('#2a1640', 0.012);
+  scene.fog = new THREE.FogExp2('#2a1640', 0.0085);
   scene.background = new THREE.Color('#150d24');
 
   // ---------- cielo ----------
@@ -324,9 +326,9 @@ export function buildWorld(scene, tier) {
     const greens = ['#3d5a33', '#4b6b3b', '#56733f', '#35502f'];
     const blossoms = ['#e7a7bd', '#f0bfcf', '#d98fac'];
     let placed = 0;
-    for (let i = 0; i < 400 && placed < 30; i++) {
+    for (let i = 0; i < 1200 && placed < 64; i++) {
       const a = r() * Math.PI * 2;
-      const d = HALL_RADIUS + 4.5 + r() * 16;
+      const d = HALL_RADIUS + 5 + r() * (GARDEN_RADIUS - HALL_RADIUS + 4);
       const x = HALL_CENTER.x + Math.sin(a) * d;
       const z = HALL_CENTER.z + Math.cos(a) * d;
       if (Math.abs(x) < 5 && z > -2) continue;
@@ -372,7 +374,7 @@ export function buildWorld(scene, tier) {
   // Cerco de ligustros alrededor del jardín y siluetas de árboles detrás.
   {
     const parts = [];
-    const n = 150;
+    const n = Math.round(GARDEN_RADIUS * 4.2);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + r() * 0.01;
       const rad = GARDEN_RADIUS + 1.2 + r() * 0.4;
@@ -381,9 +383,9 @@ export function buildWorld(scene, tier) {
       g.translate(Math.sin(a) * rad, 0.8 + r() * 0.3, Math.cos(a) * rad);
       parts.push(paint(g, ['#2f4a2b', '#38552f', '#2a4226'][i % 3]));
     }
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 140; i++) {
       const a = r() * Math.PI * 2;
-      const rad = 44 + r() * 26;
+      const rad = GARDEN_RADIUS + 7 + r() * 28;
       const h = 7 + r() * 9;
       const g = new THREE.ConeGeometry(1.8 + r() * 1.6, h, 7).toNonIndexed();
       g.deleteAttribute('uv');
@@ -399,12 +401,12 @@ export function buildWorld(scene, tier) {
   const poleMat = new THREE.MeshLambertMaterial({ color: '#1d1a1c' });
   const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 2.0, 0.9) });
   const lampSpots = [
-    [-2.7, 21.8], [2.7, 16.8], [-2.7, 11.8], [2.7, 7.4],
+    [-2.7, 38], [2.7, 31.5], [-2.7, 25], [2.7, 18.5], [-2.7, 12],
     [HALL_CENTER.x - 5.5 * HK, HALL_CENTER.z + 5.5 * HK], [HALL_CENTER.x + 5.5 * HK, HALL_CENTER.z + 5.5 * HK],
     [HALL_CENTER.x - 6.5 * HK, HALL_CENTER.z - 4.5 * HK], [HALL_CENTER.x + 6.5 * HK, HALL_CENTER.z - 4.5 * HK],
   ];
   const lampParts = [];
-  const lightOrder = [5, 4, 1, 3, 0, 6, 7, 2]; // prioridad de luces reales
+  const lightOrder = [6, 5, 2, 4, 0, 7, 8, 3, 1]; // prioridad de luces reales (primero las del salón)
   lampSpots.forEach(([x, z], i) => {
     const base = new THREE.CylinderGeometry(0.16, 0.2, 0.35, 8);
     base.translate(x, 0.17, z);
@@ -425,7 +427,8 @@ export function buildWorld(scene, tier) {
     scene.add(glow);
     colliders.circles.push({ x, z, r: 0.25 });
     addBlob(x, z, 0.9);
-    if (lightOrder.indexOf(i) < tier.lights) {
+    const rank = lightOrder.indexOf(i);
+    if (rank >= 0 && rank < tier.lights) {
       const l = new THREE.PointLight('#ffb36b', 5, 11, 1.7);
       l.position.set(x, 3.0, z);
       scene.add(l);
@@ -462,7 +465,7 @@ export function buildWorld(scene, tier) {
   {
     const parts = [];
     const metal = [];
-    const benchSpots = [[-3.8, 17.2, Math.PI / 2], [3.8, 19, -Math.PI / 2], [-3.8, 10.4, Math.PI / 2], [3.8, 10.2, -Math.PI / 2]];
+    const benchSpots = [[-3.8, 34.5, Math.PI / 2], [3.8, 28, -Math.PI / 2], [-3.8, 21, Math.PI / 2], [3.8, 14.5, -Math.PI / 2]];
     for (const [x, z, rot] of benchSpots) {
       const tr = new THREE.Matrix4().makeRotationY(rot).setPosition(x, 0, z);
       for (let s = 0; s < 4; s++) {
@@ -498,7 +501,7 @@ export function buildWorld(scene, tier) {
     const seed = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       const a = r() * Math.PI * 2;
-      const d = 2 + Math.sqrt(r()) * 32;
+      const d = 2 + Math.sqrt(r()) * GARDEN_RADIUS * 0.85;
       pos.set([Math.sin(a) * d, 0.4 + r() * 4, Math.cos(a) * d - 4], i * 3);
       seed[i] = r();
     }

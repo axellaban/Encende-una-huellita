@@ -145,7 +145,7 @@ try {
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.05, 900);
-const INTRO_FROM = new THREE.Vector3(16, 17, 31);
+const INTRO_FROM = new THREE.Vector3(26, 30, 66);
 const INTRO_LOOK = new THREE.Vector3(HALL_CENTER.x, 1, HALL_CENTER.z);
 const ENTRY_LOOK = new THREE.Vector3(EASEL_POS.x, 2.6, EASEL_POS.z);
 camera.position.copy(INTRO_FROM);
@@ -427,7 +427,7 @@ function callElevator() {
   closeSheet();
   hideHint();
   const { stand, target } = elevator.standPoint();
-  placeNear(stand, target, 0.9, 2.8);
+  placeNear(stand, target, 1.4, 4.2);
   controls.flyTo(stand, target, () => {
     elevator.setOpen(true);
     ding();
@@ -462,7 +462,7 @@ function visit(m) {
       target.y -= 0.42 * stand.distanceTo(frame) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     }
     hideHint();
-    if (key === 'featured') placeNear(stand, frame, 1.3, 4.1);
+    if (key === 'featured') placeNear(stand, frame, 1.6, 5.4);
     else placeNear(stand, frame, 0.85);
     controls.flyTo(stand, target, () => hall.pulse(key));
   }
@@ -2653,7 +2653,7 @@ $('#enter').onclick = () => {
   }
   controls.follow({
     duration: 5.2,
-    path: [new THREE.Vector3(9, 11, 36), new THREE.Vector3(3, 5, 31.5)],
+    path: [new THREE.Vector3(14, 17, 62), new THREE.Vector3(4, 6.5, 52)],
     done: finishIntro,
   });
 };

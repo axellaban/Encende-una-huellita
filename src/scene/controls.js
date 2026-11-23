@@ -334,7 +334,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
       let dirX = 0;
       let dirZ = 0;
       if (mx || mz) {
-        want = 2.7 * run;
+        want = 3.1 * run;
         dirX = mx;
         dirZ = mz;
       } else if (walkTarget) {
@@ -342,7 +342,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         const dz = walkTarget.z - player.pos.z;
         const d = Math.hypot(dx, dz);
         if (d < 0.08) { walkTarget = null; marker.visible = false; } else {
-          want = Math.min(3.3, d * 2.4 + 0.35);
+          want = Math.min(3.9, d * 2.4 + 0.35);
           dirX = dx / d;
           dirZ = dz / d;
         }
