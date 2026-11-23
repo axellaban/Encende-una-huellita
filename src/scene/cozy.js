@@ -3,12 +3,12 @@
 // el Puente del Arcoíris con su arroyo, el Prado de los espíritus y el frasco de gracias.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, CREEK_Z, MEADOW, MEADOW_R, nearCreek, uTime, rand } from './world.js';
-import { EASEL_POS, ALTAR_SCALE } from './hall.js';
+import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, CREEK_Z, MEADOW, MEADOW_R, nearCreek, insideHall, uTime, rand } from './world.js';
+import { EASEL_POS, ALTAR_SCALE, POST_H } from './hall.js';
 import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture, twoSided } from './textures.js';
 import { picadoBanner, marigoldCluster, PALETTE } from './muertos.js';
 
-export const JAR_POS = new THREE.Vector3(-3.3, 0, 2.2);
+export const JAR_POS = new THREE.Vector3(-3.6, 0, 8.4);
 
 export function createCozy(scene, tier, colliders) {
   const r = rand(23);
@@ -64,7 +64,7 @@ export function createCozy(scene, tier, colliders) {
   {
     const poleMat = new THREE.MeshLambertMaterial({ map: woodTexture('#5a3a28') });
     const poleGeo = new THREE.CylinderGeometry(0.045, 0.06, 4.4, 7);
-    for (const [z, seed] of [[19.8, 1], [14.3, 4], [8.8, 9], [3.3, 13]]) {
+    for (const [z, seed] of [[24.3, 1], [19.3, 4], [14.3, 9], [9.3, 13]]) {
       const b = picadoBanner(new THREE.Vector3(-2.75, 4.3, z), new THREE.Vector3(2.75, 4.3, z - 0.2), { sag: 0.42, flags: 11, size: 0.4, seed });
       scene.add(b);
       animated.push((t) => b.userData.flutter(t));
@@ -90,7 +90,7 @@ export function createCozy(scene, tier, colliders) {
       const d = 14 + r() * 21;
       const cx = Math.sin(a) * d;
       const cz = Math.cos(a) * d - 4;
-      if ((Math.abs(cx) < PATH_HALF + 1 && cz > -2) || nearCreek(cx, cz, 0.5)) continue;
+      if ((Math.abs(cx) < PATH_HALF + 1 && cz > -2) || nearCreek(cx, cz, 0.5) || insideHall(cx, cz, 0.5)) continue;
       for (let k = 0; k < 3; k++) {
         const x = cx + (r() - 0.5) * 0.5;
         const z = cz + (r() - 0.5) * 0.5;
@@ -141,7 +141,7 @@ export function createCozy(scene, tier, colliders) {
       const a = THREE.MathUtils.degToRad(40 + (p - 0.5) * (280 / 9));
       const rad = HALL_RADIUS - 1.0;
       const lantern = new THREE.Group();
-      lantern.position.set(HALL_CENTER.x + Math.sin(a) * rad, 4.35, HALL_CENTER.z + Math.cos(a) * rad);
+      lantern.position.set(HALL_CENTER.x + Math.sin(a) * rad, POST_H - 0.75, HALL_CENTER.z + Math.cos(a) * rad);
       const ball = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: colors[p % colors.length], transparent: true, opacity: 0.92 }));
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.012, 6, 16).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#2a1d16' }));
       ring.position.y = 0.19;
@@ -359,7 +359,7 @@ export function createCozy(scene, tier, colliders) {
   // ---------- cartel con flecha en la entrada: por acá al Prado ----------
   {
     const g = new THREE.Group();
-    g.position.set(PATH_HALF + 1.5, 0, SPAWN.z - 13.2);
+    g.position.set(PATH_HALF + 1.5, 0, 12.6);
     const wood = new THREE.MeshLambertMaterial({ map: woodTexture('#6b4630') });
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.8, 0.08), wood);
     post.position.y = 0.9;

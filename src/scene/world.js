@@ -6,16 +6,18 @@ import { grassTexture, stoneTexture, woodTexture, floorTexture, glowTexture, blo
 import { marigoldGeometry, marigoldMaterial, buildPueblo, PALETTE } from './muertos.js';
 
 export const HALL_CENTER = new THREE.Vector3(0, 0, -10);
-export const HALL_RADIUS = 11.5;
+// El salón es grande: con la cámara en tercera persona tiene que sentirse amplio (antes 11,5).
+export const HALL_RADIUS = 15;
+const HK = HALL_RADIUS / 11.5; // cuánto creció (para lo que estaba medido con el salón viejo)
 export const GARDEN_RADIUS = 37;
 export const SPAWN = new THREE.Vector3(0, 1.6, 24);
 export const PATH_HALF = 1.6;
-export const CREEK_Z = -29.5;
+export const CREEK_Z = -31;
 // El Prado de los espíritus: un claro sin árboles donde juegan las mascotas de luz.
-export const MEADOW = new THREE.Vector3(13, 0, 11);
+export const MEADOW = new THREE.Vector3(15, 0, 12.5);
 export const MEADOW_R = 7;
 // El ascensor (al costado de la entrada del salón): sin árboles adelante para que se vea.
-export const ELEVATOR_POS = new THREE.Vector3(-7.2, 0, 3.4);
+export const ELEVATOR_POS = new THREE.Vector3(-8.6, 0, 7.8);
 export const creekZ = (x) => CREEK_Z + Math.sin(x * 0.12) * 2.2;
 export const nearCreek = (x, z, pad = 0) => Math.abs(z - creekZ(x)) < 2.1 + pad;
 
@@ -63,6 +65,9 @@ function paint(geo, color) {
   geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
   return geo;
 }
+
+// Donde empieza el camino (justo afuera del piso del salón).
+export const PATH_START = HALL_CENTER.z + HALL_RADIUS + 2;
 
 export function insideHall(x, z, pad = 0) {
   return Math.hypot(x - HALL_CENTER.x, z - HALL_CENTER.z) < HALL_RADIUS + 1.6 + pad;
@@ -321,7 +326,7 @@ export function buildWorld(scene, tier) {
     let placed = 0;
     for (let i = 0; i < 400 && placed < 30; i++) {
       const a = r() * Math.PI * 2;
-      const d = 16 + r() * 20;
+      const d = HALL_RADIUS + 4.5 + r() * 16;
       const x = HALL_CENTER.x + Math.sin(a) * d;
       const z = HALL_CENTER.z + Math.cos(a) * d;
       if (Math.abs(x) < 5 && z > -2) continue;
@@ -394,9 +399,9 @@ export function buildWorld(scene, tier) {
   const poleMat = new THREE.MeshLambertMaterial({ color: '#1d1a1c' });
   const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 2.0, 0.9) });
   const lampSpots = [
-    [-2.7, 19], [2.7, 13.5], [-2.7, 8], [2.7, 2.5],
-    [HALL_CENTER.x - 5.5, HALL_CENTER.z + 5.5], [HALL_CENTER.x + 5.5, HALL_CENTER.z + 5.5],
-    [HALL_CENTER.x - 6.5, HALL_CENTER.z - 4.5], [HALL_CENTER.x + 6.5, HALL_CENTER.z - 4.5],
+    [-2.7, 21.8], [2.7, 16.8], [-2.7, 11.8], [2.7, 7.4],
+    [HALL_CENTER.x - 5.5 * HK, HALL_CENTER.z + 5.5 * HK], [HALL_CENTER.x + 5.5 * HK, HALL_CENTER.z + 5.5 * HK],
+    [HALL_CENTER.x - 6.5 * HK, HALL_CENTER.z - 4.5 * HK], [HALL_CENTER.x + 6.5 * HK, HALL_CENTER.z - 4.5 * HK],
   ];
   const lampParts = [];
   const lightOrder = [5, 4, 1, 3, 0, 6, 7, 2]; // prioridad de luces reales
@@ -431,7 +436,7 @@ export function buildWorld(scene, tier) {
   // Balizas a los lados del camino.
   {
     const posts = [];
-    for (let z = 1.5; z < SPAWN.z + 4; z += 3.2) {
+    for (let z = PATH_START; z < SPAWN.z + 4; z += 3.2) {
       for (const s of [-1, 1]) {
         const x = s * (PATH_HALF + 0.35);
         const g = new THREE.CylinderGeometry(0.06, 0.07, 0.42, 8);
@@ -443,7 +448,7 @@ export function buildWorld(scene, tier) {
     const tops = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.065, 0.065, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.9, 1.5, 0.6) }), posts.length);
     const m = new THREE.Object3D();
     let i = 0;
-    for (let z = 1.5; z < SPAWN.z + 4; z += 3.2) {
+    for (let z = PATH_START; z < SPAWN.z + 4; z += 3.2) {
       for (const s of [-1, 1]) {
         m.position.set(s * (PATH_HALF + 0.35), 0.46, z + (s > 0 ? 1.6 : 0));
         m.updateMatrix();
@@ -457,7 +462,7 @@ export function buildWorld(scene, tier) {
   {
     const parts = [];
     const metal = [];
-    const benchSpots = [[-3.8, 16, Math.PI / 2], [3.8, 16, -Math.PI / 2], [-3.8, 5, Math.PI / 2], [3.8, 5, -Math.PI / 2]];
+    const benchSpots = [[-3.8, 17.2, Math.PI / 2], [3.8, 19, -Math.PI / 2], [-3.8, 10.4, Math.PI / 2], [3.8, 10.2, -Math.PI / 2]];
     for (const [x, z, rot] of benchSpots) {
       const tr = new THREE.Matrix4().makeRotationY(rot).setPosition(x, 0, z);
       for (let s = 0; s < 4; s++) {
