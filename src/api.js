@@ -61,6 +61,7 @@ const remote = {
   eternal: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/eternal`, { method: 'POST', body: who }),
   toAltar: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/altar`, { method: 'POST', body: who }),
   altar: () => req('/api/altar'),
+  ref: (code) => req(`/api/ref/${encodeURIComponent(code)}`),
   heartDiary: (id, pid, sid) => req(`/api/memorials/${encodeURIComponent(id)}/diary/${pid}/heart`, { method: 'POST', body: { sid } }),
   // Herramientas de la familia (con el token de edición).
   own: (id, what, body) => req(`/api/memorials/${encodeURIComponent(id)}/${what}`, { method: 'POST', body, headers: { 'X-Edit-Token': myTokens()[id] || '' } }),
@@ -245,7 +246,9 @@ function makeLocal() {
       persist();
       return { hearts: db.dh[`${id}:${pid}`] };
     },
+    async ref() { return { n: 0 }; },
     async own(id, what, body) {
+      if (what === 'og') return null; // en modo demo no hay vista previa que armar
       const m = db.memorials.find((x) => x.id === id);
       if (!m) throw new Error('Sólo la familia de esta huellita puede hacer esto.');
       if (what === 'edit') {

@@ -75,6 +75,7 @@
     <div class="emote-tray" id="emote-tray" hidden>
       <div class="emotes" id="emotes"></div>
       <div class="sayings" id="sayings"></div>
+      <button class="btn primary small wide" id="photo-btn">📸 Sacar una foto en el jardín</button>
     </div>
     <div class="glow-toast" id="glow-toast" hidden></div>
 
@@ -82,6 +83,7 @@
     <div class="walk-hud" id="walk-hud" hidden>
       <button class="walk-who" id="walk-who" aria-label="Ver su lugar"><img id="walk-photo" alt="" /><span><small>Paseando con</small><b id="walk-name"></b></span></button>
       <button class="walk-act" id="walk-ball" aria-label="Tirar la pelota">🎾</button>
+      <button class="walk-act" id="walk-photo-btn" aria-label="Sacar una foto juntos">📸</button>
       <button class="walk-act" id="walk-call" aria-label="Llamarlo">📣</button>
       <button class="walk-act x-act" id="walk-stop" aria-label="Terminar el paseo">✕</button>
     </div>
@@ -117,6 +119,12 @@
     <div class="splash" id="splash">
       <div class="picado-strip" aria-hidden="true"></div>
       <div class="candle-css" aria-hidden="true"><i></i></div>
+      <div class="splash-pet" id="splash-pet" hidden>
+        <div class="splash-frame"><img id="splash-photo" alt="" /></div>
+        <p class="splash-invite" id="splash-invite"></p>
+        <h2 id="splash-name"></h2>
+        <p class="splash-candles" id="splash-candles"></p>
+      </div>
       <h1>Encendé una huellita</h1>
       <p class="splash-quote">Mientras los recordemos, siguen con nosotros.<br /><span>Seguí los pétalos hasta su ofrenda.</span></p>
       <button class="btn primary big" id="enter" disabled><span id="enter-label">Preparando el jardín…</span></button>
@@ -228,6 +236,7 @@
         <div class="gifts-row" id="s-gifts" hidden></div>
         <p class="msg" id="s-msg"></p>
         <figure class="estampita" id="s-card" hidden><img alt="" /></figure>
+        <button class="btn pass-btn wide" id="s-pass" hidden><span>✨</span><span id="s-pass-label">Pasá la luz</span></button>
         <button class="btn walk-btn wide" id="s-walk" hidden><span class="paw">🐾</span><span id="s-walk-label">Sacar a pasear</span></button>
         <button class="btn soft wide mine-btn" id="s-mine" hidden>🐾 Es mi mascota: que mis gestos la hagan brillar</button>
         <section class="family" id="s-family" hidden>
@@ -308,6 +317,7 @@
           </div>
         </div>
         <label class="toggle"><span>🙈 Modo tranquilo (ocultar visitantes)</span><input type="checkbox" id="opt-quiet" /><i></i></label>
+        <button class="menu-item" data-then="photo">📸 Sacar una foto en el jardín</button>
         <button class="menu-item" data-then="meadow">🐾 Ir al Prado de los espíritus</button>
         <button class="menu-item" data-then="floors">🛗 Pisos</button>
         <button class="menu-item" data-guide>🕯️ La sexta etapa: crear significado</button>
@@ -333,6 +343,7 @@
         <p class="sub hand" id="today-sub">Cada gesto amable hace brillar un poco más el lugar de tu mascota.</p>
         <div class="pet-glow" id="pet-glow"></div>
         <div class="streak" id="streak"></div>
+        <p class="reach" id="reach" hidden></p>
         <h3>Gestos de hoy</h3>
         <ul class="missions" id="missions"></ul>
         <h3>Necesitan una luz 🕯️</h3>
@@ -475,6 +486,16 @@
         <button class="btn primary wide" type="submit">📌 Dejar mi nota</button>
       </form>
     </dialog>
+
+    <dialog class="modal small-modal" id="photo-dialog">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <h2>📸 Tu <em>foto</em></h2>
+      <p class="sub" id="photo-dialog-sub">Un recuerdo de tu visita al jardín.</p>
+      <img class="photo-polaroid" id="photo-preview" alt="Tu foto en el jardín" />
+      <button class="btn primary wide" id="photo-share">💌 Compartir en historias</button>
+      <button class="btn soft wide" id="photo-again">🔄 Sacar otra</button>
+    </dialog>
+    <div class="flash" id="flash" hidden aria-hidden="true"></div>
 
     <dialog class="modal small-modal" id="share">
       <button class="x" data-close aria-label="Cerrar">✕</button>

@@ -5,6 +5,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/h/:id",
+      "destination": "/api/handler?page=:id"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/handler?path=:path*"
     }
@@ -40,5 +44,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/handler.js": {
+      "includeFiles": "dist/index.html"
+    }
+  }
 }

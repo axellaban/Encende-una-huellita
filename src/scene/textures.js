@@ -361,3 +361,13 @@ export function pawTexture() {
   pawTex = toTexture(c);
   return pawTex;
 }
+
+// Cartel que se lee bien de los dos lados (con DoubleSide, de atrás el texto se ve al revés).
+export function twoSided(geo, mat) {
+  mat.side = THREE.FrontSide;
+  const g = new THREE.Group();
+  const back = new THREE.Mesh(geo, mat);
+  back.rotation.y = Math.PI;
+  g.add(new THREE.Mesh(geo, mat), back);
+  return g;
+}
