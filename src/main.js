@@ -16,6 +16,7 @@ import { createSpirits, MEADOW } from './scene/spirits.js';
 import { createHeaven, FLOORS } from './scene/heaven.js';
 import { createCharacter } from './scene/character.js';
 import { createOfferFx } from './scene/gifts3d.js';
+import { createSparkles } from './scene/sparkles.js';
 import { FURS, EARS, SIZES } from '../server/looks.js';
 import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard } from './share.js';
 import { polaroid } from './photo.js';
@@ -157,6 +158,7 @@ let hall;
 let controls;
 let lanterns;
 let offerFx; // los gestos de la ofrenda en 3D (llamita, flor, regalito, corazones)
+let sparkles; // brillitos que caen en el aire
 let cozy;
 let avatars;
 let elevator;
@@ -221,6 +223,7 @@ async function buildScene() {
   hall = buildHall(scene, world.colliders, tier);
   lanterns = createLanterns(scene, tier);
   offerFx = createOfferFx(scene);
+  if (!reduced) sparkles = createSparkles(scene, tier, renderer.getPixelRatio());
   cozy = createCozy(scene, tier, world.colliders, world.ground);
   avatars = createAvatars(scene);
   elevator = createElevator(scene, world.colliders, Math.random);
@@ -295,6 +298,7 @@ async function buildScene() {
     hall.animate(t);
     lanterns.update(dt, t);
     offerFx.update(dt);
+    sparkles?.update(camera.position);
     // El murmullo del río sube al acercarte (en los pisos de arriba no hay río).
     riverT -= dt;
     if (riverT < 0) {

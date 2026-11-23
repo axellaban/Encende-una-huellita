@@ -59,7 +59,8 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     marcos, pérgola, ofrenda central de Luca, estampita), `muertos.js` (papel picado, cempasúchil,
     calaveritas, pan de muerto, pueblito, fondos), `cozy.js` (camino de pétalos, frasco, alebrijes,
     Prado de los espíritus), `river.js` (el río, el Puente del Arcoíris y el arco de entrada),
-    `elevator.js`, `avatars.js` (otros visitantes), `lanterns.js` (farolitos), `textures.js`.
+    `elevator.js`, `avatars.js` (otros visitantes), `lanterns.js` (farolitos), `sparkles.js`
+    (brillitos que caen alrededor de la cámara, todo en el shader), `textures.js`.
   - **Regalitos y gestos en 3D** (`gifts3d.js`): `giftMesh(emoji)` arma cada uno de los 24 regalitos
     de `server/glow.js` con geometría (caché por emoji, tamaño 1, apoyado en y=0); si se suma uno al
     catálogo, hay que sumarle su modelo en `SPECS` (si no, sale el emoji como cartelito).

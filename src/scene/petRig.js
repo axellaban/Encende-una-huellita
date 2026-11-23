@@ -28,8 +28,13 @@ export function lookFor(m) {
   const l = m.look || {};
   const fur = FURS.find((f) => f.id === l.fur)?.hex || FURS[Math.floor(r() * FURS.length)].hex;
   const ears = ['up', 'down', 'tip'].includes(l.ears) ? l.ears : kind === 'perro' ? ['down', 'up', 'tip'][Math.floor(r() * 3)] : 'up';
-  const sizes = { s: 0.72, m: 0.92, l: 1.12 };
-  const size = sizes[l.size] || (kind === 'gato' ? 0.78 : kind === 'otro' ? 0.6 : 0.72 + r() * 0.4);
+  // Tamaños bien distintos (de un perrito mini a uno gigante); los gatos y los otros, más chicos.
+  const SIZE_SCALE = {
+    perro: { xs: 0.5, s: 0.68, m: 0.9, l: 1.15, xl: 1.42 },
+    gato: { xs: 0.58, s: 0.68, m: 0.8, l: 0.92, xl: 1.06 },
+    otro: { xs: 0.45, s: 0.55, m: 0.65, l: 0.78, xl: 0.92 },
+  };
+  const size = SIZE_SCALE[kind][l.size] || (kind === 'gato' ? 0.78 : kind === 'otro' ? 0.6 : 0.72 + r() * 0.4);
   return {
     kind,
     fur,
