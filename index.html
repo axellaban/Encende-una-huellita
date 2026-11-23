@@ -232,6 +232,7 @@
             <button class="act" id="s-gift"><i>🎁</i><span>Regalito</span></button>
             <button class="act" id="s-hug"><i>🫂</i><span>Abrazo</span></button>
             <button class="act" id="s-share"><i>💌</i><span>Compartir</span></button>
+            <button class="act" id="s-keep"><i>🖼️</i><span>Recuerdo</span></button>
             <button class="act walk-act-btn" id="s-walk-act" hidden><i>🐾</i><span>Pasear</span></button>
           </div>
         </div>
@@ -504,6 +505,15 @@
       <button class="btn soft wide" id="photo-again">🔄 Sacar otra</button>
     </dialog>
     <div class="flash" id="flash" hidden aria-hidden="true"></div>
+
+    <dialog class="modal small-modal keepsake" id="keepsake">
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+      <p class="eyebrow">Un recuerdo</p>
+      <h2>Su <em>estampita</em></h2>
+      <p class="sub">Para guardar, imprimir o compartir en tus historias.</p>
+      <div class="keep-img"><img id="keep-img" alt="Estampita de recuerdo" /><p id="keep-wait">Pintándola…</p></div>
+      <div class="keep-acts"><a class="btn soft" id="keep-save" download="recuerdo.png">⬇️ Guardar</a><button class="btn primary" id="keep-share">💌 Compartir</button></div>
+    </dialog>
 
     <dialog class="modal small-modal" id="share">
       <button class="x" data-close aria-label="Cerrar">✕</button>

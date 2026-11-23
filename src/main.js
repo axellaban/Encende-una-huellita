@@ -20,7 +20,7 @@ import { createCharacter } from './scene/character.js';
 import { createOfferFx } from './scene/gifts3d.js';
 import { createSparkles } from './scene/sparkles.js';
 import { FURS, EARS, SIZES } from '../server/looks.js';
-import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard } from './share.js';
+import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard, drawKeepsake } from './share.js';
 import { polaroid } from './photo.js';
 // Cómo llegó esta persona (link de una huellita, invitación de alguien). Se lee antes de tocar la URL.
 const ARRIVAL = arrival();
@@ -837,6 +837,41 @@ $('#s-flower').onclick = async () => {
 };
 
 $('#s-share').onclick = () => openShare();
+
+// ---------- recuerdo: la estampita para guardar o compartir ----------
+let keepBlob = null;
+async function openKeepsake() {
+  if (!current) return;
+  const m = current;
+  $('#keep-img').hidden = true;
+  $('#keep-wait').hidden = false;
+  $('#keep-save').removeAttribute('href');
+  $('#keepsake').showModal();
+  const dates = [
+    m.birthday ? `${fmtDay(m.birthday)}${m.birthYear ? ` de ${m.birthYear}` : ''}` : m.birthYear || '',
+    m.passedDay ? `${fmtDay(m.passedDay)}${m.passedYear ? ` de ${m.passedYear}` : ''}` : m.passedYear || '',
+  ].filter(Boolean).join('  –  ');
+  const years = m.birthYear && m.passedYear ? `${m.passedYear - m.birthYear} años de amor` : '';
+  try {
+    const c = await drawKeepsake(m, photoSrc(m), { dates, years, link: `${location.host}/h/${m.id}` });
+    keepBlob = await new Promise((res) => c.toBlob(res, 'image/png'));
+    const url = URL.createObjectURL(keepBlob);
+    $('#keep-img').src = url;
+    $('#keep-img').hidden = false;
+    $('#keep-wait').hidden = true;
+    $('#keep-save').href = url;
+    $('#keep-save').download = `recuerdo-${(m.name || 'huellita').toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, '-')}.png`;
+  } catch { $('#keep-wait').textContent = 'No se pudo pintar la estampita. Probá de nuevo.'; }
+}
+$('#s-keep').onclick = openKeepsake;
+$('#keep-share').onclick = async () => {
+  if (!keepBlob || !current) return;
+  const file = new File([keepBlob], 'recuerdo.png', { type: 'image/png' });
+  try {
+    if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: `En memoria de ${current.name}`, text: `Encendé una vela para ${current.name} 🕯️ ${shareUrl(current.id)}` });
+    else { $('#keep-save').click(); toast('🖼️ Guardamos la estampita en tu equipo'); }
+  } catch { /* el usuario cerró el compartir */ }
+};
 async function shareLinkNow() {
   if (!current) return;
   const url = shareUrl(current.id, { invite: true, name: shareName() });
