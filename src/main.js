@@ -13,6 +13,7 @@ import { createCozy } from './scene/cozy.js';
 import { createAvatars } from './scene/avatars.js';
 import { createElevator } from './scene/elevator.js';
 import { createSpirits, MEADOW } from './scene/spirits.js';
+import { createHeaven, FLOORS } from './scene/heaven.js';
 import { createCharacter } from './scene/character.js';
 import { FURS, EARS, SIZES } from '../server/looks.js';
 import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard } from './share.js';
@@ -160,6 +161,8 @@ let elevator;
 let spirits;
 let me; // tu personaje
 let captureNext = null; // modo foto
+let heaven = null; // el cielo que cambia con el piso
+let bloomPass = null;
 let composer = null;
 let adaptive = null;
 
@@ -174,7 +177,8 @@ function setupRenderer() {
     composer.setPixelRatio(adaptive.ratio);
     composer.setSize(innerWidth, innerHeight);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.45, 0.9));
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.45, 0.9);
+    composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
   }
 }
@@ -214,7 +218,7 @@ async function buildScene() {
   world = buildWorld(scene, tier);
   hall = buildHall(scene, world.colliders, tier);
   lanterns = createLanterns(scene, tier);
-  cozy = createCozy(scene, tier, world.colliders);
+  cozy = createCozy(scene, tier, world.colliders, world.ground);
   avatars = createAvatars(scene);
   elevator = createElevator(scene, world.colliders, Math.random);
   avatars.visible = store.get('huellita.quiet') !== '1';
@@ -223,6 +227,8 @@ async function buildScene() {
   me = createCharacter({ hue: visitorHue, light: tierName !== 'low' });
   scene.add(me.group);
   spirits = createSpirits(scene, { blocked: controls.blocked, tier });
+  heaven = createHeaven(scene, world, { renderer, bloom: bloomPass });
+  spirits.setHand((v) => me.leashHand(v));
   wireSpirits();
   controls.placePlayer(SPAWN, ENTRY_LOOK);
   controls.teleportCamera(INTRO_FROM, INTRO_LOOK);
@@ -264,6 +270,7 @@ async function buildScene() {
   });
   controls.onMove(hideHint);
   if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
+    goFloor: (f) => goFloor(f, true, true),
     ogCard: async (id) => { const m = memorials.find((x) => x.id === id); return (await drawOgCard(m, photoSrc(m))).toDataURL('image/jpeg', 0.88); } };
 
   const clock = new THREE.Clock();
@@ -275,10 +282,12 @@ async function buildScene() {
     const P = controls.player;
     me.group.position.copy(P.pos);
     me.group.rotation.y = P.heading;
+    me.leashing = !!(walking && spirits.companion && spirits.companion.state === 'follow');
     me.update(dt, { speed: P.speed, turn: P.turn });
     spirits.setPlayer(P.pos, P.heading, P.moving, dt);
     spirits.update(dt, camera.position);
     updateBallPrompt();
+    heaven.update(dt, t);
     hall.animate(t);
     lanterns.update(dt, t);
     cozy.animate(t, dt);
@@ -357,25 +366,27 @@ function renderBirthdays() {
 const floorOf = (m) => (m.slot < 0 ? -1 : Math.floor(m.slot / SLOTS_PER_FLOOR));
 const currentFloor = () => hall?.floor ?? 0;
 
+// Los 99 pisos, todos abiertos: del jardín (1) al cielo (99). Cada botón se tiñe del cielo de su piso.
+const floorSky = (f) => {
+  const k = f / (FLOORS - 1);
+  const a = k < 0.45 ? [52 + (143 - 52) * (k / 0.45), 25 + (134 - 25) * (k / 0.45), 94 + (214 - 94) * (k / 0.45)]
+    : [143 + (134 - 143) * ((k - 0.45) / 0.55), 134 + (195 - 134) * ((k - 0.45) / 0.55), 214 + (242 - 214) * ((k - 0.45) / 0.55)];
+  return `rgb(${a.map(Math.round).join(',')})`;
+};
 function renderFloors() {
-  const count = (f) => memorials.filter((m) => floorOf(m) === f).length;
-  // Abiertos: hasta el primer piso que todavía tiene lugar (y los que ya tienen huellitas).
-  const maxUsed = memorials.reduce((a, m) => Math.max(a, floorOf(m)), 0);
-  let open = 0;
-  while (count(open) >= SLOTS_PER_FLOOR) open++;
-  open = Math.max(open, maxUsed);
+  const counts = new Array(FLOORS).fill(0);
+  for (const m of memorials) { const f = floorOf(m); if (f >= 0 && f < FLOORS) counts[f]++; }
   const list = $('#floor-list');
   list.innerHTML = '';
-  for (let f = 0; f <= open + 1; f++) {
-    const n = count(f);
-    const locked = f > open;
+  for (let f = FLOORS - 1; f >= 0; f--) {
+    const n = counts[f];
     const b = document.createElement('button');
-    b.className = `${f === currentFloor() ? 'on' : ''} ${locked ? 'locked' : ''}`;
-    b.innerHTML = locked
-      ? `<span>🔒 Piso ${f + 1}</span><small>Se abre cuando se llene el piso ${f}</small>`
-      : `<span>Piso ${f + 1}</span><span class="bar"><i style="width:${Math.round((n / SLOTS_PER_FLOOR) * 100)}%"></i></span><small>${n} / ${SLOTS_PER_FLOOR}</small>`;
+    b.className = `${f === currentFloor() ? 'on' : ''} ${n ? 'has' : ''}`;
+    b.style.setProperty('--sky', floorSky(f));
+    b.innerHTML = `<b>${f + 1}</b>${n ? `<small>${n}🐾</small>` : ''}`;
+    b.title = n ? `Piso ${f + 1} · ${n} ${n === 1 ? 'huellita' : 'huellitas'}` : `Piso ${f + 1}`;
+    b.setAttribute('aria-label', b.title);
     b.onclick = () => {
-      if (locked) return toast(`🔒 El piso ${f + 1} se abre cuando se llene el piso ${f}`);
       $('#floors').close();
       if (f === currentFloor()) return;
       rideTo(f);
@@ -402,12 +413,17 @@ function rideTo(f) {
   haptic(10);
   let n = from;
   const step = f > from ? 1 : -1;
+  const steps = Math.abs(f - from);
+  $('#lift').style.setProperty('--sky', floorSky(f));
   setTimeout(() => {
-    goFloor(f, true);
+    goFloor(f, true, true);
+    let last = 0;
     const timer = setInterval(() => {
-      n += step;
+      // Avanza de a varios pisos si son muchos (el viaje dura ~2 s).
+      n += step * Math.max(1, Math.round(steps / 24));
+      if ((step > 0 && n > f) || (step < 0 && n < f)) n = f;
       num.textContent = n + 1;
-      tick();
+      if (performance.now() - last > 90) { tick(); last = performance.now(); }
       if (n === f) {
         clearInterval(timer);
         setTimeout(() => {
@@ -419,7 +435,7 @@ function rideTo(f) {
           toast(`🛗 Piso ${f + 1}`);
         }, 350);
       }
-    }, Math.max(260, 900 / Math.abs(f - from)));
+    }, Math.max(70, 900 / steps));
   }, 750);
 }
 
@@ -435,11 +451,13 @@ function callElevator() {
   });
 }
 
-function goFloor(f, quiet = false) {
+function goFloor(f, quiet = false, instant = false) {
   if (!hall || f === hall.floor) return;
   hall.setFloor(f, memorials);
+  heaven?.setFloor(f, instant);
   renderFloors();
   elevator?.setFloor(f);
+  heartbeat();
   if (!quiet) toast(`🛗 Llegaste al piso ${f + 1}`);
 }
 
@@ -846,8 +864,16 @@ function openAdd(slot = null) {
     : 'Va a quedar en el muro para que todos puedan visitarla.';
   $('#add').showModal();
 }
-$('#add-btn').onclick = () => openAdd(null);
-$('#dock-add').onclick = () => { haptic(8); openAdd(null); };
+// Sumar sin elegir marco: en el piso donde estás (el primer lugar libre).
+function addHere() {
+  const f = currentFloor();
+  if (f <= 0) return openAdd(null);
+  const used = new Set(memorials.filter((m) => floorOf(m) === f).map((m) => m.slot));
+  for (let i = 0; i < SLOTS_PER_FLOOR; i++) if (!used.has(f * SLOTS_PER_FLOOR + i)) return openAdd(f * SLOTS_PER_FLOOR + i);
+  return openAdd(null);
+}
+$('#add-btn').onclick = () => addHere();
+$('#dock-add').onclick = () => { haptic(8); addHere(); };
 
 async function takePhoto(file) {
   if (!file || !file.type.startsWith('image/')) return toast('Elegí una imagen (JPG, PNG o similar).');
@@ -1068,7 +1094,7 @@ function goHome() {
   closeSheet();
   closeModals();
   if (!controls) return;
-  goFloor(0, true);
+  goFloor(0, true, true);
   teleportPlayer(SPAWN, ENTRY_LOOK);
   controls.follow();
 }
@@ -1262,12 +1288,13 @@ async function heartbeat() {
       pendingGesture = null;
       const r = await api.heartbeat({
         sid: visitor.sid, visitor: visitor.name, hue: visitorHue,
-        x: pos.x, z: pos.z, ry: controls?.player.heading ?? 0, ...(g || {}),
+        x: pos.x, z: pos.z, ry: controls?.player.heading ?? 0, fl: currentFloor(), ...(g || {}),
         ...(walking ? { pet: { n: walking.name, sp: walking.species, ...(walking.look || {}) } } : {}),
         since: seq,
       });
       $('#here').textContent = Math.max(1, r.here);
-      avatars?.update(r.others || []);
+      // Sólo se ven quienes están en tu mismo piso.
+      avatars?.update((r.others || []).filter((o) => (o.fl || 0) === currentFloor()));
       spirits?.setRemote(avatars?.list() || []);
       if ((r.others || []).length) next = 5_000;
       if (r.events) await applyEvents(r.events);
@@ -2456,6 +2483,8 @@ function startWalk(m, { quiet = false } = {}) {
   const key = hall?.memorialKey(m);
   const from = key !== null && key !== undefined ? hall.worldPos(key) : null;
   spirits.setPack(memorials, m.id);
+  // Que el espíritu aparezca adelante de donde estás ahora (no de donde estabas en el cuadro anterior).
+  spirits.setPlayer(controls.player.pos, controls.player.heading, controls.player.moving, 0.016);
   spirits.walk(m, from);
   walkHud.hidden = false;
   $('#walk-photo').src = photoSrc(m);

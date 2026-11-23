@@ -10,7 +10,8 @@ import { picadoBanner, marigoldCluster, PALETTE } from './muertos.js';
 
 export const JAR_POS = new THREE.Vector3(-4.2, 0, 15.5);
 
-export function createCozy(scene, tier, colliders) {
+// `ground`: lo que está en el suelo del jardín (se esconde en los pisos de arriba).
+export function createCozy(scene, tier, colliders, ground = scene) {
   const r = rand(23);
   const animated = [];
   const pickables = [];
@@ -34,7 +35,7 @@ export function createCozy(scene, tier, colliders) {
       mesh.setMatrixAt(i, m.matrix);
     });
     mesh.renderOrder = 2;
-    scene.add(mesh);
+    ground.add(mesh);
   }
 
   // ---------- camino de pétalos de cempasúchil (guía hasta la ofrenda) ----------
@@ -56,7 +57,7 @@ export function createCozy(scene, tier, colliders) {
       mesh.setMatrixAt(i, m.matrix);
       mesh.setColorAt(i, cols[i % cols.length]);
     }
-    scene.add(mesh);
+    ground.add(mesh);
   }
 
   // ---------- papel picado cruzando el camino ----------
@@ -66,13 +67,13 @@ export function createCozy(scene, tier, colliders) {
     const poleGeo = new THREE.CylinderGeometry(0.045, 0.06, 4.4, 7);
     for (const [z, seed] of [[41.5, 1], [35, 4], [28.5, 9], [22, 13], [15.5, 2]]) {
       const b = picadoBanner(new THREE.Vector3(-2.75, 4.3, z), new THREE.Vector3(2.75, 4.3, z - 0.2), { sag: 0.42, flags: 11, size: 0.4, seed });
-      scene.add(b);
+      ground.add(b);
       animated.push((t) => b.userData.flutter(t));
       for (const [x, zz] of [[-2.75, z], [2.75, z - 0.2]]) {
         const pole = new THREE.Mesh(poleGeo, poleMat);
         pole.position.set(x, 2.2, zz);
-        scene.add(pole);
-        if (!colliders.circles.some((c) => Math.hypot(c.x - x, c.z - zz) < 0.4)) colliders.circles.push({ x, z: zz, r: 0.12 });
+        ground.add(pole);
+        if (!colliders.circles.some((c) => Math.hypot(c.x - x, c.z - zz) < 0.4)) colliders.circles.push({ x, z: zz, r: 0.12, ground: true });
       }
     }
   }
@@ -111,9 +112,9 @@ export function createCozy(scene, tier, colliders) {
         capColors.push(c);
       }
     }
-    scene.add(new THREE.Mesh(mergeGeometries(stems), new THREE.MeshLambertMaterial({ color: '#e8dccb', emissive: '#3a3030' })));
+    ground.add(new THREE.Mesh(mergeGeometries(stems), new THREE.MeshLambertMaterial({ color: '#e8dccb', emissive: '#3a3030' })));
     const capMesh = new THREE.Mesh(mergeGeometries(caps), new THREE.MeshBasicMaterial({ vertexColors: true }));
-    scene.add(capMesh);
+    ground.add(capMesh);
   }
 
   // ---------- el cuenco y la pelota de Luca ----------
@@ -219,8 +220,8 @@ export function createCozy(scene, tier, colliders) {
     back.position.set(0, 0.66, -0.3);
     back.rotation.x = 0.3;
     g.add(board, back);
-    scene.add(g);
-    colliders.circles.push({ x: g.position.x, z: g.position.z, r: 0.5 });
+    ground.add(g);
+    colliders.circles.push({ x: g.position.x, z: g.position.z, r: 0.5, ground: true });
   }
 
   // ---------- el Puente del Arcoíris y su arroyo ----------
@@ -255,6 +256,8 @@ export function createCozy(scene, tier, colliders) {
       // Un río que se vea de noche: agua turquesa que corre, reflejos de luna y espuma en las orillas.
       fragmentShader: `uniform float uTime; varying vec2 vUv; varying vec3 vW;
         float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+        float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
         void main(){
           float mid = 1.0 - abs(vUv.y - 0.5) * 2.0;
           vec3 shallow = vec3(0.13, 0.30, 0.42);
@@ -272,14 +275,22 @@ export function createCozy(scene, tier, colliders) {
           float s = h(floor(g));
           float tw = smoothstep(0.9, 1.0, s) * (0.5 + 0.5 * sin(uTime * 3.0 + s * 40.0));
           c += vec3(1.6, 1.5, 1.3) * tw * smoothstep(0.25, 0.0, length(fract(g) - 0.5)) * mid;
+          // Reflejo del cielo del atardecer: de costado el agua se ve rosada y dorada (fresnel).
+          vec3 V = normalize(cameraPosition - vW);
+          float fres = pow(1.0 - clamp(V.y, 0.0, 1.0), 3.0);
+          vec3 skyRef = mix(vec3(0.26, 0.12, 0.30), vec3(0.55, 0.28, 0.22), smoothstep(0.5, 1.0, fres));
+          c = mix(c, skyRef, fres * 0.4);
+          // Reflejos de los farolitos y velas: manchas cálidas que tiemblan con la corriente.
+          float warm = n2(vec2(vUv.x * 18.0 - uTime * 0.5, vUv.y * 3.0));
+          c += vec3(0.9, 0.5, 0.15) * smoothstep(0.82, 0.98, warm) * 0.35 * mid;
           // Espuma suave contra las orillas.
           float foam = (1.0 - smoothstep(0.0, 0.09, vUv.y)) + smoothstep(0.91, 1.0, vUv.y);
           foam *= 0.6 + 0.4 * sin(vUv.x * 40.0 - uTime * 2.0);
-          c = mix(c, vec3(0.45, 0.58, 0.66), clamp(foam, 0.0, 1.0) * 0.45);
-          gl_FragColor = vec4(c, 0.96);
+          c = mix(c, vec3(0.42, 0.52, 0.62), clamp(foam, 0.0, 1.0) * 0.38);
+          gl_FragColor = vec4(c, 0.97);
         }`,
     }));
-    scene.add(water);
+    ground.add(water);
     // Piedritas en la orilla.
     const stones = [];
     for (let i = 0; i < 160; i++) {
@@ -293,7 +304,86 @@ export function createCozy(scene, tier, colliders) {
       sg.translate(p.x + n.x, 0.05, p.z + n.z);
       stones.push(sg);
     }
-    scene.add(new THREE.Mesh(mergeGeometries(stones), new THREE.MeshLambertMaterial({ color: '#8a8290', flatShading: true })));
+    ground.add(new THREE.Mesh(mergeGeometries(stones), new THREE.MeshLambertMaterial({ color: '#8a8290', flatShading: true })));
+
+    // Pétalos de cempasúchil que la corriente lleva (cientos, en un solo dibujo).
+    {
+      const N = tierCount(tier, 420);
+      const petal = new THREE.CircleGeometry(0.06, 5).rotateX(-Math.PI / 2);
+      const mesh = new THREE.InstancedMesh(petal, new THREE.MeshLambertMaterial({ emissive: '#8a3400', emissiveIntensity: 0.7, side: THREE.DoubleSide }), N);
+      const cols = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a'].map((c) => new THREE.Color(c));
+      const data = [];
+      for (let i = 0; i < N; i++) {
+        data.push({ t: r(), side: (r() - 0.5) * CREEK_HALF * 1.7, sp: 0.004 + r() * 0.006, rot: r() * 6, s: 0.6 + r() * 0.9 });
+        mesh.setColorAt(i, cols[i % cols.length]);
+      }
+      mesh.frustumCulled = false;
+      ground.add(mesh);
+      const m = new THREE.Object3D();
+      animated.push((t, dt) => {
+        for (let i = 0; i < N; i++) {
+          const o = data[i];
+          o.t = (o.t + (dt || 0.016) * o.sp * (1.2 - Math.abs(o.side) / CREEK_HALF * 0.5)) % 1;
+          const p = curve.getPoint(o.t);
+          const tan = curve.getTangent(o.t);
+          m.position.set(p.x - tan.z * o.side, 0.045 + Math.sin(t * 2 + i) * 0.006, p.z + tan.x * o.side);
+          m.rotation.set(0, o.rot + t * 0.3 * (i % 2 ? 1 : -1), 0);
+          m.scale.setScalar(o.s);
+          m.updateMatrix();
+          mesh.setMatrixAt(i, m.matrix);
+        }
+        mesh.instanceMatrix.needsUpdate = true;
+      });
+    }
+    // Juncos en las orillas, que se mecen.
+    {
+      const blades = [];
+      for (let i = 0; i < 220; i++) {
+        const t = r();
+        const p = curve.getPoint(t);
+        const tan = curve.getTangent(t);
+        const sd = r() < 0.5 ? -1 : 1;
+        const off = CREEK_HALF + 0.1 + r() * 0.6;
+        const x = p.x - tan.z * off * sd;
+        const z = p.z + tan.x * off * sd;
+        if (Math.abs(x) < 1.6) continue; // el puente
+        const h = 0.6 + r() * 0.9;
+        const b = new THREE.ConeGeometry(0.025, h, 3);
+        b.translate(0, h / 2, 0);
+        b.rotateZ((r() - 0.5) * 0.35);
+        b.rotateX((r() - 0.5) * 0.35);
+        b.translate(x, 0, z);
+        blades.push(b.toNonIndexed());
+        if (r() < 0.3) {
+          const tip = new THREE.CylinderGeometry(0.03, 0.03, 0.16, 6);
+          tip.translate(x, h * 0.92, z);
+          blades.push(tip.toNonIndexed());
+        }
+      }
+      const reeds = new THREE.Mesh(mergeGeometries(blades), new THREE.MeshLambertMaterial({ color: '#3f5a2e', emissive: '#16220f' }));
+      reeds.material.onBeforeCompile = (sh) => {
+        sh.uniforms.uTime = uTime;
+        sh.vertexShader = `uniform float uTime;\n${sh.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
+          transformed.x += sin(uTime * 1.3 + position.z * 0.7) * 0.05 * max(0.0, position.y);`);
+      };
+      reeds.material.customProgramCacheKey = () => 'juncos';
+      ground.add(reeds);
+    }
+    // Bruma baja sobre el agua.
+    {
+      const mist = new THREE.Group();
+      const mat = new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(0.45, 0.4, 0.7), transparent: true, depthWrite: false, opacity: 0.07 });
+      for (let i = 0; i < 26; i++) {
+        const t = (i + r() * 0.5) / 26;
+        const p = curve.getPoint(t);
+        const sp = new THREE.Sprite(mat);
+        sp.position.set(p.x, 0.35 + r() * 0.3, p.z + (r() - 0.5) * 2);
+        sp.scale.set(7 + r() * 5, 1.4 + r(), 1);
+        mist.add(sp);
+      }
+      ground.add(mist);
+      animated.push((t) => { mist.position.x = Math.sin(t * 0.07) * 1.5; });
+    }
 
     // Velitas que flotan río abajo (como las ofrendas que se dejan al agua).
     {
@@ -313,7 +403,7 @@ export function createCozy(scene, tier, colliders) {
         glow.position.y = 0.12;
         const petals = marigoldCluster([[0, 0.02, 0, 0.6]], { r: 0.09, rnd: r });
         b.add(petals, cup, flame, glow);
-        scene.add(b);
+        ground.add(b);
         boats.push({ b, t: r(), side: (r() - 0.5) * CREEK_HALF * 1.1, sp: 0.006 + r() * 0.006, bob: r() * 6 });
       }
       animated.push((t, dt) => {
@@ -376,7 +466,7 @@ export function createCozy(scene, tier, colliders) {
       }
       bridge.add(marigoldCluster(pts, { r: 0.07, rnd: r }));
     }
-    scene.add(bridge);
+    ground.add(bridge);
 
     // Arcoíris tenue, como el de una noche de luna.
     const colors = ['#ff8a8a', '#ffb870', '#ffe58a', '#9be38f', '#8ec5ff', '#a99bff', '#e0a0ff'];
@@ -389,17 +479,17 @@ export function createCozy(scene, tier, colliders) {
       rainbow.add(arc);
     });
     rainbow.position.set(0, -2, CREEK_Z - 5);
-    scene.add(rainbow);
+    ground.add(rainbow);
     animated.push((t) => rainbow.children.forEach((a, i) => { a.material.opacity = 0.065 + Math.sin(t * 0.4 + i * 0.5) * 0.02; }));
 
     const sign = twoSided(new THREE.PlaneGeometry(1.7, 0.36), new THREE.MeshBasicMaterial({
       map: labelTexture('Puente del Arcoíris 🌈', { w: 640, h: 136, font: '700 66px Caveat, cursive', bg: 'rgba(74,48,34,0.95)', fg: '#f6e3c4' }),
     }));
     sign.position.set(1.6, 1.0, bridge.position.z + L / 2 + 0.6);
-    scene.add(sign);
+    ground.add(sign);
     const signPost = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 0.06), wood);
     signPost.position.set(1.6, 0.5, bridge.position.z + L / 2 + 0.58);
-    scene.add(signPost);
+    ground.add(signPost);
   }
 
   // ---------- cartel con flecha en la entrada: por acá al Prado ----------
@@ -428,8 +518,8 @@ export function createCozy(scene, tier, colliders) {
     back.rotation.y = Math.PI;
     arm.add(plank, tip, front, back);
     g.add(arm);
-    scene.add(g);
-    colliders.circles.push({ x: g.position.x, z: g.position.z, r: 0.2 });
+    ground.add(g);
+    colliders.circles.push({ x: g.position.x, z: g.position.z, r: 0.2, ground: true });
   }
 
   // ---------- el Prado de los espíritus: cartel, cucha, cuenco y piedritas que brillan ----------
@@ -442,13 +532,13 @@ export function createCozy(scene, tier, colliders) {
     const sz = MEADOW.z + MEADOW_R * 0.72;
     sign.position.set(sx, 1.15, sz);
     sign.rotation.y = -0.75;
-    scene.add(sign);
+    ground.add(sign);
     for (const o of [-0.8, 0.8]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.25, 0.07), wood);
       post.position.set(sx + Math.cos(0.75) * o, 0.62, sz + Math.sin(0.75) * o);
-      scene.add(post);
+      ground.add(post);
     }
-    colliders.circles.push({ x: sx, z: sz, r: 0.35 });
+    colliders.circles.push({ x: sx, z: sz, r: 0.35, ground: true });
     // Cucha de madera con techo a dos aguas.
     const house = new THREE.Group();
     house.position.set(MEADOW.x + MEADOW_R * 0.55, 0, MEADOW.z - MEADOW_R * 0.75);
@@ -469,8 +559,8 @@ export function createCozy(scene, tier, colliders) {
     const name = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.11), new THREE.MeshBasicMaterial({ map: labelTexture('Hogar', { w: 256, h: 64, font: '700 44px Caveat, cursive' }) }));
     name.position.set(0, 0.5, 0.506);
     house.add(walls, door, doorLow, name);
-    scene.add(house);
-    colliders.circles.push({ x: house.position.x, z: house.position.z, r: 0.7 });
+    ground.add(house);
+    colliders.circles.push({ x: house.position.x, z: house.position.z, r: 0.7, ground: true });
     // Piedritas que brillan marcando el borde del prado.
     const n = 26;
     const glowStones = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.032, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 0.8, 0.9) }), n);
@@ -483,7 +573,7 @@ export function createCozy(scene, tier, colliders) {
       m.updateMatrix();
       glowStones.setMatrixAt(i, m.matrix);
     }
-    scene.add(glowStones);
+    ground.add(glowStones);
     animated.push((t) => { glowStones.material.color.setRGB(0.32 + Math.sin(t * 1.3) * 0.08, 0.75 + Math.sin(t * 1.3) * 0.12, 0.9); });
   }
 
@@ -520,8 +610,8 @@ export function createCozy(scene, tier, colliders) {
     jar.add(hit);
     pickables.push(hit);
   }
-  scene.add(jar);
-  colliders.circles.push({ x: JAR_POS.x, z: JAR_POS.z, r: 0.45 });
+  ground.add(jar);
+  colliders.circles.push({ x: JAR_POS.x, z: JAR_POS.z, r: 0.45, ground: true });
   const STAR_MAX = 90;
   const stars = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.03, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.9, 1.5, 0.8) }), STAR_MAX);
   {

@@ -265,6 +265,7 @@ export async function handleApi(req, store) {
       emote: cleanText(body.emote, 8) || null,
       country: countryOf(req),
       pet: cleanPet(body.pet),
+      fl: Number(body.fl),
     };
     const since = Number.isInteger(body.since) && body.since >= 0 ? body.since : null;
     return ok(await store.touch(cleanText(body.sid, 40), info, since));

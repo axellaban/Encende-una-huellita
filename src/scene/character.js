@@ -148,12 +148,17 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
   let t = Math.random() * 10;
   let act = null; // { kind, t, dur }
   let lookYaw = 0;
+  let leashing = false;
   let glanceT = 2;
   let glance = 0;
   return {
     group: g,
     head,
     handWorld(v = new THREE.Vector3()) { return arms[0].localToWorld(v.set(0, -0.36, 0.02)); },
+    // La mano que lleva la correa (la del farolito es la otra).
+    leashHand(v = new THREE.Vector3()) { return arms[0].localToWorld(v.set(0, -0.38, 0.03)); },
+    // Con correa: el brazo un poco hacia adelante.
+    set leashing(v) { leashing = v; },
     throw() { act = { kind: 'throw', t: 0, dur: 0.55 }; },
     wave() { act = { kind: 'wave', t: 0, dur: 1.6 }; },
     // Agacharse a acariciar al espíritu.
@@ -167,7 +172,7 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
       const swing = Math.sin(phase) * (0.35 + 0.35 * Math.min(1, speed / 4)) * k;
       legs[0].rotation.x = swing;
       legs[1].rotation.x = -swing;
-      arms[0].rotation.x = -swing * 0.9;
+      arms[0].rotation.x = leashing ? -0.55 - swing * 0.2 : -swing * 0.9;
       arms[1].rotation.x = swing * 0.6 - 0.25 * (1 - k * 0.5);
       body.position.y = Math.abs(Math.cos(phase)) * 0.045 * k + Math.sin(t * 2) * 0.006 * (1 - k);
       torso.rotation.y = swing * 0.18;

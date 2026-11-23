@@ -33,6 +33,8 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 - [ ] **Más viral**: recordatorio "hoy cumpliría años" con link para compartir; contador público de
       velas de la noche en la entrada; QR imprimible para la ofrenda de casa; video corto del paseo.
 
+- [ ] **Pisos del cielo**: hoy el salón de cada piso es igual (con su muro). Se podría variar la
+      decoración según la altura (más flores blancas y luz arriba) y sumar algo único en el piso 99.
 - [ ] **Espíritus**: que tu espíritu juegue con los espíritus que pasean otros visitantes; más acciones
       (tirar de una soga entre dos, cavar, perseguir mariposas de luz); ladridos/maullidos suaves.
 - [ ] **Tu personaje**: más opciones (rebozo, peinados, farolito de colores); hoy se elige color del

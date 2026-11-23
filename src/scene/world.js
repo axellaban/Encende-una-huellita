@@ -79,7 +79,11 @@ export function onPath(x, z, pad = 0) {
 }
 
 export function buildWorld(scene, tier) {
-  const colliders = { segments: [], circles: [] };
+  const colliders = { segments: [], circles: [], up: false };
+  // Lo que está en el suelo del jardín: en los pisos de arriba se esconde (el salón queda sobre las nubes).
+  const groundRoot = new THREE.Group();
+  groundRoot.name = 'suelo-del-jardin';
+  scene.add(groundRoot);
   const animated = [];
   const walkable = [];
   const r = rand(7);
@@ -99,9 +103,10 @@ export function buildWorld(scene, tier) {
         mid: { value: new THREE.Color('#34195e') },
         low: { value: new THREE.Color('#a3337a') },
         horizon: { value: new THREE.Color('#ff8a3d') },
+        uK: { value: 0 },
       },
       vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 low; uniform vec3 horizon; varying vec3 vP;
+      fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 low; uniform vec3 horizon; uniform float uK; varying vec3 vP;
         void main(){
           float h = vP.y;
           vec3 c = mix(mid, top, smoothstep(0.18, 0.75, h));
@@ -109,10 +114,13 @@ export function buildWorld(scene, tier) {
           c = mix(horizon, c, smoothstep(-0.04, 0.07, h));
           // Resplandor del atardecer hacia el oeste.
           float sunset = pow(max(0.0, dot(normalize(vec3(-0.2, 0.0, -1.0)), normalize(vec3(vP.x, 0.0, vP.z)))), 6.0);
-          c += vec3(0.45, 0.18, 0.06) * sunset * (1.0 - smoothstep(0.0, 0.35, h));
+          c += vec3(0.45, 0.18, 0.06) * sunset * (1.0 - smoothstep(0.0, 0.35, h)) * (1.0 - uK);
           float band = smoothstep(0.25, 0.45, h) * (1.0 - smoothstep(0.45, 0.75, h));
           float wave = sin(atan(vP.z, vP.x) * 5.0 + h * 9.0) * 0.5 + 0.5;
-          c += mix(vec3(0.25, 0.04, 0.18), vec3(0.04, 0.16, 0.18), wave) * band * 0.55;
+          c += mix(vec3(0.25, 0.04, 0.18), vec3(0.04, 0.16, 0.18), wave) * band * 0.55 * (1.0 - uK);
+          // Arriba de todo: luz de cielo, más clara cerca del sol.
+          float sun = pow(max(0.0, dot(normalize(vP), normalize(vec3(0.35, 0.55, -0.75)))), 12.0);
+          c += vec3(1.0, 0.95, 0.85) * sun * 0.55 * uK;
           gl_FragColor = vec4(c, 1.0);
         }`,
     }),
@@ -139,17 +147,33 @@ export function buildWorld(scene, tier) {
       depthWrite: false,
       fog: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uTime },
-      vertexShader: `attribute float seed; uniform float uTime; varying float vA;
-        void main(){ vA = 0.45 + 0.55 * sin(uTime * (0.6 + seed * 2.4) + seed * 60.0);
+      uniforms: { uTime, uFade: { value: 1 } },
+      vertexShader: `attribute float seed; uniform float uTime; uniform float uFade; varying float vA; varying float vS;
+        void main(){ vA = (0.45 + 0.55 * sin(uTime * (0.6 + seed * 2.4) + seed * 60.0)) * uFade;
           vA *= smoothstep(0.05, 0.35, normalize(position).y);
-          gl_PointSize = 1.2 + seed * seed * 2.6;
+          vS = seed;
+          // Las más grandes son destellos de cuatro puntas.
+          gl_PointSize = seed > 0.93 ? 9.0 + seed * 7.0 : 1.4 + seed * seed * 2.8;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `varying float vA; void main(){ float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard;
-          gl_FragColor = vec4(vec3(1.0, 0.95, 0.85) * 1.3, vA * smoothstep(0.5, 0.0, d)); }`,
+      fragmentShader: `varying float vA; varying float vS; void main(){
+          vec2 q = gl_PointCoord - 0.5;
+          float d = length(q);
+          float a;
+          if (vS > 0.93) {
+            vec2 aq = abs(q);
+            float cross = max(exp(-aq.x * 46.0 - aq.y * 5.0), exp(-aq.y * 46.0 - aq.x * 5.0));
+            a = cross + exp(-d * d * 120.0);
+          } else {
+            if (d > 0.5) discard;
+            a = smoothstep(0.5, 0.0, d);
+          }
+          vec3 gold = vec3(1.25, 1.02, 0.6);
+          vec3 white = vec3(1.25, 1.2, 1.1);
+          gl_FragColor = vec4(mix(white, gold, step(0.6, vS)), vA * a); }`,
     }));
     stars.renderOrder = -9;
     scene.add(stars);
+    sky.userData.stars = stars;
   }
 
   // Luna.
@@ -160,7 +184,8 @@ export function buildWorld(scene, tier) {
   scene.add(moon);
 
   // ---------- luces generales ----------
-  scene.add(new THREE.HemisphereLight('#a184d8', '#2c2414', 1.3));
+  const hemi = new THREE.HemisphereLight('#a184d8', '#2c2414', 1.3);
+  scene.add(hemi);
   const moonLight = new THREE.DirectionalLight('#c3c4ff', 0.6);
   moonLight.position.set(-30, 50, -40);
   scene.add(moonLight);
@@ -174,7 +199,7 @@ export function buildWorld(scene, tier) {
   const ground = new THREE.Mesh(new THREE.CircleGeometry(220, 64), new THREE.MeshLambertMaterial({ map: grassTex, color: '#c8d6b4' }));
   ground.rotation.x = -Math.PI / 2;
   ground.name = 'ground';
-  scene.add(ground);
+  groundRoot.add(ground);
   walkable.push(ground);
 
   // Colinas lejanas.
@@ -199,8 +224,8 @@ export function buildWorld(scene, tier) {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     const hills = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
-    scene.add(hills);
-    scene.add(buildPueblo(r));
+    groundRoot.add(hills);
+    groundRoot.add(buildPueblo(r));
   }
 
   // Camino de piedra.
@@ -211,13 +236,13 @@ export function buildWorld(scene, tier) {
   path.rotation.x = -Math.PI / 2;
   path.position.set(0, 0.012, HALL_CENTER.z + HALL_RADIUS - 1 + pathLen / 2);
   path.name = 'ground';
-  scene.add(path);
+  groundRoot.add(path);
   walkable.push(path);
   // Bordes del camino.
   for (const s of [-1, 1]) {
     const edge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, pathLen), new THREE.MeshLambertMaterial({ color: '#6d625a' }));
     edge.position.set(s * (PATH_HALF + 0.05), 0.04, path.position.z);
-    scene.add(edge);
+    groundRoot.add(edge);
   }
 
   // Piso de madera del salón y borde de piedra.
@@ -280,7 +305,7 @@ export function buildWorld(scene, tier) {
     }
     grass.count = placed;
     grass.frustumCulled = false;
-    scene.add(grass);
+    groundRoot.add(grass);
   }
 
   // Flores entre el pasto.
@@ -312,7 +337,7 @@ export function buildWorld(scene, tier) {
       placed++;
     }
     flowers.count = placed;
-    scene.add(flowers);
+    groundRoot.add(flowers);
   }
 
   // ---------- sombras de contacto ----------
@@ -358,17 +383,17 @@ export function buildWorld(scene, tier) {
         const pal = blossom ? blossoms : greens;
         leafParts.push(paint(g, pal[Math.floor(r() * pal.length)]));
       }
-      colliders.circles.push({ x, z, r: 0.5 });
+      colliders.circles.push({ x, z, r: 0.5, ground: true });
       addBlob(x, z, 4.2);
       placed++;
     }
     const trunks = new THREE.Mesh(mergeGeometries(trunkParts.map((g) => g.toNonIndexed())), new THREE.MeshLambertMaterial({ color: '#4a3223', flatShading: true }));
-    scene.add(trunks);
+    groundRoot.add(trunks);
     const leaves = new THREE.Mesh(mergeGeometries(leafParts), withWind(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'leaves',
       `float k = max(0.0, position.y - 2.0);
        transformed.x += sin(uTime * 0.9 + position.x * 0.25 + position.z * 0.15) * 0.04 * k;
        transformed.z += cos(uTime * 0.75 + position.z * 0.2) * 0.03 * k;`));
-    scene.add(leaves);
+    groundRoot.add(leaves);
   }
 
   // Cerco de ligustros alrededor del jardín y siluetas de árboles detrás.
@@ -394,7 +419,7 @@ export function buildWorld(scene, tier) {
     }
     const hedge = new THREE.Mesh(mergeGeometries(parts), withWind(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'hedge',
       'transformed.x += sin(uTime * 0.6 + position.z * 0.1) * 0.03 * max(0.0, position.y - 1.0);'));
-    scene.add(hedge);
+    groundRoot.add(hedge);
   }
 
   // ---------- faroles ----------
@@ -406,6 +431,8 @@ export function buildWorld(scene, tier) {
     [HALL_CENTER.x - 6.5 * HK, HALL_CENTER.z - 4.5 * HK], [HALL_CENTER.x + 6.5 * HK, HALL_CENTER.z - 4.5 * HK],
   ];
   const lampParts = [];
+  const hallLampParts = [];
+  const PATH_LAMPS = 5;
   const lightOrder = [6, 5, 2, 4, 0, 7, 8, 3, 1]; // prioridad de luces reales (primero las del salón)
   lampSpots.forEach(([x, z], i) => {
     const base = new THREE.CylinderGeometry(0.16, 0.2, 0.35, 8);
@@ -417,24 +444,26 @@ export function buildWorld(scene, tier) {
     cap.translate(x, 3.55, z);
     const collar = new THREE.CylinderGeometry(0.12, 0.08, 0.1, 8);
     collar.translate(x, 3.06, z);
-    lampParts.push(base, pole, cap, collar);
+    (i < PATH_LAMPS ? lampParts : hallLampParts).push(base, pole, cap, collar);
+    const into = i < PATH_LAMPS ? groundRoot : scene;
     const glass = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.34, 0.26), glassMat);
     glass.position.set(x, 3.27, z);
-    scene.add(glass);
+    into.add(glass);
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: tier.bloom ? 0.35 : 0.75 }));
     glow.scale.setScalar(tier.bloom ? 1.4 : 2);
     glow.position.set(x, 3.27, z);
-    scene.add(glow);
-    colliders.circles.push({ x, z, r: 0.25 });
+    into.add(glow);
+    colliders.circles.push({ x, z, r: 0.25, ground: i < PATH_LAMPS });
     addBlob(x, z, 0.9);
     const rank = lightOrder.indexOf(i);
     if (rank >= 0 && rank < tier.lights) {
       const l = new THREE.PointLight('#ffb36b', 5, 11, 1.7);
       l.position.set(x, 3.0, z);
-      scene.add(l);
+      into.add(l);
     }
   });
-  scene.add(new THREE.Mesh(mergeGeometries(lampParts.map((g) => g.toNonIndexed())), poleMat));
+  groundRoot.add(new THREE.Mesh(mergeGeometries(lampParts.map((g) => g.toNonIndexed())), poleMat));
+  scene.add(new THREE.Mesh(mergeGeometries(hallLampParts.map((g) => g.toNonIndexed())), poleMat));
 
   // Balizas a los lados del camino.
   {
@@ -447,7 +476,7 @@ export function buildWorld(scene, tier) {
         posts.push(g);
       }
     }
-    scene.add(new THREE.Mesh(mergeGeometries(posts.map((g) => g.toNonIndexed())), poleMat));
+    groundRoot.add(new THREE.Mesh(mergeGeometries(posts.map((g) => g.toNonIndexed())), poleMat));
     const tops = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.065, 0.065, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.9, 1.5, 0.6) }), posts.length);
     const m = new THREE.Object3D();
     let i = 0;
@@ -458,7 +487,7 @@ export function buildWorld(scene, tier) {
         tops.setMatrixAt(i++, m.matrix);
       }
     }
-    scene.add(tops);
+    groundRoot.add(tops);
   }
 
   // ---------- bancos ----------
@@ -487,11 +516,11 @@ export function buildWorld(scene, tier) {
         back.translate(lx, 0.72, -0.29);
         metal.push(back.applyMatrix4(tr));
       }
-      colliders.circles.push({ x, z, r: 0.85 });
+      colliders.circles.push({ x, z, r: 0.85, ground: true });
       addBlob(x, z, 2.2, 1.2);
     }
-    scene.add(new THREE.Mesh(mergeGeometries(parts), new THREE.MeshLambertMaterial({ map: woodTexture('#7a4f33') })));
-    scene.add(new THREE.Mesh(mergeGeometries(metal), poleMat));
+    groundRoot.add(new THREE.Mesh(mergeGeometries(parts), new THREE.MeshLambertMaterial({ map: woodTexture('#7a4f33') })));
+    groundRoot.add(new THREE.Mesh(mergeGeometries(metal), poleMat));
   }
 
   // ---------- luciérnagas ----------
@@ -532,6 +561,7 @@ export function buildWorld(scene, tier) {
     }));
     flies.frustumCulled = false;
     scene.add(flies);
+    sky.userData.flies = flies;
     const resize = () => { flies.material.uniforms.uScale.value = innerHeight * Math.min(devicePixelRatio, 2); };
     resize();
     addEventListener('resize', resize);
@@ -553,8 +583,9 @@ export function buildWorld(scene, tier) {
     });
     mesh.count = blobs.length;
     mesh.renderOrder = 1;
-    scene.add(mesh);
+    groundRoot.add(mesh);
   }
 
-  return { colliders, animated, walkable };
+  const fog = scene.fog;
+  return { colliders, animated, walkable, ground: groundRoot, deck, sky, stars: sky.userData.stars, moon, hemi, moonLight, warmFill, fog, flies: sky.userData.flies };
 }

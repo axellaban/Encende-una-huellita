@@ -167,6 +167,7 @@ for (const name of ['local', 'vercel']) {
     await post('/api/now', { sid: 'p1', visitor: 'Con Toby', x: 2, z: 3, pet: { n: 'Toby', sp: 'perro', fur: 'dorado', ears: 'down', size: 'm' } });
     const j = await (await post('/api/now', { sid: 'p2', visitor: 'Otra', pet: { n: '', sp: 'perro' } })).json();
     const p = j.others.find((o) => o.name === 'Con Toby');
+    assert.equal(p.fl, 0, 'sin piso: el jardín');
     assert.deepEqual(p.pet, { n: 'Toby', sp: 'perro', fur: 'dorado', ears: 'down', size: 'm' });
     const k = await (await post('/api/now', { sid: 'p3', visitor: 'X' })).json();
     assert.equal(k.others.find((o) => o.name === 'Otra').pet, null, 'sin nombre no hay espíritu');

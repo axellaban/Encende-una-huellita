@@ -63,6 +63,8 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     `teleportCamera`). `follow({ path, duration, done })` vuela de vuelta detrás del personaje.
     La cámara se acorta si un muro (`colliders.segments`) o un poste/tronco (`colliders.circles`)
     queda en el medio. `createBlocker(colliders)` es la colisión compartida con los espíritus.
+  - `heaven.js`: los pisos hacia el cielo (mar de nubes, nubes de algodón, sol, rayos). `elevator.js`:
+    la torre con la cabina que sube (`setFloor(n)` mueve la cabina y el indicador).
   - `character.js`: el personaje de cada visitante (vos y `avatars.js`): caminar, `wave()`, `throw()`, `pet()`.
   - **Espíritus**: `petRig.js` arma un `SkinnedMesh` por mascota (una sola malla, colores por vértice,
     brillo fresnel) y un animador que mezcla marchas (paso/trote/galope/saltitos) con acciones
@@ -138,5 +140,7 @@ Para los espíritus sin entrar al jardín: `npm run dev` y `/lab/pets.html?t=1.5
 Prado y deja en `__lab.log` qué hacía cada espíritu).
 
 Con swiftshader todo anda a pocos FPS: los vuelos de cámara tardan mucho más que en un teléfono real
-(esperar 8–10 s antes de sacar captura). Para probar el ascensor hace falta una huellita en el piso 2
+(esperar 8–10 s antes de sacar captura). Los 99 pisos están abiertos: `H.goFloor(98)` lleva al cielo de una (`src/scene/heaven.js` mezcla los
+colores del cielo, la niebla y las luces según el piso; `world.ground` es lo que se esconde arriba y
+`colliders.up` desactiva los choques del suelo). Antes, para probar el ascensor hacía falta una huellita en el piso 2
 (`POST /api/memorials` con `"slot": 95`).

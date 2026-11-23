@@ -16,7 +16,10 @@ const DIST_MAX = 10;
 export function createBlocker(colliders) {
   return function blocked(x, z, body = BODY) {
     if (Math.hypot(x, z) > GARDEN_RADIUS - 0.6 - body) return true;
-    for (const c of colliders.circles) if (Math.hypot(x - c.x, z - c.z) < c.r + body) return true;
+    for (const c of colliders.circles) {
+      if (c.ground && colliders.up) continue; // en los pisos de arriba no hay árboles ni bancos
+      if (Math.hypot(x - c.x, z - c.z) < c.r + body) return true;
+    }
     for (const [x1, z1, x2, z2] of colliders.segments) {
       const dx = x2 - x1;
       const dz = z2 - z1;
