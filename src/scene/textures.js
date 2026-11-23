@@ -269,15 +269,39 @@ let paperTex;
 // Papel del farolito: más claro en el centro, como si la luz atravesara.
 export function lanternTexture() {
   if (paperTex) return paperTex;
-  const [c, g] = canvas(64, 128);
-  const grad = g.createLinearGradient(0, 0, 0, 128);
-  grad.addColorStop(0, '#ffb36b');
-  grad.addColorStop(0.55, '#ffe7b0');
-  grad.addColorStop(1, '#ff9a4d');
+  // Papel de seda con dibujos calados: donde está cortado pasa la luz de la vela (más claro).
+  const [c, g] = canvas(128, 256);
+  const grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, '#e9965a');
+  grad.addColorStop(0.5, '#ffd9a0');
+  grad.addColorStop(1, '#e48a4c');
   g.fillStyle = grad;
-  g.fillRect(0, 0, 64, 128);
-  g.fillStyle = 'rgba(160,70,20,0.25)';
-  for (let x = 0; x < 64; x += 16) g.fillRect(x, 0, 2, 128);
+  g.fillRect(0, 0, 128, 256);
+  // Bandas arriba y abajo, más oscuras.
+  g.fillStyle = 'rgba(120,45,20,0.45)';
+  g.fillRect(0, 0, 128, 18);
+  g.fillRect(0, 238, 128, 18);
+  // Calados: flores, rombos y puntitos.
+  g.fillStyle = '#fff4d6';
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 2; col++) {
+      const x = 32 + col * 64 + (row % 2) * 32;
+      const y = 60 + row * 68;
+      if (row === 1) {
+        g.beginPath(); g.moveTo(x, y - 18); g.lineTo(x + 14, y); g.lineTo(x, y + 18); g.lineTo(x - 14, y); g.closePath(); g.fill();
+      } else {
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          g.beginPath(); g.ellipse(x + Math.cos(a) * 10, y + Math.sin(a) * 10, 7, 4.5, a, 0, Math.PI * 2); g.fill();
+        }
+        g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill();
+      }
+    }
+  }
+  for (let x = 8; x < 128; x += 16) { g.beginPath(); g.arc(x, 28, 2.5, 0, Math.PI * 2); g.fill(); g.beginPath(); g.arc(x, 228, 2.5, 0, Math.PI * 2); g.fill(); }
+  // Costillas del armazón.
+  g.fillStyle = 'rgba(110,40,15,0.35)';
+  for (let x = 0; x < 128; x += 32) g.fillRect(x, 0, 3, 256);
   paperTex = toTexture(c);
   return paperTex;
 }

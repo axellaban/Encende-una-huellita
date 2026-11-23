@@ -1,36 +1,76 @@
 // Farolitos de papel que suben al cielo cada vez que alguien enciende una vela,
 // unos cuantos que ya flotan a lo lejos, y destellos al encender.
 import * as THREE from 'three';
-import { glowTexture, lanternTexture, bubbleTexture } from './textures.js';
+import { glowTexture, lanternTexture, bubbleTexture, flameTexture } from './textures.js';
+
+// El farolito de papel: cuerpo redondeado, aros y tapita de madera, papel calado iluminado desde
+// adentro, una llamita que titila y una borla abajo. Se usa para los que suben al cielo, los que
+// flotan lejos y las guirnaldas sobre el camino.
+let kitCache = null;
+function kit() {
+  if (kitCache) return kitCache;
+  const prof = [];
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    prof.push(new THREE.Vector2(0.1 + Math.sin(t * Math.PI) * 0.085, (t - 0.5) * 0.36));
+  }
+  kitCache = {
+    body: new THREE.LatheGeometry(prof, 16),
+    ring: new THREE.TorusGeometry(0.1, 0.012, 6, 16).rotateX(Math.PI / 2),
+    cap: new THREE.CylinderGeometry(0.03, 0.06, 0.04, 8).translate(0, 0.2, 0),
+    tassel: new THREE.ConeGeometry(0.022, 0.1, 6).rotateX(Math.PI).translate(0, -0.26, 0),
+  };
+  return kitCache;
+}
+export function paperLantern({ scale = 1, tint = [2.2, 1.3, 0.6], glow = 1.4 } = {}) {
+  const K = kit();
+  const g = new THREE.Group();
+  const wood = new THREE.MeshBasicMaterial({ color: '#3a2418', transparent: true });
+  const body = new THREE.Mesh(K.body, new THREE.MeshBasicMaterial({ map: lanternTexture(), side: THREE.DoubleSide, transparent: true, color: new THREE.Color(tint[0] * 0.52, tint[1] * 0.52, tint[2] * 0.52) }));
+  const top = new THREE.Mesh(K.ring, wood);
+  top.position.y = 0.18;
+  const bot = new THREE.Mesh(K.ring, wood);
+  bot.position.y = -0.18;
+  const cap = new THREE.Mesh(K.cap, wood);
+  const tassel = new THREE.Mesh(K.tassel, new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 0.35, 0.5), transparent: true }));
+  const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTexture(), color: new THREE.Color(2.2, 1.6, 0.9), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+  flame.scale.set(0.06, 0.11, 1);
+  flame.position.y = -0.06;
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, color: new THREE.Color(tint[0] * 0.28, tint[1] * 0.28, tint[2] * 0.28) }));
+  halo.scale.setScalar(glow);
+  g.add(body, top, bot, cap, tassel, flame, halo);
+  g.scale.setScalar(scale);
+  g.userData.lamp = { flame, halo, seed: Math.random() * 10 };
+  return g;
+}
+// La llamita titila y el halo respira.
+export function flickerLantern(l, t) {
+  const u = l.userData.lamp;
+  if (!u) return;
+  const n = Math.sin(t * 9 + u.seed) * 0.5 + Math.sin(t * 15.3 + u.seed * 2) * 0.5;
+  u.flame.scale.set(0.06 + n * 0.006, 0.11 + n * 0.016, 1);
+  u.halo.material.opacity = (u.base ?? 1) * (0.82 + n * 0.12);
+}
+function fadeLantern(l, f) {
+  l.traverse((o) => { if (o.material) o.material.opacity = f; });
+  if (l.userData.lamp) l.userData.lamp.base = f;
+}
+const TINTS = [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [1.3, 0.9, 2.0], [0.8, 1.8, 1.6], [2.2, 1.7, 0.6]];
 
 export function createLanterns(scene, tier) {
-  const bodyGeo = new THREE.CylinderGeometry(0.17, 0.12, 0.36, 8, 1, true);
-  const capGeo = new THREE.CircleGeometry(0.12, 8).rotateX(Math.PI / 2);
-  const glowMat = new THREE.SpriteMaterial({ map: glowTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(1.4, 0.9, 0.5) });
   const live = [];
 
   function makeLantern(scale = 1) {
-    const g = new THREE.Group();
-    const tints = [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [1.3, 0.9, 2.0], [0.8, 1.8, 1.6], [2.2, 1.7, 0.6]];
-    const tc = tints[Math.floor(Math.random() * tints.length)];
-    const mat = new THREE.MeshBasicMaterial({ map: lanternTexture(), side: THREE.DoubleSide, transparent: true, color: new THREE.Color(...tc) });
-    const body = new THREE.Mesh(bodyGeo, mat);
-    const cap = new THREE.Mesh(capGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.8, 0.9), transparent: true }));
-    cap.position.y = -0.18;
-    const glow = new THREE.Sprite(glowMat.clone());
-    glow.scale.setScalar(tier.bloom ? 1.1 : 1.6);
-    g.add(body, cap, glow);
-    g.scale.setScalar(scale);
-    return g;
+    return paperLantern({ scale, tint: TINTS[Math.floor(Math.random() * TINTS.length)], glow: tier.bloom ? 1.1 : 1.6 });
   }
 
   // Farolitos lejanos que siempre están en el cielo.
   const ambient = [];
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 32; i++) {
     const l = makeLantern(1.6 + Math.random() * 1.2);
     const a = Math.random() * Math.PI * 2;
     const d = 40 + Math.random() * 60;
-    l.userData = { a, d, y: 18 + Math.random() * 35, speed: 0.02 + Math.random() * 0.03, seed: Math.random() * 10 };
+    Object.assign(l.userData, { a, d, y: 18 + Math.random() * 35, speed: 0.02 + Math.random() * 0.03, seed: Math.random() * 10 });
     scene.add(l);
     ambient.push(l);
   }
@@ -56,7 +96,7 @@ export function createLanterns(scene, tier) {
         sp.position.y = 0.55;
         l.add(sp);
       }
-      l.userData = { t: 0, seed: Math.random() * 10, vx: (Math.random() - 0.5) * 0.25, vz: (Math.random() - 0.5) * 0.25 };
+      Object.assign(l.userData, { t: 0, seed: Math.random() * 10, vx: (Math.random() - 0.5) * 0.25, vz: (Math.random() - 0.5) * 0.25 });
       scene.add(l);
       live.push(l);
     },
@@ -85,10 +125,8 @@ export function createLanterns(scene, tier) {
         l.position.z += dt * (u.vz + Math.cos(t * 0.5 + u.seed) * 0.1);
         l.rotation.y += dt * 0.3;
         const fade = u.t > 45 ? Math.max(0, 1 - (u.t - 45) / 10) : 1;
-        l.children[0].material.opacity = fade;
-        l.children[1].material.opacity = fade;
-        l.children[2].material.opacity = fade;
-        if (l.children[3]) l.children[3].material.opacity = fade;
+        if (fade < 1) fadeLantern(l, fade);
+        flickerLantern(l, t);
         if (u.t > 55) {
           scene.remove(l);
           live.splice(i, 1);
@@ -98,6 +136,7 @@ export function createLanterns(scene, tier) {
         const u = l.userData;
         u.a += dt * u.speed * 0.05;
         l.position.set(Math.sin(u.a) * u.d, u.y + Math.sin(t * 0.2 + u.seed) * 1.5, Math.cos(u.a) * u.d - 10);
+        flickerLantern(l, t);
       }
       for (let i = bursts.length - 1; i >= 0; i--) {
         const b = bursts[i];
