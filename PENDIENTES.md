@@ -17,14 +17,16 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       --use-webgpu-adapter=swiftshader --use-vulkan=swiftshader` abre la portada nada más).
 - [x] **Cielo mágico con cometas** (`src/scene/skymagic.js` + shader del cielo en `world.js`): Vía
       Láctea, nebulosas, polvo de estrellas, 3 cometas lentos, estrellas fugaces; arriba cirros, halo
-      del sol, bancos de nubes gigantes, islas flotantes y pájaros de luz. Falta: auroras suaves en
-      pisos intermedios y que las islas tengan algo propio (un farolito, una casita).
+      del sol, bancos de nubes gigantes, islas flotantes (con casitas y farolitos) y pájaros de luz;
+      auroras en los pisos del medio.
 - [x] **Personajes**: parpadean, cachetes, sarape con flecos, rebozo, respiración, aplastar/estirar,
-      miran el cielo. Falta: más peinados y ropa a elegir, expresiones (sonrisa al regalar), saludo
-      automático entre visitantes cercanos.
-- [x] **Mascotas**: 5 tamaños bien distintos, ojos con iris y brillos, bigotes, pechera, nariz que
-      brilla; las chiquitas ya no se quedan atrás en el paseo. Falta: más razas (orejas grandes tipo
-      corgi, hocico chato), y que el tamaño se pueda cambiar al editar (hoy se elige al crear).
+      miran el cielo, y peinado a elegir (corto, trenzas, chongo, colita; va codificado en `hue % 8`,
+      ver `character.js`). Falta: expresiones (sonrisa al regalar) y saludo automático entre
+      visitantes cercanos.
+- [x] **Mascotas**: 5 tamaños bien distintos (se pueden cambiar al editar), ojos con iris y
+      brillos, bigotes, pechera, nariz que brilla, orejas grandotas y hocico largo/mediano/chato.
+      Falta: que los espíritus de otros visitantes también lleven el hocico elegido (hoy la presencia
+      manda pelaje, orejas y tamaño).
 - [x] **Hall con pasillos y pisos con nombre** (`src/floors.js`, propios, no los del original):
       cartel colgado por muro con el contador, 99 nombres de piso.
 - [x] **Ventanitas en la pared**: cada lugar ocupado es un marco hondo con postigos pintados que se
@@ -34,16 +36,17 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 - [x] **Botonera y cabina del ascensor**: botones de bronce con nombre del piso; al viajar, ojo de
       buey con el cielo que pasa y la plaquita del piso.
 - [x] **Farolitos** (`paperLantern` en `lanterns.js`): papel calado, aros, llama que titila,
-      guirnaldas sobre el camino, más en el cielo. Falta: farolitos en la pérgola del salón.
+      guirnaldas sobre el camino, en la pérgola del salón, en el ahuehuete y más en el cielo.
 - [x] **Arcoíris doble** con polvo de luz y reflejo en el agua (`river.js`).
-- [x] **Jardín**: canteros con borde de piedra, estanque, pétalos que se levantan al caminar. Falta:
-      caminitos secundarios entre canteros, más variedad de árboles (jacarandá en flor, ahuehuete).
+- [x] **Jardín**: canteros con borde de piedra, estanque, caminitos de piedras, jacarandás en flor,
+      un ahuehuete enorme con farolitos y pétalos que se levantan al caminar.
 - [x] **Agregar a la pantalla de inicio**: tarjeta después del primer gesto (iPhone: explica cómo).
-- [ ] **A la altura de Coco (sin copiarla)**: intro cinematográfica más emotiva (la cámara baja por el
-      puente mientras suena la guitarra), música distinta por zona, sonidos al tocar cosas, y una
-      pequeña celebración en 3D por cada gesto. Revisar en celular a 60 fps.
-- [ ] **Del original que falta**: catálogo de regalitos más grande (cada uno nuevo necesita su
-      modelo en `gifts3d.js`) y botón "Recuerdo".
+- [x] **Experiencia de película (sin copiar Coco)**: intro cinematográfica con leyendas
+      (`controls.cinematic`), música por zona (`setMood`: jardín, salón, cielo), pasos según el piso y
+      sonidos al tocar espíritus y el frasco. Falta: revisarlo en un celular real a 60 fps y ajustar los
+      tiempos de las leyendas (van con `setTimeout`, el vuelo con el reloj del juego).
+- [x] **Del original**: 36 regalitos con modelo 3D y botón **Recuerdo** (estampita 1080x1350 para
+      guardar o compartir, `drawKeepsake` en `share.js`).
 
 ## P0 · Verificaciones que nunca se hicieron en el mundo real
 

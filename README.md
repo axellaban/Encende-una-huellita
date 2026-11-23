@@ -84,6 +84,13 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   su ficha, la repisa con cada regalito y cuántos le dejaron.
 - **Farolitos de papel calado** en guirnaldas sobre el camino, canteros, un estanque y pétalos que se
   levantan al caminar.
+- **Intro de película**: la cámara baja desde la Vía Láctea, pasa sobre el salón y cruza el río hasta
+  quedar detrás tuyo, con dos leyendas. La música cambia con el lugar (vals en el jardín, campanitas en
+  el salón, mayor y luminosa en el cielo) y los pasos suenan distinto en piedra, pasto, madera o nube.
+- **Recuerdo**: una estampita con la foto bajo un arco dorado, el nombre, las fechas y las palabras de
+  la familia, para guardar, imprimir o compartir.
+- **36 regalitos en 3D** (bife, pelota de fútbol, barrilete, coronita, torta…), razas con orejas y hocico
+  a elegir, peinados para tu personaje, auroras en los pisos del medio y un ahuehuete con farolitos.
 - **Brillitos en el aire**: polvo de luz diminuto que cae muy despacio alrededor tuyo, en todos los pisos.
 - **Caminito al ascensor**, con dos farolitos de papel que lo marcan.
 - **Tamaños de mascota bien distintos**: Mini, Chico, Mediano, Grande y Gigante (de un chihuahua a un
