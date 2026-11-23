@@ -66,6 +66,7 @@ export function createStore(kv) {
       glow: Number(h.glow) || 0,
       guestbookCount: Number(h.gb) || 0,
       lastGifts: h.lastGifts ? JSON.parse(h.lastGifts) : [],
+      giftCounts: Object.fromEntries(Object.keys(h).filter((k) => k.startsWith('gc:')).map((k) => [k.slice(3), Number(h[k]) || 0])),
       extraPhotos: f?.extraPhotos || Array.from({ length: Number(h.xp) || 0 }, (_, i) => `/api/photos/${id}/${i + 1}`),
       voice: h.voice ? `/api/voices/${id}?v=${h.voice}` : null,
       eternal: h.eternal ? JSON.parse(h.eternal) : null,
@@ -251,6 +252,8 @@ export function createStore(kv) {
         ['LPUSH', `${P}gf:${id}`, JSON.stringify(entry)],
         ['LTRIM', `${P}gf:${id}`, '0', '49'],
         ['HINCRBY', `${P}m:${id}`, 'gifts', '1'],
+        // Cuántos de cada regalito (para la repisa: "🦴 ×2").
+        ['HINCRBY', `${P}m:${id}`, `gc:${gift.split(' ')[0]}`, '1'],
         ['HSET', `${P}m:${id}`, 'lastGifts', JSON.stringify(last)],
       ]);
       const glow = await grantGlow(id, 'gift', who);

@@ -712,3 +712,11 @@ body.sheet-open .ball-prompt, body.walking .ball-prompt { display: none; }
 .lift-name i { font-style: normal; color: #e0b55d; font-size: 13px; }
 .lift.closed .lift-name { opacity: 1; transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) { .lift-window .sky { animation: none; } }
+
+/* Repisa de la ficha: los regalitos con su cantidad, sobre una tablita de madera. */
+.shelf-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 10px; margin: 10px 4px 2px; padding: 10px 12px 14px; border-radius: 12px; position: relative;
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0)); }
+.shelf-row::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 4px; height: 7px; border-radius: 3px; background: linear-gradient(180deg, #a8754a, #6b4428); box-shadow: 0 3px 6px rgba(0,0,0,.35); }
+.shelf-item { position: relative; display: grid; place-items: center; width: 42px; height: 42px; }
+.shelf-item i { font-style: normal; font-size: 28px; filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+.shelf-item b { position: absolute; right: -6px; top: -4px; font-size: 10.5px; padding: 1px 5px; border-radius: 999px; background: #fff3dc; color: #6b3d16; font-weight: 900; box-shadow: 0 1px 3px rgba(0,0,0,.3); }

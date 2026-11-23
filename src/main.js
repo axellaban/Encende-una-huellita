@@ -695,6 +695,18 @@ function fillSheet(m) {
   $('#s-glow').hidden = !mine;
   if (mine) $('#s-glow').innerHTML = glowCardHTML(m);
   $('#s-mine').hidden = !(mine && pet && pet.id !== m.id);
+  // La repisa: cada regalito con cuántos le dejaron (como en una ofrenda de verdad).
+  const gc = Object.entries(m.giftCounts || {}).sort((a, b) => b[1] - a[1]);
+  $('#s-shelf').hidden = !gc.length;
+  $('#s-shelf').innerHTML = '';
+  for (const [emo, n] of gc.slice(0, 12)) {
+    const sp = document.createElement('span');
+    sp.className = 'shelf-item';
+    sp.innerHTML = '<i></i><b></b>';
+    sp.querySelector('i').textContent = emo;
+    sp.querySelector('b').textContent = `×${n}`;
+    $('#s-shelf').append(sp);
+  }
   const gl = m.giftList || [];
   $('#s-gifts').hidden = !gl.length;
   $('#s-gifts').innerHTML = '';
