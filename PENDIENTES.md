@@ -6,6 +6,11 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 
 ## P0 · Verificaciones que nunca se hicieron en el mundo real
 
+- [ ] **Rama de producción de Vercel**: hoy es `claude/ecstatic-gates-rt74m2` (ver AGENTS). Cambiarla a
+      `main` en Vercel → Settings → Environments → Production Branch.
+- [ ] **Conectar Upstash en producción**: `/api/health` responde `ok:false` (23/11/2026), así que el
+      sitio está en modo demo (cada visitante solo, sin presencia compartida). Vercel → Storage →
+      Create Database → Upstash for Redis → conectar a Production y Preview → Redeploy.
 - [ ] **Deploy real en Vercel + Upstash.** Todo se probó con un Upstash simulado (`server/api.test.js`).
       Confirmar: rewrite `/api/:path*` → `api/handler.js`, lectura de `KV_REST_API_URL`/`TOKEN`,
       fotos servidas con caché de CDN, y que sin Upstash la app caiga bien al **modo demo**.

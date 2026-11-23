@@ -14,8 +14,14 @@ textos y arte propios. La huellita destacada del centro es **Luca**, el perro de
 ## Sobre la persona y cómo trabajar con ella
 
 - Habla español rioplatense (vos, tocá, encendé). **Toda la interfaz y los textos van en ese registro.**
-- Quiere ver los avances desplegados: **mergear a `main` cuando algo esté listo y probado**
-  (Vercel despliega `main`). El trabajo se hace en una rama y después se empuja también a `main`.
+- Quiere ver los avances desplegados: **mergear a `main` cuando algo esté listo y probado**.
+  El trabajo se hace en una rama y después se empuja también a `main`.
+- **Ojo: hoy Vercel publica como producción la rama `claude/ecstatic-gates-rt74m2`, no `main`**
+  (verificado el 23/11/2026: `main` se construía pero el sitio seguía en la versión vieja). Después de
+  mergear a `main`, empujá `main` también a esa rama con avance rápido
+  (`git push origin origin/main:refs/heads/claude/ecstatic-gates-rt74m2`) y verificá que
+  `https://encende-una-huellita.vercel.app/` cargue el mismo `assets/index-*.js` que `npm run build`.
+  Se arregla del todo en Vercel → Settings → Environments → Production Branch = `main`.
 - Prioridad absoluta: **experiencia en el celular** (mobile-first, que se sienta como un juego amable).
 - Es un proyecto con carga emocional (Luca murió hace poco). Tono cálido, nunca frívolo.
 - Decisiones ya tomadas que **no hay que revertir**:
