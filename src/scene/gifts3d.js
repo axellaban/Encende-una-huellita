@@ -347,6 +347,180 @@ const SPECS = {
     glow: 1.1,
     idle(o, t) { const m = o.getObjectByName('moon'); if (m) m.rotation.z = Math.sin(t * 0.9 + o.id) * 0.15; },
   }),
+  // ----- más comida -----
+  '🥩': () => ({
+    parts: [
+      P(cyl(0.46, 0.42, 0.04, 28), '#f1e6d4', { p: V(0, 0.02, 0) }),
+      P(sph(0.3, 18, 12), '#a8432f', { s: V(1.25, 0.22, 0.9), p: V(0, 0.09, 0) }),
+      P(new THREE.TorusGeometry(0.29, 0.035, 6, 24, Math.PI * 1.1), '#f3d6c4', { s: V(1.25, 1, 0.9), r: V(Math.PI / 2, 0, 0.3), p: V(0, 0.1, 0) }),
+      ...[-0.12, 0, 0.12].map((x) => P(new THREE.BoxGeometry(0.03, 0.01, 0.42), '#4a1a12', { r: V(0, 0.6, 0), p: V(x, 0.155, 0) })),
+      P(sph(0.04, 8, 6), '#3fae6a', { s: V(1.6, 0.4, 1), p: V(-0.26, 0.06, 0.24) }),
+    ],
+  }),
+  '🍎': () => ({
+    parts: [
+      P(sph(0.24, 22, 16), col('#d62f2f', 1.05), { s: V(1, 0.92, 1), p: V(0, 0.22, 0) }),
+      P(sph(0.05, 8, 6), '#8a1c1c', { s: V(1, 0.4, 1), p: V(0, 0.42, 0) }),
+      P(cyl(0.012, 0.016, 0.1, 6), '#5a3a22', { r: V(0, 0, 0.2), p: V(0.01, 0.47, 0) }),
+      P(sph(0.06, 10, 6), '#4caf50', { s: V(1.6, 0.25, 0.8), r: V(0, 0.4, 0.4), p: V(0.07, 0.48, 0) }),
+      P(sph(0.04, 8, 6), col('#ffffff', 1.4), { s: V(0.7, 1, 0.3), p: V(-0.09, 0.3, 0.19) }),
+    ],
+  }),
+  '🍦': () => ({
+    parts: [
+      P(new THREE.ConeGeometry(0.13, 0.42, 14), '#d9a35a', { r: V(Math.PI, 0, 0), p: V(0, 0.21, 0) }),
+      ...[0.1, 0.2, 0.3].map((y) => P(new THREE.TorusGeometry(0.13 * (y / 0.42) + 0.01, 0.006, 4, 16), '#a8743a', { r: V(Math.PI / 2, 0, 0), p: V(0, y, 0) })),
+      P(sph(0.15, 16, 12), '#9fe0c8', { p: V(0, 0.46, 0) }),
+      P(sph(0.13, 16, 12), '#ff9ec4', { p: V(0.02, 0.62, 0.01) }),
+      P(sph(0.04, 10, 8), col('#e63946', 1.1), { p: V(0.03, 0.76, 0.02) }),
+      P(cyl(0.004, 0.004, 0.07, 4), '#5a3a22', { r: V(0, 0, 0.4), p: V(0.05, 0.81, 0.02) }),
+    ],
+  }),
+  '🎂': () => {
+    const sprinkles = [];
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      sprinkles.push(P(new THREE.BoxGeometry(0.03, 0.008, 0.01), ['#ffd23f', '#5b8fd8', '#3fae6a', '#e0457b'][i % 4], { r: V(0, a * 2, 0), p: V(Math.cos(a) * 0.15, 0.43, Math.sin(a) * 0.15) }));
+    }
+    return {
+      parts: [
+        P(cyl(0.4, 0.4, 0.03, 28), '#e8eef5', { p: V(0, 0.015, 0) }),
+        P(cyl(0.32, 0.32, 0.22, 28), '#f8d7e3', { p: V(0, 0.14, 0) }),
+        P(new THREE.TorusGeometry(0.32, 0.03, 6, 28), '#ff7fb0', { r: V(Math.PI / 2, 0, 0), p: V(0, 0.25, 0) }),
+        P(cyl(0.22, 0.22, 0.16, 24), '#fff1f5', { p: V(0, 0.34, 0) }),
+        P(new THREE.TorusGeometry(0.22, 0.025, 6, 24), '#ff7fb0', { r: V(Math.PI / 2, 0, 0), p: V(0, 0.42, 0) }),
+        ...sprinkles,
+        P(cyl(0.018, 0.018, 0.14, 8), '#7cc0ff', { p: V(0, 0.49, 0) }),
+        P(sph(0.025, 8, 6), col('#ffd27a', 2.2), { s: V(1, 1.7, 1), p: V(0, 0.59, 0) }),
+      ],
+    };
+  },
+  // ----- más juguetes -----
+  '⚽': () => {
+    const patches = [];
+    const ico = new THREE.IcosahedronGeometry(1, 0);
+    const pos = ico.attributes.position;
+    const seen = [];
+    for (let i = 0; i < pos.count; i++) {
+      const v = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
+      if (seen.some((s) => s.distanceTo(v) < 0.1)) continue;
+      seen.push(v);
+      const g = sph(0.06, 8, 6);
+      g.scale(1, 1, 0.35);
+      g.lookAt(v);
+      patches.push(P(g, '#1e1420', { p: V(v.x * 0.2, 0.2 + v.y * 0.2, v.z * 0.2) }));
+    }
+    return { parts: [P(sph(0.2, 24, 18), '#f7f4ee', { p: V(0, 0.2, 0) }), ...patches] };
+  },
+  '🪶': () => {
+    const feather = (color, rot, len) => [
+      P(sph(0.07, 12, 8), color, { s: V(0.55, len, 0.12), r: V(0, 0, rot), p: V(Math.sin(-rot) * len * 0.07 * 1.2, 0.1 + Math.cos(rot) * len * 0.07, 0) }),
+      P(cyl(0.004, 0.004, len * 0.14, 4), '#f4ede0', { r: V(0, 0, rot), p: V(Math.sin(-rot) * len * 0.07 * 1.2, 0.1 + Math.cos(rot) * len * 0.07, 0.01) }),
+    ];
+    return {
+      parts: [
+        P(cyl(0.012, 0.012, 0.6, 6), '#c9a46a', { r: V(0, 0, Math.PI / 2 - 0.35), p: V(-0.28, 0.05, 0) }),
+        P(sph(0.035, 10, 8), '#e0457b', { p: V(0, 0.1, 0) }),
+        ...feather(col('#3fb6c8', 1.1), 0.35, 3.2),
+        ...feather(col('#ff8fb1', 1.1), -0.1, 3.6),
+        ...feather(col('#ffd23f', 1.1), -0.55, 3.0),
+      ],
+    };
+  },
+  '🪢': () => ({
+    parts: [
+      P(cyl(0.035, 0.035, 0.6, 10), '#3fae6a', { r: V(0, 0, Math.PI / 2), p: V(0, 0.08, 0) }),
+      ...[-1, 1].map((s) => P(sph(0.085, 12, 10), '#f4ede0', { p: V(s * 0.26, 0.085, 0) })),
+      ...[-1, 1].map((s) => P(new THREE.TorusGeometry(0.075, 0.025, 6, 14), '#e0457b', { r: V(0, Math.PI / 2, 0), p: V(s * 0.26, 0.085, 0) })),
+      ...[-1, 1].flatMap((s) => [0, 1, 2].map((k) => P(new THREE.ConeGeometry(0.02, 0.12, 5), '#f4ede0', { r: V(0, 0, s * (Math.PI / 2 + (k - 1) * 0.35)), p: V(s * 0.39, 0.07 + (k - 1) * 0.02, (k - 1) * 0.02) }))),
+      ...[-0.1, 0.1].map((x) => P(new THREE.TorusGeometry(0.037, 0.008, 4, 12), '#f4ede0', { r: V(0, Math.PI / 2, 0), p: V(x, 0.08, 0) })),
+    ],
+  }),
+  '🪁': () => {
+    const tri = (a, b, c, color) => {
+      const sh = new THREE.Shape();
+      sh.moveTo(...a); sh.lineTo(...b); sh.lineTo(...c); sh.closePath();
+      return P(new THREE.ExtrudeGeometry(sh, { depth: 0.01, bevelEnabled: false }), color, { p: V(0, 0.42, 0) });
+    };
+    return {
+      parts: [
+        tri([0, 0.32], [-0.22, 0], [0, 0], col('#e0457b', 1.05)),
+        tri([0, 0.32], [0, 0], [0.22, 0], col('#ffd23f', 1.05)),
+        tri([-0.22, 0], [0, -0.3], [0, 0], col('#5b8fd8', 1.05)),
+        tri([0, 0], [0, -0.3], [0.22, 0], col('#3fae6a', 1.05)),
+        P(cyl(0.008, 0.008, 0.62, 4), '#8a6a4a', { p: V(0, 0.43, 0.015) }),
+        P(cyl(0.008, 0.008, 0.44, 4), '#8a6a4a', { r: V(0, 0, Math.PI / 2), p: V(0, 0.42, 0.015) }),
+        P(tube([[0, 0.12, 0.01], [0.05, 0.06, 0.02], [-0.03, 0.0, 0.03], [0.02, -0.0, 0.02]], 0.005, 12), '#f4ede0'),
+        ...[0.09, 0.03].map((y, i) => P(new THREE.ConeGeometry(0.03, 0.05, 4), i ? '#e0457b' : '#ffd23f', { r: V(0, 0, Math.PI / 2), s: V(1, 1, 0.3), p: V(0.02, y, 0.02) })),
+        P(new THREE.BoxGeometry(0.1, 0.02, 0.1), '#8a6a4a', { p: V(0, 0.01, 0) }),
+      ],
+    };
+  },
+  // ----- más detalles -----
+  '🌹': () => {
+    const head = [P(sph(0.07, 12, 10), col('#c8203a', 1.05), { s: V(1, 1.1, 1) })];
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      head.push(P(sph(0.07, 10, 8), col(i % 2 ? '#d62f4a' : '#b81c34', 1.05), { s: V(0.9, 1, 0.35), r: V(0.35, -a, 0), p: V(Math.sin(a) * 0.065, -0.01, Math.cos(a) * 0.065) }));
+    }
+    head.forEach((g) => g.translate(0, 0.72, 0));
+    return {
+      parts: [
+        P(cyl(0.015, 0.015, 0.66, 6), '#3f8f3a', { p: V(0, 0.33, 0) }),
+        ...[-1, 1].map((s) => P(sph(0.06, 10, 6), '#4caf50', { s: V(1.6, 0.25, 0.8), r: V(0, 0, s * 0.5), p: V(s * 0.07, 0.32 + s * 0.06, 0) })),
+        ...head,
+      ],
+      rot: [0, 0, 0.12],
+    };
+  },
+  '👑': () => ({
+    parts: [
+      P(cyl(0.22, 0.2, 0.14, 24, true), col('#f2c14e', 1.2), { p: V(0, 0.07, 0) }),
+      P(new THREE.TorusGeometry(0.21, 0.018, 6, 28), col('#e0b04a', 1.2), { r: V(Math.PI / 2, 0, 0), p: V(0, 0.01, 0) }),
+      ...[0, 1, 2, 3, 4].flatMap((i) => {
+        const a = (i / 5) * Math.PI * 2;
+        return [
+          P(new THREE.ConeGeometry(0.05, 0.14, 4), col('#f2c14e', 1.2), { p: V(Math.cos(a) * 0.205, 0.21, Math.sin(a) * 0.205) }),
+          P(sph(0.022, 8, 6), col('#fff4d6', 1.5), { p: V(Math.cos(a) * 0.205, 0.29, Math.sin(a) * 0.205) }),
+          P(sph(0.026, 8, 6), col(['#e63946', '#5b8fd8', '#3fae6a', '#8b5cc7', '#e0457b'][i], 1.3), { s: V(1, 1, 0.5), r: V(0, -a + Math.PI / 2, 0), p: V(Math.cos(a) * 0.215, 0.08, Math.sin(a) * 0.215) }),
+        ];
+      }),
+    ],
+  }),
+  '⭐': () => {
+    const sh = new THREE.Shape();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
+      const rr = i % 2 ? 0.1 : 0.24;
+      if (i === 0) sh.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); else sh.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    sh.closePath();
+    const star = new THREE.ExtrudeGeometry(sh, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.025, bevelSegments: 2 });
+    star.center();
+    return {
+      parts: [
+        P(cyl(0.1, 0.12, 0.04, 16), '#7b2cbf', { p: V(0, 0.02, 0) }),
+        P(cyl(0.012, 0.012, 0.18, 6), '#d9a748', { p: V(0, 0.12, 0) }),
+      ],
+      subs: [{ name: 'star', pivot: [0, 0.44, 0], parts: [P(star, col('#ffd65a', 1.9))] }],
+      glow: 1.1,
+      idle(o, t) { const m = o.getObjectByName('star'); if (m) m.rotation.y = Math.sin(t * 0.8 + o.id) * 0.5; },
+    };
+  },
+  '🧣': () => {
+    const parts = [P(new THREE.TorusGeometry(0.2, 0.06, 10, 32), '#e63946', { r: V(Math.PI / 2, 0, 0), s: V(1, 1, 0.85), p: V(0, 0.07, 0) })];
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      parts.push(P(new THREE.TorusGeometry(0.062, 0.014, 6, 14), '#f4ede0', { s: V(1, 0.85, 1), r: V(0, -a, 0), p: V(Math.cos(a) * 0.2, 0.07, Math.sin(a) * 0.2) }));
+    }
+    // Las dos puntas que caen adelante, con rayas y flecos.
+    for (const [x, ry] of [[0.02, 0.15], [0.15, -0.2]]) {
+      parts.push(P(new THREE.BoxGeometry(0.12, 0.03, 0.32), '#e63946', { r: V(0.1, ry, 0), p: V(x, 0.035, 0.32) }));
+      for (const dz of [-0.06, 0.06]) parts.push(P(new THREE.BoxGeometry(0.122, 0.032, 0.03), '#f4ede0', { r: V(0.1, ry, 0), p: V(x + Math.sin(ry) * dz, 0.037, 0.32 + dz) }));
+      for (let k = 0; k < 5; k++) parts.push(P(new THREE.BoxGeometry(0.012, 0.01, 0.06), '#f4ede0', { r: V(0, ry, 0), p: V(x - 0.05 + k * 0.025 + Math.sin(ry) * 0.2, 0.02, 0.5) }));
+    }
+    return { parts, rot: [0, 0.5, 0] };
+  },
   '💌': () => {
     const flap = new THREE.Shape();
     flap.moveTo(-0.23, 0.15);

@@ -9,7 +9,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#1a1230');
 const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
-camera.position.set(0, 6.2, 9.5);
+camera.position.set(0, 8.2, 11.5);
 camera.lookAt(0, 0.2, 0);
 scene.add(new THREE.HemisphereLight('#b7a6ff', '#3a2030', 1.4));
 const key = new THREE.DirectionalLight('#ffd9a0', 1.6);
@@ -22,7 +22,7 @@ const items = GIFT_EMOJIS.map((ch, i) => {
   const g = giftMesh(ch);
   const col = i % 6;
   const row = Math.floor(i / 6);
-  g.position.set((col - 2.5) * 1.5, 0, (row - 1.5) * 1.5);
+  g.position.set((col - 2.5) * 1.5, 0, (row - 2.5) * 1.35);
   scene.add(g);
   return g;
 });
