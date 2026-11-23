@@ -121,6 +121,11 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
 - Cambios de API: agregar el test en `server/api.test.js` (corre contra local y contra la función de Vercel).
 - Colores HDR (>1) en materiales emisivos para que el *bloom* los haga brillar; cuidado con valores
   enormes (ya hubo un bug de pantalla blanca por luciérnagas gigantes cerca de la cámara).
+- **Shaders sin NaN** (ya hubo pantalla negra por esto): nunca `pow()` con una base que pueda ser negativa
+  (para un cuadrado usar `x * x`), `clamp` en bases tipo `1.0 - dot(...)`, `smoothstep(a, b, x)` siempre con
+  `a < b` (si hace falta al revés: `1.0 - smoothstep(b, a, x)`), y cuidado con `atan(0,0)` y `normalize(0)`.
+  Un solo píxel NaN lo desparrama el bloom por toda la pantalla; hay un pase que los limpia antes del
+  bloom en `setupRenderer()`, pero no hay que depender de él.
 - El cempasúchil (`marigoldGeometry` en `muertos.js`) son pétalos sueltos en capas: cualquier material
   que lo use tiene que ser `side: THREE.DoubleSide` (si no, de atrás desaparecen pétalos). Las guirnaldas
   y arcos van sobre un carrizo (un tubo) para que las flores no parezcan flotar.
