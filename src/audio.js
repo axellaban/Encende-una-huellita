@@ -7,6 +7,9 @@ let nature = null;
 let sfx = null;
 let chimeTimer = null;
 let cricketTimer = null;
+let bubbleTimer = null;
+let stream = null; // el murmullo del río (sube cuando estás cerca)
+let riverK = 0;
 let musicOn = false;
 let soundsOn = true;
 
@@ -78,6 +81,30 @@ function init() {
   ng.gain.value = 0.05;
   noise.connect(bp).connect(ng).connect(nature);
   noise.start();
+
+  // El río: el mismo ruido con un filtro que se mueve (borbotea), más fuerte cerca del agua.
+  const shp = ctx.createBiquadFilter();
+  shp.type = 'highpass';
+  shp.frequency.value = 240;
+  const sbp = ctx.createBiquadFilter();
+  sbp.type = 'bandpass';
+  sbp.frequency.value = 760;
+  sbp.Q.value = 0.55;
+  const wob = ctx.createOscillator();
+  wob.frequency.value = 0.37;
+  const wg = ctx.createGain();
+  wg.gain.value = 280;
+  wob.connect(wg).connect(sbp.frequency);
+  wob.start();
+  stream = ctx.createGain();
+  stream.gain.value = 0.22 * riverK;
+  const water = ctx.createBufferSource();
+  water.buffer = buf;
+  water.loop = true;
+  water.playbackRate.value = 0.83;
+  water.connect(shp).connect(sbp).connect(stream).connect(nature);
+  water.start();
+  scheduleBubble();
 
   scheduleChime();
   scheduleCricket();
@@ -168,6 +195,37 @@ function scheduleCricket() {
   }, 600 + Math.random() * 2200);
 }
 
+// Burbujitas del agua (un "plip" que sube de tono), más seguidas cuanto más cerca.
+function bubble() {
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator();
+  o.type = 'sine';
+  const f0 = 320 + Math.random() * 520;
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(f0 * 2.2, t + 0.07);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.022 * riverK, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+  o.connect(g).connect(nature);
+  o.start(t);
+  o.stop(t + 0.1);
+}
+
+function scheduleBubble() {
+  bubbleTimer = setTimeout(() => {
+    if (soundsOn && riverK > 0.15 && nature.gain.value > 0.01) bubble();
+    scheduleBubble();
+  }, 140 + Math.random() * (900 - riverK * 650));
+}
+
+// 0 = lejos del río, 1 = en la orilla o sobre el puente.
+export function setRiver(k) {
+  riverK = k;
+  if (!ctx || !stream) return;
+  stream.gain.setTargetAtTime(0.22 * k, ctx.currentTime, 0.4);
+}
+
 function ramp(node, v) {
   node.gain.cancelScheduledValues(ctx.currentTime);
   node.gain.setValueAtTime(node.gain.value, ctx.currentTime);
@@ -253,5 +311,6 @@ export function pauseAll(paused) {
 export function stopAll() {
   clearTimeout(chimeTimer);
   clearTimeout(cricketTimer);
+  clearTimeout(bubbleTimer);
   ctx?.close();
 }

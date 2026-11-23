@@ -7,7 +7,11 @@ import {
   emptySlotTexture, portraitTexture, photoTexture, labelTexture, twoSided, flameTexture, glowTexture, woodTexture, lightConeTexture, emojiTexture, lanternTexture,
 } from './textures.js';
 import { stageOf } from '../../server/glow.js';
+import { giftMesh, idleGift } from './gifts3d.js';
 import { PALETTE, paintedWallTexture, talaveraTexture, marigoldGeometry, marigoldMaterial, marigoldCluster, picadoBanner, sugarSkull, panDeMuerto, backgroundTexture } from './muertos.js';
+
+// Ramo del jarrito: [x, y, z, tamaño] de cada flor (se van sumando con las flores que le dejan).
+const BOUQUET = [[0, 0.135, 0, 1.15], [-0.032, 0.12, 0.018, 1], [0.03, 0.125, -0.012, 1], [0.006, 0.118, 0.034, 0.95], [-0.012, 0.15, -0.028, 0.9]];
 
 const WALL_COLORS = ['#178f8c', '#c2186b', '#d9901c', '#6a2aa6', '#239a62', '#d9661a', '#2f6fd6', '#b5307a', '#159aa0', '#7b3fc4'];
 
@@ -72,19 +76,57 @@ export function candleLevel(n) {
 
 const panelAngle = (p) => THREE.MathUtils.degToRad(40 + p * (280 / (PANELS - 1)));
 
-function makeCandle(waxMat, h, flames, bloom) {
+// Veladoras de vidrio de colores (como las de las ofrendas), con la cera y la llamita adentro.
+const VELA_COLS = ['#d6246e', '#f7951f', '#7b2cbf', '#14b3b0', '#e63946', '#ffc61a'];
+let velaKit = null;
+function velaParts() {
+  if (velaKit) return velaKit;
+  const glass = new THREE.CylinderGeometry(0.036, 0.032, 1, 16, 1, true).translate(0, 0.5, 0);
+  const bottom = new THREE.CylinderGeometry(0.032, 0.032, 0.008, 16).translate(0, 0.004, 0);
+  const wax = new THREE.CylinderGeometry(0.031, 0.031, 1, 16).translate(0, 0.5, 0);
+  const rim = new THREE.TorusGeometry(0.036, 0.004, 6, 20).rotateX(Math.PI / 2);
+  const band = new THREE.CylinderGeometry(0.0365, 0.0345, 1, 16, 1, true).translate(0, 0.5, 0);
+  const mats = VELA_COLS.map((c) => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.85, transparent: true, opacity: 0.82, side: THREE.DoubleSide, depthWrite: false }));
+  const glowCols = VELA_COLS.map((c) => new THREE.Color(c).lerp(new THREE.Color('#ffd9a0'), 0.55));
+  const waxMat = new THREE.MeshLambertMaterial({ color: '#fff3e0', emissive: '#ffb36b', emissiveIntensity: 0.8 });
+  const goldMat = new THREE.MeshLambertMaterial({ color: '#e0b04a', emissive: '#6b4300', emissiveIntensity: 0.6 });
+  const bandMat = new THREE.MeshLambertMaterial({ color: '#fbf3e6', emissive: '#7a5226', emissiveIntensity: 0.6, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+  velaKit = { glass, bottom, wax, rim, band, mats, glowCols, waxMat, goldMat, bandMat };
+  return velaKit;
+}
+let velaSeq = 0;
+function makeCandle(_waxMat, h, flames, bloom) {
+  const K = velaParts();
+  const ci = velaSeq++ % VELA_COLS.length;
   const c = new THREE.Group();
-  const wax = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.032, h, 10), waxMat);
-  wax.position.y = h / 2;
-  const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(1.8, 1.5, 1.2) }));
-  flame.scale.set(0.06, 0.12, 1);
-  flame.position.y = h + 0.06;
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: bloom ? 0.3 : 0.5 }));
-  glow.scale.setScalar(0.32);
-  glow.position.y = h + 0.04;
-  c.add(wax, flame, glow);
-  flames.push({ flame, glow, seed: Math.random() * 100, group: c, base: bloom ? 0.3 : 0.5 });
+  const glass = new THREE.Mesh(K.glass, K.mats[ci]);
+  glass.scale.y = h;
+  const bottom = new THREE.Mesh(K.bottom, K.mats[ci]);
+  const wax = new THREE.Mesh(K.wax, K.waxMat);
+  wax.scale.y = h * 0.82;
+  const rim = new THREE.Mesh(K.rim, K.goldMat);
+  rim.position.y = h;
+  // Una franjita clara, como la estampita pegada en el vaso.
+  const band = new THREE.Mesh(K.band, K.bandMat);
+  band.scale.y = h * 0.3;
+  band.position.y = h * 0.3;
+  const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(1.9, 1.5, 1.1) }));
+  flame.scale.set(0.05, 0.1, 1);
+  flame.position.y = h * 0.82 + 0.045;
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: bloom ? 0.32 : 0.5, color: K.glowCols[ci] }));
+  glow.scale.setScalar(0.34);
+  glow.position.y = h * 0.7;
+  c.add(glass, bottom, wax, rim, band, flame, glow);
+  flames.push({ flame, glow, seed: Math.random() * 100, group: c, base: bloom ? 0.32 : 0.5, fy: flame.position.y });
   return c;
+}
+
+// Un lugar para un regalito 3D (se llena con giftMesh según lo último que le dejaron).
+function giftHolder(scale) {
+  const g = new THREE.Group();
+  g.scale.setScalar(scale);
+  g.visible = false;
+  return g;
 }
 
 export function buildHall(scene, colliders, tier) {
@@ -100,6 +142,12 @@ export function buildHall(scene, colliders, tier) {
   const flowerMats = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a'].map((c) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, color: c, emissive: c, emissiveIntensity: 0.25 }));
   const tileMat = new THREE.MeshLambertMaterial({ map: talaveraTexture() });
   const animators = [];
+  // Jarrito de barro de la repisa (geometrías compartidas por todos los marcos).
+  const jarGeo = new THREE.LatheGeometry([[0.0, 0], [0.032, 0], [0.045, 0.03], [0.046, 0.055], [0.034, 0.08], [0.03, 0.095], [0.038, 0.105]].map(([x, y]) => new THREE.Vector2(x, y)), 14);
+  const jarRimGeo = new THREE.TorusGeometry(0.036, 0.006, 6, 16).rotateX(Math.PI / 2).translate(0, 0.105, 0);
+  const jarLeafGeo = mergeGeometries([0, 1, 2, 3].map((i) => new THREE.SphereGeometry(0.03, 6, 4).scale(1.6, 0.25, 0.7).rotateZ(0.5).translate(0.04, 0.1, 0).rotateY(i * 1.57 + 0.4)));
+  const jarMat = new THREE.MeshLambertMaterial({ color: '#b5532a', emissive: '#3a1408', emissiveIntensity: 0.6 });
+  const leafMat = new THREE.MeshLambertMaterial({ color: '#4c8a3a', emissive: '#10200a' });
 
   const slots = [];
   const flames = [];
@@ -172,25 +220,33 @@ export function buildHall(scene, colliders, tier) {
         shelf.add(new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.04, 0.22), ledgeMat));
         const candles = [0, 1, 2].map((i) => {
           const c = makeCandle(waxMat, 0.09 + i * 0.03, flames, tier.bloom);
-          c.position.set([-0.3, 0.3, 0.2][i], 0.02, [0, 0, -0.05][i]);
+          c.position.set([0.31, 0.39, 0.25][i], 0.02, [0.03, -0.05, -0.07][i]);
           c.visible = false;
           shelf.add(c);
           return c;
         });
-        const flowers = [0, 1, 2, 3].map((i) => {
+        // Jarrito de barro con el ramo de cempasúchil (más flores, más ramo).
+        const jar = new THREE.Group();
+        jar.position.set(-0.35, 0.02, -0.02);
+        jar.scale.setScalar(1.25);
+        jar.add(new THREE.Mesh(jarGeo, jarMat), new THREE.Mesh(jarRimGeo, jarMat), new THREE.Mesh(jarLeafGeo, leafMat));
+        jar.visible = false;
+        shelf.add(jar);
+        const flowers = BOUQUET.map(([x, y, z, s], i) => {
           const f = new THREE.Mesh(marigoldGeo, flowerMats[(local + i) % flowerMats.length]);
-          f.position.set(-0.12 + i * 0.08, 0.05, 0.03 * (i % 2));
+          f.position.set(x, y, z);
+          f.scale.setScalar(s);
+          f.rotation.set(x * 4, i, z * 4);
           f.visible = false;
-          shelf.add(f);
+          jar.add(f);
           return f;
         });
         const gifts = [0, 1, 2].map((i) => {
-          const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
-          sp.scale.setScalar(0.11);
-          sp.position.set(-0.05 + i * 0.13, 0.08, 0.06);
-          sp.visible = false;
-          shelf.add(sp);
-          return sp;
+          const h = giftHolder(0.17);
+          h.position.set(-0.17 + i * 0.18, 0.02, 0.035);
+          h.rotation.y = (i - 1) * 0.3;
+          shelf.add(h);
+          return h;
         });
         shelf.visible = false;
         const fx = makeGlowFx(glowFx);
@@ -199,7 +255,7 @@ export function buildHall(scene, colliders, tier) {
         g.add(border, mat, photo, name, shelf, fx.group);
         photo.userData = { kind: 'slot', local };
         pickables.push(photo);
-        slots.push({ group: g, border, mat, photo, name, shelf, candles, flowers, gifts, fx, memorial: null, textures: [] });
+        slots.push({ group: g, border, mat, photo, name, shelf, candles, jar, flowers, gifts, fx, memorial: null, textures: [] });
       }
     }
   }
@@ -475,13 +531,13 @@ export function buildHall(scene, colliders, tier) {
   const featuredFx = makeGlowFx(glowFx, 1.6);
   featuredFx.group.position.set(0, 1.9, -0.5);
   easel.add(featuredFx.group);
+  // Los últimos regalitos para la destacada, en el segundo escalón (adelante de las velas).
   const featuredGifts = [0, 1, 2].map((i) => {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
-    sp.scale.setScalar(0.16);
-    sp.position.set(-0.4 + i * 0.4, 0.82, -0.05);
-    sp.visible = false;
-    easel.add(sp);
-    return sp;
+    const h = giftHolder(0.23);
+    h.position.set([-0.36, 0.02, 0.4][i], 0.7, 0.07);
+    h.rotation.y = [0.35, 0, -0.35][i];
+    easel.add(h);
+    return h;
   });
   easel.scale.setScalar(ALTAR_SCALE);
   easel.userData.baseScale = ALTAR_SCALE;
@@ -552,24 +608,26 @@ export function buildHall(scene, colliders, tier) {
     s.shelf.visible = true;
     const lvl = candleLevel(m.candles);
     s.candles.forEach((c, i) => { c.visible = i < lvl; });
-    const fl = Math.min(4, Math.ceil(m.flowers / 2));
-    s.flowers.forEach((f, i) => { f.visible = i < fl && i < 4 - (m.lastGifts?.length || 0); });
+    const fl = Math.min(BOUQUET.length, Math.ceil(m.flowers / 2));
+    s.jar.visible = fl > 0;
+    s.flowers.forEach((f, i) => { f.visible = i < fl; });
     showGifts(s.gifts, m.lastGifts);
     s.fx.group.visible = true;
     setStage(s.fx, stageOf(m.glow).index, !!m.eternal);
   }
 
-  function showGifts(sprites, list = []) {
-    sprites.forEach((sp, i) => {
+  function showGifts(holders, list = []) {
+    holders.forEach((h, i) => {
       const ch = list[i];
-      sp.visible = !!ch;
-      if (ch && sp.userData.ch !== ch) {
-        sp.material.map = emojiTexture(ch, 96);
-        sp.material.needsUpdate = true;
-        sp.userData.ch = ch;
+      if (ch && h.userData.ch !== ch) {
+        h.clear();
+        h.add(giftMesh(ch));
+        h.userData.ch = ch;
       }
+      h.visible = !!ch && !h.userData.held;
     });
   }
+  const holdersFor = (key) => (key === 'featured' ? featuredGifts : slots[key]?.gifts) || null;
 
   function setFeatured(m) {
     if (!(featured && featured.photo === m.photo && featured.name === m.name)) {
@@ -680,14 +738,48 @@ export function buildHall(scene, colliders, tier) {
       };
       tick();
     },
+    // Dónde cae cada gesto (en el mundo): la vela, el jarrito de flores o el lugar del regalito.
+    offerPos(key, kind) {
+      const v = new THREE.Vector3();
+      if (key === 'featured') {
+        if (kind === 'candle') v.set(0, 0.86, -0.05);
+        else if (kind === 'flower') v.set(0, 1.12, -0.5);
+        else if (kind === 'gift') return featuredGifts[0].getWorldPosition(v);
+        else v.set(0, 1.9, -0.5);
+        return easel.localToWorld(v);
+      }
+      const s = slots[key];
+      if (!s) return null;
+      if (kind === 'candle') return s.shelf.localToWorld(v.set(0.31, 0.15, 0.03));
+      if (kind === 'flower') return s.jar.localToWorld(v.set(0, 0.13, 0));
+      if (kind === 'gift') return s.gifts[0].getWorldPosition(v);
+      return s.photo.getWorldPosition(v);
+    },
+    // Tamaño (en el mundo) del regalito en ese lugar.
+    giftScale(key) {
+      const h = holdersFor(key)?.[0];
+      return h ? h.getWorldScale(new THREE.Vector3()).x : 0.15;
+    },
+    // Esconder el regalito nuevo mientras vuela hasta la repisa.
+    holdGift(key, on) {
+      const h = holdersFor(key)?.[0];
+      if (!h) return;
+      h.userData.held = on;
+      h.visible = !on && !!h.userData.ch;
+    },
     animate(t) {
       for (const f of flames) {
         if (f.spin) { f.spin.rotation.y = t * 0.6; continue; }
         if (!f.group.visible) continue;
         const n = Math.sin(t * 9 + f.seed) * 0.5 + Math.sin(t * 17 + f.seed * 3) * 0.5;
-        f.flame.scale.set(0.06 + n * 0.006, 0.12 + n * 0.02, 1);
+        if (f.fy) {
+          f.flame.scale.set(0.05 + n * 0.005, 0.1 + n * 0.018, 1);
+          f.flame.position.x = Math.sin(t * 5 + f.seed) * 0.003;
+        } else f.flame.scale.set(0.06 + n * 0.006, 0.12 + n * 0.02, 1);
         f.glow.material.opacity = f.base + n * 0.06;
       }
+      for (const h of featuredGifts) if (h.visible && h.children[0]) idleGift(h.children[0], t);
+      for (const s of slots) if (s.shelf.visible) for (const h of s.gifts) if (h.visible && h.children[0]?.userData.idle) idleGift(h.children[0], t);
       for (const fx of glowFx) {
         if (fx.stage < 1 || !fx.group.parent?.visible) continue;
         fx.lantern.rotation.z = Math.sin(t * 1.3 + fx.seed) * 0.08;

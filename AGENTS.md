@@ -46,7 +46,10 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
 ## Arquitectura en 1 minuto
 
 - **Plano del jardín**: los números están arriba de `src/scene/world.js` (`HALL_CENTER`, `HALL_RADIUS`,
-  `GARDEN_RADIUS`, `SPAWN`, `CREEK_Z`, `MEADOW`, `ELEVATOR_POS`); lo demás se ubica a partir de ellos.
+  `GARDEN_RADIUS`, `SPAWN`, `CREEK_Z`, `BRIDGE`, `MEADOW`, `ELEVATOR_POS`); lo demás se ubica a partir de ellos.
+  **Se llega de afuera**: `SPAWN` está del otro lado del río, se cruza el Puente del Arcoíris y se entra
+  por el arco de cempasúchil. Afuera es tierra y pasto apagado (`outside(x, z)`), adentro el jardín de
+  colores. Al río no se entra (`inWater`); el arco del puente sube y baja al personaje (`groundY`).
   Si se agranda algo, revisar que no quede encimado (camino, faroles, bancos, frasco, carteles en
   `cozy.js`, árboles) y sacar una captura desde arriba (`H.controls.teleportCamera(...)`).
 - **Frontend** (Vite + Three.js, sin framework): `index.html` + `src/`.
@@ -54,9 +57,16 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     ascensor, presencia, paseo. **Candidato a dividir** (ver PENDIENTES).
   - `src/scene/`: `world.js` (cielo, pasto, árboles, faroles, luciérnagas), `hall.js` (muro de
     marcos, pérgola, ofrenda central de Luca, estampita), `muertos.js` (papel picado, cempasúchil,
-    calaveritas, pan de muerto, pueblito, fondos), `cozy.js` (camino de pétalos, puente, frasco,
-    alebrijes, Prado de los espíritus), `elevator.js`, `avatars.js` (otros visitantes), `lanterns.js`
-    (farolitos), `textures.js`.
+    calaveritas, pan de muerto, pueblito, fondos), `cozy.js` (camino de pétalos, frasco, alebrijes,
+    Prado de los espíritus), `river.js` (el río, el Puente del Arcoíris y el arco de entrada),
+    `elevator.js`, `avatars.js` (otros visitantes), `lanterns.js` (farolitos), `textures.js`.
+  - **Regalitos y gestos en 3D** (`gifts3d.js`): `giftMesh(emoji)` arma cada uno de los 24 regalitos
+    de `server/glow.js` con geometría (caché por emoji, tamaño 1, apoyado en y=0); si se suma uno al
+    catálogo, hay que sumarle su modelo en `SPECS` (si no, sale el emoji como cartelito).
+    `createOfferFx` hace los gestos: la llamita que vuela a la veladora, la flor que estalla en pétalos,
+    el regalito que sale de la mano y se apoya en la repisa (`hall.holdGift` lo esconde mientras vuela)
+    y los corazones del abrazo. `hall.offerPos(key, kind)` dice dónde cae cada gesto; en `main.js`,
+    `offerGesture()` gira al personaje, hace `me.offer()`/`me.hug()` y lanza el efecto.
   - **Tercera persona**: `controls.js` mueve a tu personaje (`player.pos`, `player.heading`) y maneja la
     cámara en tres modos: `follow` (detrás del personaje; arrastrar orbita, pellizcar acerca),
     `focus` (mira un punto fijo, p. ej. un marco: `flyTo(stand, target)`) y `fixed` (intro:
@@ -135,6 +145,7 @@ const ctx = await b.newContext({ ...devices['iPhone 13'] }); // celular
 //   H.startWalk('luca')   // sacar a pasear a Luca
 ```
 
+Los 24 regalitos juntos: `npm run dev` y `/lab/gifts.html?t=1.3`.
 Para los espíritus sin entrar al jardín: `npm run dev` y `/lab/pets.html?t=1.5&pose=sit&side&d=0.55`
 (congela en t segundos) o `/lab/pets.html?mode=pack` con `window.__lab.advance(20)` (simula 20 s del
 Prado y deja en `__lab.log` qué hacía cada espíritu).

@@ -6,7 +6,7 @@
 // La cámara tiene tres modos: "follow" (sigue al personaje), "focus" (mira un punto fijo, por ejemplo
 // un marco del muro; arrastrar orbita alrededor) y "fixed" (la intro).
 import * as THREE from 'three';
-import { GARDEN_RADIUS, SPAWN } from './world.js';
+import { GARDEN_RADIUS, SPAWN, inWater, groundY } from './world.js';
 
 const BODY = 0.3;
 const HEAD = 1.3;
@@ -80,11 +80,13 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   const defaultDist = () => (portrait() ? 5.6 : 4.8);
   distTarget = dist = camDist = defaultDist();
 
+  // Al río no se entra: se cruza por el puente (en los pisos de arriba no hay río).
+  const stop = (x, z) => blocked(x, z) || (!colliders.up && inWater(x, z));
   function tryMove(dx, dz) {
     const p = player.pos;
-    if (!blocked(p.x + dx, p.z + dz)) { p.x += dx; p.z += dz; return true; }
-    if (!blocked(p.x + dx, p.z)) { p.x += dx; return true; }
-    if (!blocked(p.x, p.z + dz)) { p.z += dz; return true; }
+    if (!stop(p.x + dx, p.z + dz)) { p.x += dx; p.z += dz; return true; }
+    if (!stop(p.x + dx, p.z)) { p.x += dx; return true; }
+    if (!stop(p.x, p.z + dz)) { p.z += dz; return true; }
     return false;
   }
 
@@ -280,7 +282,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
       camera.lookAt(lookAt);
     },
     placePlayer(p, facing = null) {
-      player.pos.set(p.x, 0, p.z);
+      player.pos.set(p.x, colliders.up ? 0 : groundY(p.x, p.z), p.z);
       if (facing) player.heading = Math.atan2(facing.x - p.x, facing.z - p.z);
       player.speed = 0;
       walkTarget = null;
@@ -371,6 +373,9 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         if (!moving) player.speed *= 0.5;
       }
       player.moving = moving && player.speed > 0.15;
+      // Sube y baja por el arco del puente.
+      const gy = colliders.up ? 0 : groundY(player.pos.x, player.pos.z);
+      player.pos.y += (gy - player.pos.y) * Math.min(1, dt * 12);
       if (player.moving) listeners.move.forEach((fn) => fn());
       if (marker.visible) {
         const s = 1 + Math.sin(performance.now() / 160) * 0.12;
@@ -395,7 +400,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         }
         pivot.x += (player.pos.x - pivot.x) * Math.min(1, dt * 12);
         pivot.z += (player.pos.z - pivot.z) * Math.min(1, dt * 12);
-        pivot.y = HEAD + Math.min(0.25, Math.max(0, (camDist - 4) * 0.05));
+        pivot.y = HEAD + player.pos.y + Math.min(0.25, Math.max(0, (camDist - 4) * 0.05));
       } else if (mode === 'focus') {
         pivot.copy(focus.target);
         const dy = Math.atan2(Math.sin(yaw - focus.yaw0), Math.cos(yaw - focus.yaw0));

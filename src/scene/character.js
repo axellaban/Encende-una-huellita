@@ -161,6 +161,10 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
     set leashing(v) { leashing = v; },
     throw() { act = { kind: 'throw', t: 0, dur: 0.55 }; },
     wave() { act = { kind: 'wave', t: 0, dur: 1.6 }; },
+    // Ofrecer algo a la ofrenda: los dos brazos hacia adelante, una leve reverencia.
+    offer() { act = { kind: 'offer', t: 0, dur: 1.3 }; },
+    // Abrazo: se abraza a sí mismo y se mece.
+    hug() { act = { kind: 'hug', t: 0, dur: 1.9 }; },
     // Agacharse a acariciar al espíritu.
     pet() { act = { kind: 'pet', t: 0, dur: 1.8 }; },
     get busy() { return !!act; },
@@ -199,11 +203,26 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
           arms[0].rotation.x = -1.1 * e;
           arms[0].rotation.z = -0.12 + Math.sin(act.t * 7) * 0.18 * e;
           head.rotation.x = 0.3 * e;
+        } else if (act.kind === 'offer') {
+          const e = Math.sin(Math.PI * Math.min(1, p * 1.25));
+          arms[0].rotation.x = arms[1].rotation.x = -1.35 * e;
+          arms[0].rotation.z = -0.12 + 0.25 * e;
+          arms[1].rotation.z = 0.12 - 0.25 * e;
+          torso.rotation.x = 0.18 * e;
+          head.rotation.x = 0.22 * e;
+        } else if (act.kind === 'hug') {
+          const e = Math.sin(Math.PI * Math.min(1, p * 1.1));
+          arms[0].rotation.x = arms[1].rotation.x = -1.05 * e;
+          arms[0].rotation.z = -0.12 + 1.0 * e;
+          arms[1].rotation.z = 0.12 - 1.0 * e;
+          body.rotation.z = Math.sin(act.t * 4) * 0.08 * e;
+          head.rotation.x = 0.18 * e;
+          head.rotation.z = Math.sin(act.t * 4) * 0.1 * e;
         } else if (act.kind === 'wave') {
           arms[0].rotation.x = -2.7;
           arms[0].rotation.z = -0.4 + Math.sin(act.t * 12) * 0.35;
         }
-        if (p >= 1) { act = null; arms[0].rotation.z = -0.12; hips.position.y = 0.46; head.rotation.x = 0; }
+        if (p >= 1) { act = null; arms[0].rotation.z = -0.12; arms[1].rotation.z = 0.12; hips.position.y = 0.46; head.rotation.x = 0; }
       } else arms[0].rotation.z = -0.12;
     },
     dispose() {
