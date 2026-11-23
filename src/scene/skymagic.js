@@ -84,7 +84,7 @@ const tailShader = (uTime) => new THREE.ShaderMaterial({
       float core = exp(-across * across * 6.0);
       // Filamentos que se mueven a lo largo de la cola.
       float fil = 0.75 + 0.25 * sin(vUv.y * 40.0 + vUv.x * 9.0 - uTime * 0.6 + uSeed);
-      float along = pow(1.0 - vUv.x, 1.6);
+      float along = pow(clamp(1.0 - vUv.x, 0.0, 1.0), 1.6);
       vec3 c = mix(vec3(1.6, 1.5, 1.35), uTint, smoothstep(0.0, 0.5, vUv.x));
       c = mix(c, vec3(1.0, 0.45, 0.8), smoothstep(0.55, 1.0, vUv.x) * 0.6);
       gl_FragColor = vec4(c, core * along * fil * uA * 0.75);
@@ -138,7 +138,7 @@ export function createSkyMagic(scene, { uTime, rnd = Math.random }) {
     fog: false,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `uniform float uA; varying vec2 vUv;
-      void main(){ float a = pow(vUv.x, 2.5) * exp(-pow((vUv.y - 0.5) * 3.2, 2.0)); gl_FragColor = vec4(vec3(1.6, 1.5, 1.3), a * uA); }`,
+      void main(){ float yy = (vUv.y - 0.5) * 3.2; float a = pow(clamp(vUv.x, 0.0, 1.0), 2.5) * exp(-yy * yy); gl_FragColor = vec4(vec3(1.6, 1.5, 1.3), a * uA); }`,
   });
   const shoots = [];
   for (let i = 0; i < 3; i++) {

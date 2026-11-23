@@ -61,7 +61,7 @@ const WatercolorShader = {
       c += vec3(0.07, 0.06, 0.05) * (0.6 + fib * 0.4) * (1.0 - L) * uAmt;   // los negros quedan como tinta sobre papel, no negro puro
       // Viñeta cálida, como el borde de una hoja pintada.
       vec2 q = vUv - 0.5;
-      float vig = smoothstep(0.85, 0.35, length(q * vec2(1.0, 1.15)));
+      float vig = (1.0 - smoothstep(0.35, 0.85, length(q * vec2(1.0, 1.15))));
       c *= mix(1.0, 0.82 + 0.18 * vig, uAmt);
       c = mix(c, c * vec3(1.03, 0.99, 0.94), (1.0 - vig) * 0.5 * uAmt);
       gl_FragColor = vec4(c, 1.0);

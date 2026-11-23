@@ -85,7 +85,7 @@ function createFx(scene) {
       void main(){ vC = aColor; vA = aAlpha; vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_PointSize = clamp(uScale * aSize / max(-mv.z, 0.1), 1.0, 28.0); gl_Position = projectionMatrix * mv; }`,
     fragmentShader: `varying vec3 vC; varying float vA; void main(){ float d = length(gl_PointCoord - 0.5);
-      float g = smoothstep(0.5, 0.0, d); g *= g; gl_FragColor = vec4(vC * 1.7, g * vA); }`,
+      float g = (1.0 - smoothstep(0.0, 0.5, d)); g *= g; gl_FragColor = vec4(vC * 1.7, g * vA); }`,
   }));
   pts.frustumCulled = false;
   scene.add(pts);

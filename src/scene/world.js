@@ -155,10 +155,10 @@ export function buildWorld(scene, tier) {
           c = mix(low, c, smoothstep(0.02, 0.2, h));
           c = mix(horizon, c, smoothstep(-0.04, 0.07, h));
           // Resplandor del atardecer hacia el oeste.
-          float sunset = pow(max(0.0, dot(normalize(vec3(-0.2, 0.0, -1.0)), normalize(vec3(vP.x, 0.0, vP.z)))), 6.0);
+          float sunset = pow(max(0.0, dot(normalize(vec3(-0.2, 0.0, -1.0)), normalize(vec3(vP.x, 0.0, vP.z) + vec3(1e-4, 0.0, 0.0)))), 6.0);
           c += vec3(0.45, 0.18, 0.06) * sunset * (1.0 - smoothstep(0.0, 0.35, h)) * (1.0 - uK);
           float band = smoothstep(0.25, 0.45, h) * (1.0 - smoothstep(0.45, 0.75, h));
-          float wave = sin(atan(vP.z, vP.x) * 5.0 + h * 9.0) * 0.5 + 0.5;
+          float wave = sin(atan(vP.z, vP.x + 1e-5) * 5.0 + h * 9.0) * 0.5 + 0.5;
           c += mix(vec3(0.25, 0.04, 0.18), vec3(0.04, 0.16, 0.18), wave) * band * 0.55 * (1.0 - uK);
           // Arriba de todo: luz de cielo, más clara cerca del sol.
           float sun = pow(max(0.0, dot(normalize(vP), normalize(vec3(0.35, 0.55, -0.75)))), 12.0);
@@ -175,7 +175,8 @@ export function buildWorld(scene, tier) {
             float band = exp(-dm * dm * 26.0);
             float f1 = fbm3(d * 5.0);
             float f2 = fbm3(d * 13.0 + 4.0);
-            float lane = 1.0 - 0.75 * exp(-pow(dm * 9.0 + (f1 - 0.5) * 1.6, 2.0)) * smoothstep(0.35, 0.7, f2);
+            float lz = dm * 9.0 + (f1 - 0.5) * 1.6;
+            float lane = 1.0 - 0.75 * exp(-lz * lz) * smoothstep(0.35, 0.7, f2);
             vec3 mw = mix(vec3(0.28, 0.24, 0.55), vec3(0.62, 0.36, 0.52), f1);
             mw = mix(mw, vec3(0.35, 0.55, 0.75), smoothstep(0.55, 0.8, f2) * 0.5);
             c += mw * band * (0.25 + 0.75 * f2) * lane * 0.55 * alt * night;
@@ -183,7 +184,7 @@ export function buildWorld(scene, tier) {
             vec3 q = d * 420.0;
             float sh = h3(floor(q));
             float dens = 0.988 - band * 0.035;
-            float sd = smoothstep(dens, 1.0, sh) * smoothstep(0.5, 0.0, length(fract(q) - 0.5));
+            float sd = smoothstep(dens, 1.0, sh) * (1.0 - smoothstep(0.0, 0.5, length(fract(q) - 0.5)));
             float tw = 0.6 + 0.4 * sin(uTime * (1.0 + sh * 3.0) + sh * 50.0);
             c += vec3(1.2, 1.15, 1.25) * sd * tw * 0.9 * alt * night;
             // Nebulosas suaves, rosa y turquesa.
@@ -195,10 +196,11 @@ export function buildWorld(scene, tier) {
           // Auroras en los pisos del medio: cortinas de luz verde, turquesa y rosa que ondulan.
           float midf = smoothstep(0.06, 0.22, uK) * (1.0 - smoothstep(0.5, 0.72, uK));
           if (midf > 0.0) {
-            float az = atan(d.z, d.x);
+            float az = atan(d.z, d.x + 1e-5);
             float wave = sin(az * 3.0 + uTime * 0.05 + sin(az * 7.0 + uTime * 0.11) * 0.6);
             float yb = 0.3 + wave * 0.07;
-            float base = exp(-pow((h - yb) * 10.0, 2.0));
+            float ab = (h - yb) * 10.0;
+            float base = exp(-ab * ab);
             float up = smoothstep(yb - 0.01, yb + 0.05, h) * (1.0 - smoothstep(yb + 0.05, yb + 0.32, h));
             float curtains = 0.5 + 0.5 * sin(az * 38.0 + uTime * 0.25 + sin(az * 11.0 + uTime * 0.07) * 2.5);
             vec3 ac = mix(vec3(0.25, 1.0, 0.65), vec3(0.95, 0.45, 1.0), smoothstep(0.0, 1.0, (h - yb) * 3.5));
@@ -211,7 +213,8 @@ export function buildWorld(scene, tier) {
             c = mix(c, vec3(1.0, 1.0, 1.02), ci * 0.45 * day);
             // Halo de 22° alrededor del sol, con un leve arcoíris.
             float ang = acos(clamp(dot(d, normalize(vec3(0.35, 0.55, -0.75))), -1.0, 1.0));
-            float ring = exp(-pow((ang - 0.38) * 26.0, 2.0));
+            float ra = (ang - 0.38) * 26.0;
+            float ring = exp(-ra * ra);
             vec3 rc = mix(vec3(1.0, 0.55, 0.45), vec3(0.6, 0.75, 1.0), smoothstep(0.36, 0.41, ang));
             c += rc * ring * 0.22 * day;
             // Cenit luminoso, como si el cielo no terminara nunca.
@@ -261,7 +264,7 @@ export function buildWorld(scene, tier) {
             a = cross + exp(-d * d * 120.0);
           } else {
             if (d > 0.5) discard;
-            a = smoothstep(0.5, 0.0, d);
+            a = (1.0 - smoothstep(0.0, 0.5, d));
           }
           vec3 gold = vec3(1.25, 1.02, 0.6);
           vec3 white = vec3(1.25, 1.2, 1.1);
@@ -700,7 +703,7 @@ export function buildWorld(scene, tier) {
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `varying float vA; void main(){ float d = length(gl_PointCoord - 0.5);
-          float g = smoothstep(0.5, 0.0, d); g *= g; gl_FragColor = vec4(vec3(1.0, 0.68, 0.25) * 1.9, g * vA); }`,
+          float g = (1.0 - smoothstep(0.0, 0.5, d)); g *= g; gl_FragColor = vec4(vec3(1.0, 0.68, 0.25) * 1.9, g * vA); }`,
     }));
     flies.frustumCulled = false;
     scene.add(flies);

@@ -96,7 +96,7 @@ function puffyClouds(rnd) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       float up = normal.y * 0.5 + 0.5;
       totalEmissiveRadiance *= mix(0.55, 1.15, up);
-      float rim = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
+      float rim = pow(clamp(1.0 - abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0), 3.0);
       totalEmissiveRadiance += vec3(0.35, 0.33, 0.3) * rim;`);
   };
   mat.customProgramCacheKey = () => 'nubes';

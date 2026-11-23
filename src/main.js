@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { createWatercolorPass } from './scene/watercolor.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
@@ -176,6 +177,14 @@ const watercolorOn = () => store.get('huellita.watercolor') !== '0';
 
 function setupRenderer() {
   renderer.setSize(innerWidth, innerHeight);
+  // Si el celular se queda sin memoria gráfica, el lienzo queda negro: recargamos un escalón más abajo.
+  renderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    const next = tierName === 'high' ? 'mid' : 'low';
+    saveQuality(next);
+    toast('✨ Ajustamos la calidad para que ande mejor en tu equipo…');
+    setTimeout(() => location.reload(), 1200);
+  }, { once: true });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.12;
   adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: tier.maxPixelRatio, min: tierName === 'low' ? 0.7 : 0.85 });
@@ -185,6 +194,17 @@ function setupRenderer() {
     composer.setPixelRatio(adaptive.ratio);
     composer.setSize(innerWidth, innerHeight);
     composer.addPass(new RenderPass(scene, camera));
+    // Un solo píxel NaN o infinito alcanza para que el bloom ponga toda la pantalla en negro: se limpia acá.
+    composer.addPass(new ShaderPass({
+      uniforms: { tDiffuse: { value: null } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+        void main(){
+          vec4 c = texture2D(tDiffuse, vUv);
+          if (any(isnan(c)) || any(isinf(c))) c = vec4(0.0, 0.0, 0.0, 1.0);
+          gl_FragColor = vec4(clamp(c.rgb, 0.0, 64.0), c.a);
+        }`,
+    }));
     bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.45, 0.9);
     composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
@@ -197,10 +217,12 @@ function setupRenderer() {
 function sizeWatercolor() {
   if (!watercolor) return;
   const pr = adaptive?.ratio || renderer.getPixelRatio();
-  watercolor.setSize(innerWidth * pr, innerHeight * pr, pr);
+  watercolor.setSize(Math.max(1, innerWidth * pr), Math.max(1, innerHeight * pr), pr);
 }
 
 function resize() {
+  // Al cambiar de app o rotar, a veces el tamaño llega en 0 por un instante: no achicar todo a nada.
+  if (!innerWidth || !innerHeight) return;
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer?.setSize(innerWidth, innerHeight);
