@@ -11,12 +11,11 @@ referencia ("Where Winds Meet"). Cada punto dice qué, por qué y dónde tocar. 
 en celular (iPhone 13 y SE) y el recorrido de punta a punta (ver AGENTS).
 
 ### 1. Publicar lo que está listo
-- [ ] **Arreglo de la pantalla negra** (commit "Arreglo de la pantalla negra…"): está en la rama, falta
-      publicarlo. El recorrido en celular dio 31/35, pero los 4 que fallaron parecen datos de prueba
-      viejos en `data/kv.json` (búsqueda con 3 resultados, huellita repetida que no se borra) y algo con
-      vela y flor que hay que mirar: arrancar con `data/` limpio y repetir. Si se repite lo de la vela,
-      revisar si el aviso de `webglcontextlost` recarga la página en swiftshader.
-- [ ] Después de publicar, preguntarle al dueño si vuelve a ver la pantalla negra.
+- [x] **Arreglo de la pantalla negra** publicado el 23/11 (PR #12, verificado en vivo). El recorrido de
+      punta a punta dio 35/35 en celular, iPhone SE y compu. Ojo al probar: no correr dos recorridos a la
+      vez contra el mismo servidor (se pisan los datos y fallan vela, búsqueda y quitar) y empezar con
+      `data/` limpio.
+- [ ] Preguntarle al dueño si vuelve a ver la pantalla negra en su celular (con captura y dónde estaba).
 
 ### 2. Que se vea limpio en el celular
 - [x] **Acuarela apagada por defecto** (`watercolorOn()` en `main.js`, hecho el 23/11). En el iPhone del
