@@ -219,6 +219,7 @@ for (const name of ['local', 'vercel']) {
     r = await (await post(`/api/memorials/${other.id}/gift`, { ...who, gift: '🎾 Una pelota' })).json();
     assert.equal(r.memorial.gifts, 1);
     assert.deepEqual(r.memorial.lastGifts, ['🎾']);
+    assert.deepEqual(r.memorial.giftCounts, { '🎾': 1 });
     assert.equal((await post(`/api/memorials/${other.id}/gift`, { ...who, sid: 'g2', gift: '💣 Bomba' })).status, 400);
     r = await (await post(`/api/memorials/${other.id}/hug`, who)).json();
     assert.equal(r.glow.gained, 1);

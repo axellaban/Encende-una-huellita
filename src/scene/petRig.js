@@ -181,17 +181,36 @@ export function createPet(look) {
     add(place(sphere(sr, 0.92, 0.78, 1 + sl / sr * 0.9, 14), at(head, 0, -0.04, headR * 0.62 + sl * 0.55)), head, muzzle);
     if (!cat) add(place(sphere(0.05, 1.05, 0.5, 1.1, 10), at(head, 0, -0.075, headR * 0.55 + sl * 0.45)), head, light);
     add(place(sphere(cat ? 0.016 : 0.026, 1.25, 0.8, 0.9, 10), at(head, 0, -0.02 + (cat ? 0.005 : 0), headR * 0.62 + sl * 1.05 + sr * 0.82)), head, cat ? pink : dark, 0.05);
+    // Brillito en la nariz húmeda.
+    if (!cat) add(place(sphere(0.008, 1.4, 0.7, 1, 6), at(head, 0.006, -0.008, headR * 0.62 + sl * 1.05 + sr * 0.82 + 0.018)), head, white, 0.9);
   } else {
     add(place(sphere(0.05, 1.2, 0.9, 1), at(head, 0, -0.03, 0.085)), head, light);
     add(place(sphere(0.014), at(head, 0, -0.01, 0.13)), head, pink, 0.1);
   }
   // Mejillas esponjosas.
   if (look.tail === 'fluffy' || cat) for (const sd of [-1, 1]) add(place(sphere(0.05, 1, 0.8, 1), at(head, sd * 0.07, -0.05, 0.03)), head, light);
-  // Ojos grandes con brillo.
-  const eyeR = cat ? 0.024 : 0.026;
+  // Ojos grandes y vivos: iris de color (ámbar en los gatos, marrón miel en los perros), pupila
+  // (rasgada en los gatos), un brillo grande y otro chiquito.
+  const eyeR = cat ? 0.028 : 0.029;
+  const iris = new THREE.Color(cat ? '#d9a13a' : bunny ? '#3a2a2a' : '#7a4a22');
   for (const sd of [-1, 1]) {
-    add(place(sphere(eyeR, 1, 1.1, 0.7, 10), at(eyes, sd * 0.052, 0, headR * 0.15)), eyes, dark, 0.02);
-    add(place(sphere(0.009, 1, 1, 1, 6), at(eyes, sd * 0.052 + 0.008, 0.011, headR * 0.15 + 0.016)), eyes, white, 1.6);
+    add(place(sphere(eyeR, 1, 1.1, 0.7, 12), at(eyes, sd * 0.052, 0, headR * 0.15)), eyes, iris, 0.12);
+    add(place(sphere(eyeR * 0.68, cat ? 0.42 : 1, 1.1, 0.6, 10), at(eyes, sd * 0.052, 0, headR * 0.15 + 0.008)), eyes, dark, 0.02);
+    add(place(sphere(0.0095, 1, 1, 1, 6), at(eyes, sd * 0.052 + 0.009, 0.012, headR * 0.15 + 0.019)), eyes, white, 1.6);
+    add(place(sphere(0.0045, 1, 1, 1, 6), at(eyes, sd * 0.052 - 0.008, -0.009, headR * 0.15 + 0.02)), eyes, white, 1.2);
+  }
+  // Bigotes de gato: tres de cada lado.
+  if (cat) {
+    for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) {
+      const w = capsule(0.0018, 0.075, 4);
+      w.rotateZ(Math.PI / 2 + sd * (0.12 - k * 0.12));
+      w.rotateY(sd * 0.35);
+      add(place(w, at(head, sd * 0.075, -0.045 - k * 0.006, headR * 0.72)), head, white, 0.6);
+    }
+  }
+  // Pechera esponjosa en los de pelo largo.
+  if (look.tail === 'fluffy' || cat) {
+    for (let k = 0; k < 4; k++) add(place(sphere(0.045, 1, 1.1, 0.7, 10), at(chest, (k - 1.5) * 0.03, -0.03 - Math.abs(k - 1.5) * 0.015, 0.1)), chest, light);
   }
   // Orejas.
   const innerEar = (x, y, z, nx, ny, nz) => (nz > 0.2 ? pink.clone().lerp(F, 0.35) : F);

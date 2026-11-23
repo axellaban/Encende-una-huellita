@@ -3,6 +3,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { createWatercolorPass } from './scene/watercolor.js';
+import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
 import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF } from './scene/world.js';
@@ -169,12 +171,14 @@ let heaven = null; // el cielo que cambia con el piso
 let bloomPass = null;
 let composer = null;
 let adaptive = null;
+let watercolor = null; // estilo acuarela (pase final)
+const watercolorOn = () => store.get('huellita.watercolor') !== '0';
 
 function setupRenderer() {
   renderer.setSize(innerWidth, innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.12;
-  adaptive = createAdaptiveResolution(renderer, (r) => composer?.setPixelRatio(r), { max: tier.maxPixelRatio, min: tierName === 'low' ? 0.7 : 0.85 });
+  adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: tier.maxPixelRatio, min: tierName === 'low' ? 0.7 : 0.85 });
   if (tier.bloom) {
     const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: tierName === 'high' ? 4 : 2 });
     composer = new EffectComposer(renderer, rt);
@@ -184,7 +188,16 @@ function setupRenderer() {
     bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.45, 0.9);
     composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
+    // Acuarela: el último pase, en el color final de la pantalla.
+    watercolor = createWatercolorPass(watercolorOn() ? 1 : 0);
+    composer.addPass(watercolor.pass);
+    sizeWatercolor();
   }
+}
+function sizeWatercolor() {
+  if (!watercolor) return;
+  const pr = adaptive?.ratio || renderer.getPixelRatio();
+  watercolor.setSize(innerWidth * pr, innerHeight * pr, pr);
 }
 
 function resize() {
@@ -192,6 +205,7 @@ function resize() {
   camera.updateProjectionMatrix();
   renderer?.setSize(innerWidth, innerHeight);
   composer?.setSize(innerWidth, innerHeight);
+  sizeWatercolor();
 }
 addEventListener('resize', resize);
 
@@ -281,6 +295,7 @@ async function buildScene() {
 
   const clock = new THREE.Clock();
   let riverT = 0;
+  let kickT = 0;
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
     const t = clock.elapsedTime;
@@ -298,6 +313,11 @@ async function buildScene() {
     hall.animate(t);
     lanterns.update(dt, t);
     offerFx.update(dt);
+    // Al caminar se levantan pétalos de cempasúchil de los pies (en el jardín y el salón).
+    if (P.moving && !world.colliders.up && !reduced) {
+      kickT -= dt * Math.min(2, P.speed / 2);
+      if (kickT < 0) { kickT = 0.28; offerFx.kick(P.pos); }
+    }
     sparkles?.update(camera.position);
     // El murmullo del río sube al acercarte (en los pisos de arriba no hay río).
     riverT -= dt;
@@ -399,8 +419,9 @@ function renderFloors() {
     const b = document.createElement('button');
     b.className = `${f === currentFloor() ? 'on' : ''} ${n ? 'has' : ''}`;
     b.style.setProperty('--sky', floorSky(f));
-    b.innerHTML = `<b>${f + 1}</b>${n ? `<small>${n}🐾</small>` : ''}`;
-    b.title = n ? `Piso ${f + 1} · ${n} ${n === 1 ? 'huellita' : 'huellitas'}` : `Piso ${f + 1}`;
+    b.innerHTML = `<b>${f + 1}</b><span class="fn"></span>${n ? `<small>${n} 🐾</small>` : ''}`;
+    b.querySelector('.fn').textContent = floorName(f);
+    b.title = `Piso ${f + 1} · ${floorName(f)}${n ? ` · ${n} ${n === 1 ? 'huellita' : 'huellitas'}` : ''}`;
     b.setAttribute('aria-label', b.title);
     b.onclick = () => {
       $('#floors').close();
@@ -410,6 +431,8 @@ function renderFloors() {
     list.append(b);
   }
   $$('.floor-num').forEach((el) => { el.textContent = currentFloor() + 1; });
+  const here = $('#floor-here');
+  if (here) here.textContent = `Estás en el piso ${currentFloor() + 1} · ${floorName(currentFloor())}`;
   elevator?.setFloor(currentFloor());
 }
 
@@ -424,6 +447,8 @@ function rideTo(f) {
   const num = $('#lift-num');
   num.textContent = from + 1;
   $('#lift-arrow').textContent = f > from ? '▲' : '▼';
+  $('#lift-name').textContent = floorName(f);
+  lift.classList.toggle('down', f < from);
   lift.hidden = false;
   requestAnimationFrame(() => requestAnimationFrame(() => lift.classList.add('closed')));
   haptic(10);
@@ -448,7 +473,7 @@ function rideTo(f) {
           lift.classList.remove('closed');
           elevator?.setOpen(true);
           setTimeout(() => { lift.hidden = true; riding = false; elevator?.setOpen(false); }, 900);
-          toast(`🛗 Piso ${f + 1}`);
+          toast(`🛗 Piso ${f + 1} · ${floorName(f)}`);
         }, 350);
       }
     }, Math.max(70, 900 / steps));
@@ -676,6 +701,18 @@ function fillSheet(m) {
   $('#s-glow').hidden = !mine;
   if (mine) $('#s-glow').innerHTML = glowCardHTML(m);
   $('#s-mine').hidden = !(mine && pet && pet.id !== m.id);
+  // La repisa: cada regalito con cuántos le dejaron (como en una ofrenda de verdad).
+  const gc = Object.entries(m.giftCounts || {}).sort((a, b) => b[1] - a[1]);
+  $('#s-shelf').hidden = !gc.length;
+  $('#s-shelf').innerHTML = '';
+  for (const [emo, n] of gc.slice(0, 12)) {
+    const sp = document.createElement('span');
+    sp.className = 'shelf-item';
+    sp.innerHTML = '<i></i><b></b>';
+    sp.querySelector('i').textContent = emo;
+    sp.querySelector('b').textContent = `×${n}`;
+    $('#s-shelf').append(sp);
+  }
   const gl = m.giftList || [];
   $('#s-gifts').hidden = !gl.length;
   $('#s-gifts').innerHTML = '';
@@ -1067,11 +1104,17 @@ function openMenu() {
   closeModals();
   $('#opt-music').checked = isMusicOn();
   $('#opt-sounds').checked = isSoundsOn();
+  $('#opt-watercolor').checked = watercolorOn();
+  $('#opt-watercolor').disabled = !watercolor;
   const q = savedQuality();
   $$('#opt-quality button').forEach((b) => b.classList.toggle('on', b.dataset.q === q));
   $('#menu').showModal();
 }
 $('#opt-music').onchange = (e) => { setMusic(e.target.checked); syncMusicBtn(); store.set('huellita.music', e.target.checked ? '1' : '0'); };
+$('#opt-watercolor').onchange = (e) => {
+  store.set('huellita.watercolor', e.target.checked ? '1' : '0');
+  if (watercolor) watercolor.amount = e.target.checked ? 1 : 0;
+};
 $('#opt-sounds').onchange = (e) => { setSounds(e.target.checked); store.set('huellita.sounds', e.target.checked ? '1' : '0'); };
 $$('#opt-quality button').forEach((b) => {
   b.onclick = () => {
@@ -1427,7 +1470,31 @@ function floatFromCurrent(ch) {
   avatars.floatAt(ch, at.clone().add(new THREE.Vector3(0, -0.2, 0)));
 }
 
+// Invitación a llevarla en la pantalla de inicio (como el original, pero a nuestro modo): después
+// del primer gesto, una sola vez cada dos semanas. En iPhone explica cómo hacerlo desde Compartir.
+function maybeInstallCard() {
+  if (maybeInstallCard.done) return;
+  maybeInstallCard.done = true;
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const until = Number(store.get('huellita.installNo') || 0);
+  if (standalone || Date.now() < until) return;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !/crios|fxios/i.test(navigator.userAgent);
+  if (!installPrompt && !ios) return;
+  $('#install-hint').textContent = ios && !installPrompt ? 'Tocá Compartir (el cuadrado con la flechita) y después “Agregar a inicio”.' : 'Abrila con un toque, como una app, y volvé a visitarlos cuando quieras.';
+  $('#install-yes').hidden = !installPrompt;
+  setTimeout(() => { $('#install-card').hidden = false; }, 3500);
+}
+$('#install-yes').onclick = async () => {
+  $('#install-card').hidden = true;
+  try { await installPrompt?.prompt(); } catch { /* el navegador no quiso */ }
+};
+$('#install-no').onclick = () => {
+  $('#install-card').hidden = true;
+  store.set('huellita.installNo', String(Date.now() + 14 * 86400_000));
+};
+
 function afterGesture(kind, r, { bonus = 0 } = {}) {
+  maybeInstallCard();
   const target = r.memorial || current;
   const pet = myPet();
   const isOwn = !!pet && target?.id === pet.id;

@@ -78,6 +78,11 @@
       <button class="btn primary small wide" id="photo-btn">📸 Sacar una foto en el jardín</button>
     </div>
     <div class="glow-toast" id="glow-toast" hidden></div>
+    <div class="install-card" id="install-card" hidden role="dialog" aria-label="Agregar a la pantalla de inicio">
+      <img src="/icon-192.png" alt="" width="48" height="48" />
+      <div class="txt"><b>Encendé una huellita desde tu pantalla de inicio</b><small id="install-hint">Abrila con un toque, como una app, y volvé a visitarlos cuando quieras.</small></div>
+      <div class="acts"><button class="btn primary small" id="install-yes">Agregar</button><button class="link-btn" id="install-no">Ahora no</button></div>
+    </div>
 
     <!-- paseo con el espíritu de tu mascota -->
     <div class="walk-hud" id="walk-hud" hidden>
@@ -233,6 +238,7 @@
         <div class="gathering" id="s-gathering" hidden></div>
         <div class="eternal" id="s-eternal"></div>
         <div class="glow-card" id="s-glow" hidden></div>
+        <div class="shelf-row" id="s-shelf" hidden></div>
         <div class="gifts-row" id="s-gifts" hidden></div>
         <p class="msg" id="s-msg"></p>
         <figure class="estampita" id="s-card" hidden><img alt="" /></figure>
@@ -297,6 +303,7 @@
       <p class="eyebrow">Ascensor</p>
       <h2>¿A qué <em>piso</em>?</h2>
       <p class="sub">99 pisos, del jardín al cielo. Cuanto más alto, más luz. Cada piso tiene lugar para 90 huellitas.</p>
+      <p class="floor-here" id="floor-here"></p>
       <div class="floor-list" id="floor-list"></div>
     </dialog>
 
@@ -307,6 +314,7 @@
       <div class="menu-list">
         <label class="toggle"><span>🎵 Música</span><input type="checkbox" id="opt-music" /><i></i></label>
         <label class="toggle"><span>🦗 Sonidos del jardín</span><input type="checkbox" id="opt-sounds" checked /><i></i></label>
+        <label class="toggle"><span>🎨 Estilo acuarela</span><input type="checkbox" id="opt-watercolor" checked /><i></i></label>
         <div class="quality">
           <span>✨ Calidad gráfica</span>
           <div class="seg" id="opt-quality">
@@ -511,6 +519,8 @@
       <div class="lift-door l"><span class="paw">🐾</span></div>
       <div class="lift-door r"><span class="paw">🐾</span></div>
       <div class="lift-panel"><span>Piso</span><b id="lift-num">1</b><i id="lift-arrow">▲</i></div>
+      <div class="lift-window"><div class="sky"></div><div class="orb"></div><div class="glass"></div></div>
+      <div class="lift-name"><i>✦</i><span id="lift-name"></span><i>✦</i></div>
     </div>
 
     <!-- ---------- guía: la sexta etapa ---------- -->

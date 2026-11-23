@@ -546,6 +546,17 @@ export function createOfferFx(scene) {
   for (let i = 0; i < PET; i++) { petals.setColorAt(i, petalCols[i % 4]); pData.push({ life: 0 }); }
   scene.add(petals);
   let pNext = 0;
+  function kick(at) {
+    const d = pData[pNext];
+    d.p = at.clone().add(new THREE.Vector3(rnd(0.15), 0.05, rnd(0.15)));
+    d.v = new THREE.Vector3(rnd(0.5), 0.8 + Math.random() * 0.7, rnd(0.5));
+    d.r = new THREE.Euler(Math.random() * 6, Math.random() * 6, 0);
+    d.w = new THREE.Vector3(rnd(8), rnd(8), rnd(8));
+    d.life = 1.0 + Math.random() * 0.6;
+    d.floor = at.y + 0.02;
+    pNext = (pNext + 1) % PET;
+    petals.count = PET;
+  }
   function petalBurst(at, n = 50) {
     for (let i = 0; i < n; i++) {
       const d = pData[pNext];
@@ -632,6 +643,7 @@ export function createOfferFx(scene) {
     burst,
     ring,
     petalBurst,
+    kick,
     get busy() { return live.length > 0; },
     update(dt) {
       for (let i = live.length - 1; i >= 0; i--) {

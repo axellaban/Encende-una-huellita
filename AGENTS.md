@@ -74,6 +74,11 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     `teleportCamera`). `follow({ path, duration, done })` vuela de vuelta detrás del personaje.
     La cámara se acorta si un muro (`colliders.segments`) o un poste/tronco (`colliders.circles`)
     queda en el medio. `createBlocker(colliders)` es la colisión compartida con los espíritus.
+  - `skymagic.js`: cometas, estrellas fugaces, bancos de nubes, islas flotantes y pájaros de luz
+    (`setK(k)` desde `heaven.js`). La Vía Láctea, las nebulosas y los cirros están en el shader del
+    cielo de `world.js`. `watercolor.js`: el pase final de acuarela (Opciones → Estilo acuarela).
+  - `src/floors.js`: nombres propios de los 99 pisos y de los 10 pasillos (no usar los del original).
+  - Muro: cada lugar ocupado es una ventanita con postigos (un solo `InstancedMesh`, `updateShutters`).
   - `heaven.js`: los pisos hacia el cielo (mar de nubes, nubes de algodón, sol, rayos). `elevator.js`:
     la torre con la cabina que sube (`setFloor(n)` mueve la cabina y el indicador).
   - `character.js`: el personaje de cada visitante (vos y `avatars.js`): caminar, `wave()`, `throw()`, `pet()`.

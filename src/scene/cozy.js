@@ -8,6 +8,7 @@ import { EASEL_POS, ALTAR_SCALE, POST_H } from './hall.js';
 import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture, twoSided } from './textures.js';
 import { picadoBanner, PALETTE } from './muertos.js';
 import { buildRiver } from './river.js';
+import { paperLantern, flickerLantern } from './lanterns.js';
 
 export const JAR_POS = new THREE.Vector3(-4.2, 0, 15.5);
 
@@ -72,6 +73,30 @@ export function createCozy(scene, tier, colliders, ground = scene) {
       const b = picadoBanner(new THREE.Vector3(-2.75, 4.3, z), new THREE.Vector3(2.75, 4.3, z - 0.2), { sag: 0.42, flags: 11, size: 0.4, seed });
       ground.add(b);
       animated.push((t) => b.userData.flutter(t));
+      // Una guirnalda de farolitos de papel más abajo, entre los mismos postes.
+      {
+        const a = new THREE.Vector3(-2.75, 3.7, z);
+        const bb = new THREE.Vector3(2.75, 3.7, z - 0.2);
+        const pts = [];
+        for (let i = 0; i <= 16; i++) {
+          const k = i / 16;
+          pts.push(new THREE.Vector3().lerpVectors(a, bb, k).add(new THREE.Vector3(0, -Math.sin(k * Math.PI) * 0.45, 0)));
+        }
+        ground.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: '#2a1d16' })));
+        const TINTS = [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [0.8, 1.8, 1.6], [2.2, 1.7, 0.6], [1.3, 0.9, 2.0]];
+        for (const [j, k] of [0.22, 0.5, 0.78].entries()) {
+          const hang = new THREE.Group();
+          hang.position.lerpVectors(a, bb, k).add(new THREE.Vector3(0, -Math.sin(k * Math.PI) * 0.45, 0));
+          const string = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.26, 4), new THREE.MeshBasicMaterial({ color: '#2a1d16' }));
+          string.position.y = -0.13;
+          const l = paperLantern({ scale: 1.05, tint: TINTS[(seed + j) % TINTS.length], glow: 1.5 });
+          l.position.y = -0.48;
+          hang.add(string, l);
+          ground.add(hang);
+          const ph = seed + j * 1.7;
+          animated.push((t) => { hang.rotation.z = Math.sin(t * 1.1 + ph) * 0.07; hang.rotation.x = Math.sin(t * 0.8 + ph) * 0.05; flickerLantern(l, t); });
+        }
+      }
       for (const [x, zz] of [[-2.75, z], [2.75, z - 0.2]]) {
         const pole = new THREE.Mesh(poleGeo, poleMat);
         pole.position.set(x, 2.2, zz);

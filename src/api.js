@@ -184,7 +184,8 @@ function makeLocal() {
       (db.gifts[id] ||= []).push({ gift, who: who.visitor, at: Date.now() });
       const own = db.memorials.find((m) => m.id === id);
       const holder = own || db.counters[id];
-      holder.lastGifts = [gift.split(' ')[0], ...(holder.lastGifts || [])].slice(0, 3);
+      holder.lastGifts = [gift.split(" ")[0], ...(holder.lastGifts || [])].slice(0, 3);
+      holder.giftCounts = { ...(holder.giftCounts || {}), [gift.split(" ")[0]]: ((holder.giftCounts || {})[gift.split(" ")[0]] || 0) + 1 };
       const glow = grant(id, 'gift', who);
       const m = find(id);
       ev('gift', m, who.visitor, { gift });

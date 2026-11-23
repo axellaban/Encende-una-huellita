@@ -74,6 +74,16 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
   arriba se camina sobre las nubes y sólo se ve a quienes están en tu mismo piso.
 - **Paseo con correa**: el espíritu va adelante tuyo con collar de cuero y medallita, la correa va de tu
   mano al collar (floja o tirante según la distancia), mueve la cola y se desvía a olfatear.
+- **Estilo acuarela**: todo parece pintado a mano (papel, pigmento en los bordes, lavados de color);
+  se apaga en Opciones.
+- **Cielo mágico**: de noche, Vía Láctea, nebulosas, cometas con su cola y estrellas fugaces; arriba,
+  cirros, halo del sol, nubes gigantes, islas que flotan con cascadas de luz y pájaros de luz.
+- **Pasillos y pisos con nombre** ("Pasillo de las veladoras · 4 huellitas", "Piso 24 · Corredor de las
+  nubes rosas"), botonera de bronce y una cabina con ojo de buey al viajar.
+- **Ventanitas en el muro**: cada huellita vive en una ventanita con postigos pintados que se abren; en
+  su ficha, la repisa con cada regalito y cuántos le dejaron.
+- **Farolitos de papel calado** en guirnaldas sobre el camino, canteros, un estanque y pétalos que se
+  levantan al caminar.
 - **Brillitos en el aire**: polvo de luz diminuto que cae muy despacio alrededor tuyo, en todos los pisos.
 - **Caminito al ascensor**, con dos farolitos de papel que lo marcan.
 - **Tamaños de mascota bien distintos**: Mini, Chico, Mediano, Grande y Gigante (de un chihuahua a un

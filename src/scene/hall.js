@@ -8,6 +8,8 @@ import {
 } from './textures.js';
 import { stageOf } from '../../server/glow.js';
 import { giftMesh, idleGift } from './gifts3d.js';
+import { CORRIDOR_NAMES } from '../floors.js';
+import { paperLantern, flickerLantern } from './lanterns.js';
 import { PALETTE, paintedWallTexture, talaveraTexture, marigoldGeometry, marigoldMaterial, marigoldCluster, picadoBanner, sugarSkull, panDeMuerto, backgroundTexture } from './muertos.js';
 
 // Ramo del jarrito: [x, y, z, tamaño] de cada flor (se van sumando con las flores que le dejan).
@@ -129,6 +131,49 @@ function giftHolder(scale) {
   return g;
 }
 
+// Postigo de madera pintada (claro: el color lo pone cada instancia): tablas, un marco, un corazón
+// calado y una manijita.
+let shutterTex = null;
+function shutterTexture() {
+  if (shutterTex) return shutterTex;
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f4efe6';
+  g.fillRect(0, 0, 128, 256);
+  g.strokeStyle = 'rgba(90,70,50,0.35)';
+  g.lineWidth = 2;
+  for (let x = 32; x < 128; x += 32) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 256); g.stroke(); }
+  g.strokeStyle = 'rgba(255,255,255,0.9)';
+  g.lineWidth = 10;
+  g.strokeRect(5, 5, 118, 246);
+  g.strokeStyle = 'rgba(70,50,35,0.45)';
+  g.lineWidth = 2;
+  g.strokeRect(12, 12, 104, 232);
+  // Corazón calado.
+  g.fillStyle = 'rgba(60,35,30,0.55)';
+  g.beginPath();
+  g.moveTo(64, 112);
+  g.bezierCurveTo(40, 92, 44, 68, 64, 80);
+  g.bezierCurveTo(84, 68, 88, 92, 64, 112);
+  g.fill();
+  // Flor chiquita abajo.
+  g.fillStyle = 'rgba(255,255,255,0.85)';
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    g.beginPath(); g.arc(64 + Math.cos(a) * 9, 186 + Math.sin(a) * 9, 6, 0, Math.PI * 2); g.fill();
+  }
+  g.fillStyle = 'rgba(200,150,60,0.9)';
+  g.beginPath(); g.arc(64, 186, 5, 0, Math.PI * 2); g.fill();
+  // Manijita de bronce.
+  g.fillStyle = '#c9973f';
+  g.beginPath(); g.arc(110, 128, 6, 0, Math.PI * 2); g.fill();
+  shutterTex = new THREE.CanvasTexture(c);
+  shutterTex.colorSpace = THREE.SRGBColorSpace;
+  return shutterTex;
+}
+
 export function buildHall(scene, colliders, tier) {
   const r = rand(11);
   const panelMat = new THREE.MeshLambertMaterial({ map: woodTexture('#4a3022') });
@@ -142,6 +187,23 @@ export function buildHall(scene, colliders, tier) {
   const flowerMats = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a'].map((c) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, color: c, emissive: c, emissiveIntensity: 0.25 }));
   const tileMat = new THREE.MeshLambertMaterial({ map: talaveraTexture() });
   const animators = [];
+  // Cada lugar del muro es una ventanita: un marco hondo (con alféizar) donde la foto queda
+  // metida adentro, y dos postigos de madera pintada que se abren cuando llega una huellita.
+  const WIN_W = FRAME_W + 0.16;
+  const WIN_H = FRAME_H + 0.16;
+  const windowFrameGeo = (() => {
+    const t = 0.08;
+    const d = 0.17;
+    const parts = [
+      new THREE.BoxGeometry(WIN_W, t, d).translate(0, WIN_H / 2 - t / 2, 0.06),
+      new THREE.BoxGeometry(WIN_W, t, d).translate(0, -WIN_H / 2 + t / 2, 0.06),
+      new THREE.BoxGeometry(t, WIN_H - 2 * t, d).translate(-WIN_W / 2 + t / 2, 0, 0.06),
+      new THREE.BoxGeometry(t, WIN_H - 2 * t, d).translate(WIN_W / 2 - t / 2, 0, 0.06),
+      new THREE.BoxGeometry(WIN_W + 0.1, 0.045, 0.14).translate(0, -WIN_H / 2 - 0.02, 0.12),
+      new THREE.BoxGeometry(WIN_W - 0.02, WIN_H - 0.02, 0.02).translate(0, 0, -0.02),
+    ];
+    return mergeGeometries(parts.map((g) => g.toNonIndexed()));
+  })();
   // Jarrito de barro de la repisa (geometrías compartidas por todos los marcos).
   const jarGeo = new THREE.LatheGeometry([[0.0, 0], [0.032, 0], [0.045, 0.03], [0.046, 0.055], [0.034, 0.08], [0.03, 0.095], [0.038, 0.105]].map(([x, y]) => new THREE.Vector2(x, y)), 14);
   const jarRimGeo = new THREE.TorusGeometry(0.036, 0.006, 6, 16).rotateX(Math.PI / 2).translate(0, 0.105, 0);
@@ -188,8 +250,14 @@ export function buildHall(scene, colliders, tier) {
     cone.position.set(0, 2.08, 0.0);
     panel.add(bar, cone);
 
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.3), new THREE.MeshBasicMaterial({ transparent: true }));
-    label.position.set(0, 4.35, 0.12);
+    // Cartel del pasillo, colgado de dos cadenitas sobre el techito.
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 0.52), new THREE.MeshBasicMaterial({ transparent: true }));
+    label.position.set(0, 4.62, 0.36);
+    for (const sx of [-1.35, 1.35]) {
+      const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.34, 4), new THREE.MeshLambertMaterial({ color: '#c9973f' }));
+      chain.position.set(sx, 5.02, 0.36);
+      panel.add(chain);
+    }
     panel.add(label);
     panelLabels.push(label);
 
@@ -205,14 +273,14 @@ export function buildHall(scene, colliders, tier) {
         g.position.set(COL_X[col], ROW_Y[row], 0.03);
         panel.add(g);
 
-        const border = new THREE.Mesh(new THREE.BoxGeometry(FRAME_W + 0.16, FRAME_H + 0.16, 0.07), frameMat);
+        const border = new THREE.Mesh(windowFrameGeo, frameMat);
         border.position.z = 0.01;
         const mat = new THREE.Mesh(new THREE.PlaneGeometry(FRAME_W + 0.04, FRAME_H + 0.04), new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#3a2a20', emissiveIntensity: 0.3 }));
         mat.position.z = 0.05;
         const photo = new THREE.Mesh(new THREE.PlaneGeometry(FRAME_W - 0.06, FRAME_H - 0.06), new THREE.MeshBasicMaterial({ map: emptySlotTexture(), transparent: true, color: '#e8e0d4' }));
         photo.position.z = 0.055;
         const name = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.15), new THREE.MeshBasicMaterial({ transparent: true }));
-        name.position.set(0, -FRAME_H / 2 - 0.15, 0.06);
+        name.position.set(0, -FRAME_H / 2 - 0.19, 0.2);
         name.visible = false;
 
         const shelf = new THREE.Group();
@@ -258,6 +326,57 @@ export function buildHall(scene, colliders, tier) {
         slots.push({ group: g, border, mat, photo, name, shelf, candles, jar, flowers, gifts, fx, memorial: null, textures: [] });
       }
     }
+  }
+
+  // ---------- postigos de las ventanitas (todos en un solo dibujo) ----------
+  const SHUTTER_COLS = ['#2bb3a8', '#e0457b', '#f2b33d', '#5b8fd8', '#8b5cc7', '#e8743b', '#3fae6a'].map((c) => new THREE.Color(c));
+  const shutterGeo = new THREE.BoxGeometry(WIN_W / 2, WIN_H, 0.035).translate(WIN_W / 4, 0, 0);
+  const shutters = new THREE.InstancedMesh(shutterGeo, new THREE.MeshLambertMaterial({ map: shutterTexture(), side: THREE.DoubleSide }), slots.length * 2);
+  shutters.frustumCulled = false;
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  slots.forEach((s, i) => {
+    s.open = 0;
+    s.openTarget = 0;
+    s.openDelay = 0;
+    for (let k = 0; k < 2; k++) {
+      shutters.setMatrixAt(i * 2 + k, zero);
+      shutters.setColorAt(i * 2 + k, SHUTTER_COLS[(i * 3 + Math.floor(i / 9)) % SHUTTER_COLS.length]);
+    }
+  });
+  scene.add(shutters);
+  const shM = new THREE.Matrix4();
+  const shL = new THREE.Matrix4();
+  const shT = new THREE.Matrix4();
+  const shR = new THREE.Matrix4();
+  const shS = new THREE.Matrix4();
+  let lastAnimT = 0;
+  function updateShutters(t) {
+    const dt = Math.min(0.1, Math.max(0, t - lastAnimT));
+    lastAnimT = t;
+    let dirty = false;
+    slots.forEach((s, i) => {
+      if (!s.memorial) {
+        if (s.open !== -1) { shutters.setMatrixAt(i * 2, zero); shutters.setMatrixAt(i * 2 + 1, zero); s.open = -1; dirty = true; }
+        return;
+      }
+      if (s.open < 0) s.open = 0;
+      if (s.openDelay > 0) s.openDelay -= dt;
+      else s.open += (s.openTarget - s.open) * Math.min(1, dt * 2.4);
+      // Se abren con un pequeño rebote, como postigos de verdad.
+      const e = s.open < 0.999 ? s.open + Math.sin(s.open * Math.PI) * 0.08 : 1;
+      const ang = e * 2.45;
+      for (let k = 0; k < 2; k++) {
+        const sd = k === 0 ? -1 : 1;
+        shT.makeTranslation(sd * WIN_W / 2, 0, 0.15);
+        shR.makeRotationY(-sd * ang);
+        shS.makeScale(-sd, 1, 1);
+        shL.multiplyMatrices(shT, shR).multiply(shS);
+        shM.multiplyMatrices(s.group.matrixWorld, shL);
+        shutters.setMatrixAt(i * 2 + k, shM);
+      }
+      dirty = true;
+    });
+    if (dirty) shutters.instanceMatrix.needsUpdate = true;
   }
 
   // ---------- pérgola y guirnaldas ----------
@@ -329,6 +448,28 @@ export function buildHall(scene, colliders, tier) {
     }
   }
   for (const pt of posts) strand(new THREE.Vector3(pt.x, POST_H + 0.1, pt.z), top, tier.bulbsPerStrand, 0.9);
+  // Farolitos de papel colgando de las guías de luces de la pérgola (uno cada dos postes, a dos alturas).
+  {
+    const TINTS = [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [0.8, 1.8, 1.6], [2.2, 1.7, 0.6], [1.3, 0.9, 2.0]];
+    posts.forEach((pt, i) => {
+      if (i % 2) return;
+      const a = new THREE.Vector3(pt.x, POST_H + 0.1, pt.z);
+      for (const [j, t] of [0.32, 0.62].entries()) {
+        const p = new THREE.Vector3().lerpVectors(a, top, t);
+        p.y -= Math.sin(Math.PI * t) * 0.9;
+        const hang = new THREE.Group();
+        hang.position.copy(p);
+        const string = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 4), new THREE.MeshBasicMaterial({ color: '#2a1d16' }));
+        string.position.y = -0.25;
+        const l = paperLantern({ scale: 1.9, tint: TINTS[(i + j) % TINTS.length], glow: 1.4 });
+        l.position.y = -0.85;
+        hang.add(string, l);
+        scene.add(hang);
+        const ph = i * 1.3 + j;
+        animators.push((tt) => { hang.rotation.z = Math.sin(tt * 0.9 + ph) * 0.06; hang.rotation.x = Math.sin(tt * 0.7 + ph) * 0.04; flickerLantern(l, tt); });
+      }
+    });
+  }
   // Papel picado entre los postes y cruzando hacia el poste central.
   for (let i = 0; i < posts.length - 1; i++) {
     const b = picadoBanner(new THREE.Vector3(posts[i].x, POST_H - 0.12, posts[i].z), new THREE.Vector3(posts[i + 1].x, POST_H - 0.12, posts[i + 1].z), { sag: 0.35, flags: 9, size: 0.36, seed: i });
@@ -576,6 +717,7 @@ export function buildHall(scene, colliders, tier) {
   let hovered = null;
 
   function clearSlot(s) {
+    s.openTarget = 0;
     s.textures.forEach((t) => t.dispose());
     s.textures = [];
     s.memorial = null;
@@ -591,8 +733,11 @@ export function buildHall(scene, colliders, tier) {
 
   function fillSlot(s, m) {
     const prev = s.memorial;
+    if (!prev || prev.id !== m.id) { s.open = 0; s.openDelay = Math.random() * 0.7; }
+    s.openTarget = 1;
     if (!(prev && prev.id === m.id && prev.photo === m.photo)) {
       clearSlot(s);
+      s.openTarget = 1;
       const tex = m.photo ? photoTexture(m.photo) : portraitTexture(m);
       s.textures.push(tex);
       s.photo.material.map = tex;
@@ -669,11 +814,17 @@ export function buildHall(scene, colliders, tier) {
       else if (Math.floor(m.slot / SLOTS_PER_FLOOR) === floor) here.set(m.slot % SLOTS_PER_FLOOR, m);
     }
     slots.forEach((s, i) => (here.has(i) ? fillSlot(s, here.get(i)) : clearSlot(s)));
-    if (labelFloor === floor) return;
+    // Cada pasillo con su nombre y cuántas huellitas tiene en este piso.
+    const per = new Array(PANELS).fill(0);
+    for (const i of here.keys()) per[Math.floor(i / PER_PANEL)]++;
     labelFloor = floor;
     panelLabels.forEach((lbl, p) => {
+      const n = per[p];
+      const text = n ? `${CORRIDOR_NAMES[p]} · ${n} ${n === 1 ? 'huellita' : 'huellitas'}` : CORRIDOR_NAMES[p];
+      if (lbl.userData.text === text) return;
+      lbl.userData.text = text;
       lbl.material.map?.dispose();
-      lbl.material.map = labelTexture(`Piso ${floor + 1} · Pared ${p + 1}`, { w: 512, h: 96 });
+      lbl.material.map = labelTexture(text, { w: 1100, h: 172, font: '400 70px "Young Serif", Georgia, serif', bg: 'rgba(58,36,24,0.95)', fg: '#f6e3c4' });
       lbl.material.needsUpdate = true;
     });
   }
@@ -778,6 +929,7 @@ export function buildHall(scene, colliders, tier) {
       h.visible = !on && !!h.userData.ch;
     },
     animate(t) {
+      updateShutters(t);
       for (const f of flames) {
         if (f.spin) { f.spin.rotation.y = t * 0.6; continue; }
         if (!f.group.visible) continue;
