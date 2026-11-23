@@ -59,10 +59,14 @@ function spiritMaterial(rim) {
       '#include <emissivemap_fragment>',
       `#include <emissivemap_fragment>
        float fres = pow(1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0), 2.8);
-       totalEmissiveRadiance += diffuseColor.rgb * (uInner + vGlow) + uRim * fres * (0.95 + uPulse);`,
+       totalEmissiveRadiance += diffuseColor.rgb * (uInner + vGlow) + uRim * fres * (0.95 + uPulse);
+       // Brillo de pelaje: luz suave de arriba y un leve ruido como pelitos.
+       float sheen = pow(max(0.0, normal.y), 3.0) * 0.18;
+       float fuzz = fract(sin(dot(floor(vViewPosition.xy * 220.0), vec2(12.9898, 78.233))) * 43758.5453);
+       totalEmissiveRadiance += diffuseColor.rgb * (sheen + (fuzz - 0.5) * 0.06);`,
     );
   };
-  mat.customProgramCacheKey = () => 'spirit-pet';
+  mat.customProgramCacheKey = () => 'spirit-pet-2';
   return mat;
 }
 
@@ -149,8 +153,9 @@ export function createPet(look) {
     g.setAttribute('aGlow', new THREE.BufferAttribute(gl, 1));
     parts.push(g);
   };
-  const sphere = (r, sx = 1, sy = 1, sz = 1, seg = 14) => new THREE.SphereGeometry(r * s, seg, Math.max(6, seg - 4)).scale(sx, sy, sz);
-  const capsule = (r, len, seg = 10) => new THREE.CapsuleGeometry(r * s, len * s, 4, seg);
+  // Más segmentos: el espíritu se ve suave de cerca (cuando lo paseás, la cámara está a 3 m).
+  const sphere = (r, sx = 1, sy = 1, sz = 1, seg = 14) => new THREE.SphereGeometry(r * s, Math.round(seg * 1.45), Math.max(8, Math.round((seg - 4) * 1.45))).scale(sx, sy, sz);
+  const capsule = (r, len, seg = 10) => new THREE.CapsuleGeometry(r * s, len * s, 6, Math.round(seg * 1.5));
   const place = (g, v, rx = 0, ry = 0, rz = 0) => { g.rotateX(rx); g.rotateY(ry); g.rotateZ(rz); g.translate(v.x, v.y, v.z); return g; };
   const bellyShade = (x, y, z, nx, ny) => (ny < -0.25 ? belly : F.clone().lerp(belly, clamp01((-ny - 0.05) * 2.5)));
   const chestShade = (x, y, z, nx, ny, nz) => (look.pattern === 'tuxedo' && nz > 0.35 && ny < 0.5 ? white : bellyShade(x, y, z, nx, ny));
@@ -199,7 +204,7 @@ export function createPet(look) {
   add(place(capsule(0.024, 0.04, 8).scale(1, 1, 0.45), at(tongue, 0, -0.03, 0.01), -0.3), tongue, pink, 0.15);
   // Cola.
   tail.forEach((b, i) => {
-    let r = cat ? 0.024 - i * 0.002 : look.tail === 'fluffy' ? 0.055 - i * 0.004 : 0.032 - i * 0.003;
+    let r = cat ? 0.024 - i * 0.002 : look.tail === 'fluffy' ? 0.062 - i * 0.004 : 0.04 - i * 0.004;
     if (bunny) r = i === 0 ? 0.065 : 0.001;
     const g = i === 0 && bunny ? sphere(r) : capsule(Math.max(0.004, r), tailLen * 0.8, 8);
     if (!(i === 0 && bunny)) g.rotateX(Math.PI / 2);
@@ -215,6 +220,18 @@ export function createPet(look) {
     add(place(sphere(0.042 * (cat ? 0.85 : 1), 1, 0.55, 1.35, 10), at(L.paw, 0, 0.012, 0.016)), L.paw, sock ? white : F.clone().lerp(dark, 0.15), 0.12);
   }
 
+  // Collar de cuero con medallita dorada (los perros; para engancharle la correa).
+  if (!bunny) {
+    const nk = at(neck, 0, 0.035, 0.02);
+    const collar = new THREE.TorusGeometry((cat ? 0.066 : 0.084) * s, 0.016 * s, 8, 24);
+    collar.rotateX(Math.PI / 2 - 0.65);
+    collar.translate(nk.x, nk.y, nk.z);
+    add(collar, neck, new THREE.Color(cat ? '#d6246e' : '#b5302a'), 0.05);
+    const tag = new THREE.CylinderGeometry(0.022 * s, 0.022 * s, 0.006 * s, 14);
+    tag.rotateX(Math.PI / 2 - 0.4);
+    tag.translate(nk.x, nk.y - 0.07 * s, nk.z + 0.07 * s);
+    add(tag, neck, new THREE.Color('#f4c55a'), 0.9);
+  }
   const geo = mergeGeometries(parts);
   const mat = spiritMaterial(look.rim);
   const mesh = new THREE.SkinnedMesh(geo, mat);
@@ -240,6 +257,8 @@ export function createPet(look) {
   const pet = {
     look, group, mesh, hit, aura, pool, s, H,
     bones: { root, hips, chest, neck, head, eyes, earL, earR, tongue, tail, legs },
+    // Dónde se engancha la correa (el collar), en coordenadas del mundo.
+    collarWorld(v = new THREE.Vector3()) { return neck.localToWorld(v.set(0, 0.0, 0.09 * s)); },
     anim: null,
     mouthWorld(v = new THREE.Vector3()) { return head.localToWorld(v.set(0, -0.06 * s, (headR + (cat ? 0.05 : 0.1 * look.snout + 0.04)) * s)); },
     headWorld(v = new THREE.Vector3()) { return head.getWorldPosition(v); },
@@ -397,6 +416,13 @@ function createAnimator(pet) {
     P.tailCurl = look.tail === 'curl' ? 0.35 : cat ? -0.12 : -0.1;
     P.tailAmp = cat ? 0.12 + ex * 0.1 : 0.22 + ex * 0.55;
     P.tailFreq = cat ? 2 : 6 + ex * 9 + wg.gallop * 3;
+    if (st.wag && !cat) {
+      // Paseando con su familia: cola arriba y moviéndose de lado a lado.
+      P.tailCarry = Math.max(P.tailCarry, 0.95);
+      P.tailAmp = Math.max(P.tailAmp, 0.85);
+      P.tailFreq = Math.max(P.tailFreq, 10 + amp * 3);
+      P.hipsRoll += Math.sin(t * P.tailFreq) * 0.03; // la cola mueve un poquito la cadera
+    }
     P.earPerk = ex;
     P.tongue = 0;
     // Mirar: a un objetivo, o vistazos sueltos cuando está quieto.

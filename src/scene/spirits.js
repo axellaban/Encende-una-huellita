@@ -308,7 +308,7 @@ export function createSpirits(scene, { blocked, tier }) {
     a.pet.group.rotation.y = a.heading;
     const animSpeed = Math.max(a.speed, Math.min(0.45 * a.s, Math.abs(a.turn) * 0.2 * a.s));
     a.pet.anim.update(dt, {
-      speed: animSpeed, turn: a.turn, look: a.look, excite: a.excite, want: a.want,
+      speed: animSpeed, turn: a.turn, look: a.look, excite: a.excite, want: a.want, wag: a.role === 'companion' ? 1 : 0,
       bank: clamp(-a.turn * a.speed * 0.05, -0.32, 0.32),
     });
     // Chispitas al correr y huellitas al pisar.
@@ -605,16 +605,23 @@ export function createSpirits(scene, { blocked, tier }) {
         const fx2 = Math.sin(o.heading);
         const fz2 = Math.cos(o.heading);
         if (o.moving) {
-          a.look = null;
-          // Al costado y un poquito atrás; si se queda lejos, galopa para alcanzarte.
-          const tx = o.pos.x - fx2 * 0.9 + fz2 * 0.75 * a.d.side;
-          const tz = o.pos.z - fz2 * 0.9 - fx2 * 0.75 * a.d.side;
+          // Como en un paseo de verdad: adelante tuyo, un poco al costado, con la correa floja.
+          // De vez en cuando se desvía a olfatear algo (hasta donde da la correa).
+          a.d.sniffT = (a.d.sniffT ?? (6 + R() * 6)) - dt;
+          let lead = 1.55 * a.s + 0.35;
+          let lat = 0.38 * a.d.side;
+          if (a.d.sniffT < 0) {
+            lat = 1.1 * a.d.side;
+            lead = 1.0;
+            a.want = { sniff: true };
+            if (a.d.sniffT < -1.4) { a.d.sniffT = 6 + R() * 8; a.d.side = R() < 0.5 ? 1 : -1; }
+          } else a.want = {};
+          const tx = o.pos.x + fx2 * lead + fz2 * lat;
+          const tz = o.pos.z + fz2 * lead - fx2 * lat;
           const dt2 = Math.hypot(tx - a.pos.x, tz - a.pos.z);
-          a.goal = { x: tx, z: tz, speed: clamp(dt2 * 2.2 + o.vel.length() * 0.9, 0.6, 5) * a.s, stop: 0.12 };
-          a.want = {};
-          a.excite = 0.75;
-          a.d.explore -= dt;
-          if (a.d.explore < 0 && a.role === 'companion') { go(a, 'explore'); return null; }
+          a.goal = { x: tx, z: tz, speed: clamp(dt2 * 2.6 + o.vel.length(), 0.6, 5.5) * a.s, stop: 0.08 };
+          a.look = a.want.sniff ? null : tmp.set(a.pos.x + fx2 * 3, 0.4, a.pos.z + fz2 * 3);
+          a.excite = 0.95;
         } else {
           const still = o.still;
           if (d > 1.6 || still < 0.6) a.goal = { x: o.pos.x + (a.pos.x - o.pos.x) / Math.max(d, 0.01) * 1.1, z: o.pos.z + (a.pos.z - o.pos.z) / Math.max(d, 0.01) * 1.1, speed: 2.2 * a.s, stop: 0.15, face: o.pos };
@@ -846,7 +853,8 @@ export function createSpirits(scene, { blocked, tier }) {
     a.fade = 0;
     // Aparece como una lucecita que viaja desde su marco hasta vos.
     const start = from ? from.clone() : player.pos.clone().setY(1.5);
-    const end = new THREE.Vector3(player.pos.x - Math.sin(player.heading) * 1.2, 0, player.pos.z - Math.cos(player.heading) * 1.2);
+    // Aparece adelante tuyo (en el paseo va adelante, con la correa).
+    const end = new THREE.Vector3(player.pos.x + Math.sin(player.heading) * 1.6, 0, player.pos.z + Math.cos(player.heading) * 1.6);
     if (blocked(end.x, end.z, 0.25)) end.copy(player.pos);
     a.pos.copy(end);
     a.heading = player.heading;
@@ -894,6 +902,55 @@ export function createSpirits(scene, { blocked, tier }) {
 
   const allAgents = () => [...pack, ...(companion ? [companion] : []), ...remotes.values()];
 
+  // ---------- la correa ----------
+  // Una soga roja que va de tu mano al collar: floja cuando camina cerca, tirante si se adelanta.
+  // Se suelta sola cuando sale a buscar la pelota o se va a jugar.
+  const LEASH_PTS = 22;
+  const leashPos = new Float32Array((LEASH_PTS + 1) * 3);
+  const leashGeo = new THREE.BufferGeometry();
+  leashGeo.setAttribute('position', new THREE.BufferAttribute(leashPos, 3));
+  const leashMat = new THREE.LineBasicMaterial({ color: new THREE.Color(1.6, 0.35, 0.3), transparent: true, opacity: 0.95 });
+  const leash = new THREE.Line(leashGeo, leashMat);
+  leash.frustumCulled = false;
+  leash.visible = false;
+  // Una versión con grosor (la línea de WebGL mide 1 píxel): tubito que se rehace cada cuadro.
+  let leashTube = null;
+  const tubeMat = new THREE.MeshLambertMaterial({ color: '#c0392b', emissive: '#5a1010', emissiveIntensity: 0.6 });
+  scene.add(leash);
+  const leashA = new THREE.Vector3();
+  const leashB = new THREE.Vector3();
+  let handFn = null;
+  const ON_LEASH = new Set(['follow', 'called', 'present', 'poked', 'idle', 'watch']);
+  function updateLeash() {
+    const a = companion;
+    const show = !!(a && handFn && a.fade > 0.9 && !a.d.orb && ON_LEASH.has(a.state) && a.role === 'companion');
+    if (!show) {
+      leash.visible = false;
+      if (leashTube) leashTube.visible = false;
+      return;
+    }
+    handFn(leashA);
+    a.pet.collarWorld(leashB);
+    const d = leashA.distanceTo(leashB);
+    if (d > 4.2) { leash.visible = false; if (leashTube) leashTube.visible = false; return; }
+    // Comba de una cuerda de ~2,4 m: cuanto más cerca, más cuelga.
+    const slack = Math.max(0.03, (2.4 - d) * 0.45);
+    const pts = [];
+    for (let i = 0; i <= LEASH_PTS; i++) {
+      const k = i / LEASH_PTS;
+      const p = new THREE.Vector3().lerpVectors(leashA, leashB, k);
+      p.y -= Math.sin(Math.PI * k) * slack;
+      p.y = Math.max(0.04, p.y);
+      pts.push(p);
+      p.toArray(leashPos, i * 3);
+    }
+    leashGeo.attributes.position.needsUpdate = true;
+    leash.visible = true;
+    const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), LEASH_PTS, 0.012, 5, false);
+    if (!leashTube) { leashTube = new THREE.Mesh(tube, tubeMat); leashTube.frustumCulled = false; scene.add(leashTube); } else { leashTube.geometry.dispose(); leashTube.geometry = tube; }
+    leashTube.visible = true;
+  }
+
   return {
     pickables,
     ball,
@@ -926,6 +983,8 @@ export function createSpirits(scene, { blocked, tier }) {
       go(companion, 'called');
     },
     // El personaje: posición, rumbo y si se está moviendo (para que el acompañante lo siga).
+    // De dónde sale la correa (la mano de tu personaje).
+    setHand(fn) { handFn = fn; },
     setPlayer(pos, heading, moving, dt) {
       player.vel.subVectors(pos, player.pos).divideScalar(Math.max(dt, 1e-3));
       player.pos.copy(pos);
@@ -967,6 +1026,7 @@ export function createSpirits(scene, { blocked, tier }) {
         animate(a, dt);
       }
       updateBall(dt);
+      updateLeash();
       fx.update(dt);
     },
   };

@@ -67,8 +67,15 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
 - Pueblito de colores con las ventanas encendidas en las colinas, cielo violeta con aurora de fiesta,
   pétalos que flotan, alebrijes de colores neón y visitantes con cara de calaverita, corona de flores o sombrero.
 - Música: guitarra de cuerdas punteadas en vals (composición propia generada en el navegador).
-- **Ascensor** junto a la entrada del salón: indicador de piso con aguja, puertas de bronce y transición
-  de puertas con "ding" al cambiar de piso. Cada piso nuevo se abre cuando se llena el de abajo.
+- **Ascensor al cielo** junto al camino: una torre de vidrio y bronce con cúpula de talavera y una cabina
+  dorada que se ve subir; botonera con los **99 pisos**, todos abiertos. Cuanto más alto, más luz: el
+  jardín desaparece, el salón flota sobre un mar de nubes, el cielo pasa del atardecer violeta al
+  amanecer rosado y, arriba de todo, al celeste con sol, nubes de algodón y rayos de luz. En los pisos de
+  arriba se camina sobre las nubes y sólo se ve a quienes están en tu mismo piso.
+- **Paseo con correa**: el espíritu va adelante tuyo con collar de cuero y medallita, la correa va de tu
+  mano al collar (floja o tirante según la distancia), mueve la cola y se desvía a olfatear.
+- **El río**: agua que corre con reflejos de luna y del atardecer, espuma en las orillas, juncos, bruma,
+  pétalos de cempasúchil y velitas que flotan río abajo, y el Puente del Arcoíris que lo cruza.
 - La huellita destacada puede tener una **estampita** (`card` en `server/seed.js`) apoyada en la
   ofrenda y pegada con cintitas en su ficha.
 - Tipografías: Cormorant Garamond y Young Serif (títulos), Caveat (escrito a mano), DM Sans y Nunito.

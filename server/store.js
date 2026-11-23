@@ -453,6 +453,7 @@ export function createStore(kv) {
           gestureAt: say || emote ? now : 0,
           country: info.country || null,
           pet: info.pet || null,
+          fl: Number.isInteger(info.fl) && info.fl >= 0 && info.fl < 99 ? info.fl : 0,
           at: now,
         };
         cmds.push(['HSET', `${P}pres`, sid, JSON.stringify(pos)]);
