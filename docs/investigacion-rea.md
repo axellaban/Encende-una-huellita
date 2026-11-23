@@ -66,7 +66,7 @@ impresos, caballete pago, donaciones.
 | Racha | "🌙 N noches seguidas" en el panel Hoy |
 | Mientras no estabas | Al volver, aviso con lo que recibieron tus mascotas |
 | Necesitan una luz | Carrusel de huellitas sin tu vela de hoy, ordenadas por menos velas |
-| Regalitos | 24 regalitos gratis en 3 categorías; los últimos se ven en la repisa del marco |
+| Regalitos | 36 regalitos gratis en 3 categorías (12 por categoría); los últimos se ven en la repisa del marco |
 | Abrazo en silencio | Botón 🫂 en la ficha, aparece en la actividad en vivo |
 | Visitantes | Personajitos con nombre, frases amables de un catálogo (sin texto libre) y gestos que flotan; modo tranquilo |
 | Palanca | Joystick en el celular (además de tocar el piso) |

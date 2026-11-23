@@ -1,4 +1,4 @@
-// Muestra los 24 regalitos en 3D en una grilla, con la misma luz de noche del jardín.
+// Muestra los 36 regalitos en 3D en una grilla, con la misma luz de noche del jardín.
 import * as THREE from 'three';
 import { giftMesh, idleGift, GIFT_EMOJIS } from '../src/scene/gifts3d.js';
 

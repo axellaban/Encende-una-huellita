@@ -102,7 +102,7 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
 - **El río**: agua de noche que refleja el cielo, la luna y los faroles del puente, con olitas que
   corren; orillas de barro húmedo, piedras con musgo, juncos, nenúfares con flor, bruma, pétalos de
   cempasúchil y velitas que flotan río abajo. Su murmullo (y algún burbujeo) sube cuando te acercás.
-- **La ofrenda en 3D**: los 24 regalitos son objetos de verdad (huesito, quesito, osito, globo,
+- **La ofrenda en 3D**: los 36 regalitos son objetos de verdad (huesito, quesito, osito, globo,
   mariposa que aletea, lunita que brilla…) y se apoyan en la repisa de cada marco o en el escalón de la
   ofrenda. Al dejar algo, tu personaje lo ofrece con los brazos: la llamita viaja hasta la veladora de
   vidrio de color, la flor estalla en pétalos sobre un jarrito de barro, el regalito vuela desde tu mano
@@ -233,7 +233,7 @@ server/index.js         Servidor local
 api/handler.js          Función de Vercel
 scripts/dev.mjs         Levanta Vite y la API juntos (npm run dev)
 lab/pets.html           Laboratorio de poses y simulación del Prado (sólo en desarrollo)
-lab/gifts.html          Los 24 regalitos en 3D juntos (sólo en desarrollo)
+lab/gifts.html          Los 36 regalitos en 3D juntos (sólo en desarrollo)
 ```
 
 ### API

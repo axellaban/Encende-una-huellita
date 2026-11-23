@@ -56,7 +56,7 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
   Si se agranda algo, revisar que no quede encimado (camino, faroles, bancos, frasco, carteles en
   `cozy.js`, árboles) y sacar una captura desde arriba (`H.controls.teleportCamera(...)`).
 - **Frontend** (Vite + Three.js, sin framework): `index.html` + `src/`.
-  - `src/main.js` (≈2.870 líneas, el más grande): arranque, UI, ficha, modales, gamificación, guía,
+  - `src/main.js` (≈2.980 líneas, el más grande): arranque, UI, ficha, modales, gamificación, guía,
     ascensor, presencia, paseo. **Candidato a dividir** (ver PENDIENTES).
   - `src/scene/`: `world.js` (cielo, pasto, árboles, faroles, luciérnagas), `hall.js` (muro de
     marcos, pérgola, ofrenda central de Luca, estampita), `muertos.js` (papel picado, cempasúchil,
@@ -64,7 +64,7 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     Prado de los espíritus), `river.js` (el río, el Puente del Arcoíris y el arco de entrada),
     `elevator.js`, `avatars.js` (otros visitantes), `lanterns.js` (farolitos), `sparkles.js`
     (brillitos que caen alrededor de la cámara, todo en el shader), `textures.js`.
-  - **Regalitos y gestos en 3D** (`gifts3d.js`): `giftMesh(emoji)` arma cada uno de los 24 regalitos
+  - **Regalitos y gestos en 3D** (`gifts3d.js`): `giftMesh(emoji)` arma cada uno de los 36 regalitos
     de `server/glow.js` con geometría (caché por emoji, tamaño 1, apoyado en y=0); si se suma uno al
     catálogo, hay que sumarle su modelo en `SPECS` (si no, sale el emoji como cartelito).
     `createOfferFx` hace los gestos: la llamita que vuela a la veladora, la flor que estalla en pétalos,
@@ -162,7 +162,7 @@ const ctx = await b.newContext({ ...devices['iPhone 13'] }); // celular
 //   H.startWalk('luca')   // sacar a pasear a Luca
 ```
 
-Los 24 regalitos juntos: `npm run dev` y `/lab/gifts.html?t=1.3`.
+Los 36 regalitos juntos: `npm run dev` y `/lab/gifts.html?t=1.3`.
 Para los espíritus sin entrar al jardín: `npm run dev` y `/lab/pets.html?t=1.5&pose=sit&side&d=0.55`
 (congela en t segundos) o `/lab/pets.html?mode=pack` con `window.__lab.advance(20)` (simula 20 s del
 Prado y deja en `__lab.log` qué hacía cada espíritu).

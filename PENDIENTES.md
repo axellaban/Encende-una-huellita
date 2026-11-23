@@ -83,7 +83,7 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 "no hagas berretadas" — cada cosa, con capturas en celular antes de mergear.
 
 - [x] **Estilo acuarela** (`src/scene/watercolor.js`, último pase del composer): papel con fibras,
-      pigmento en los bordes (Sobel), lavados, color que sangra, viñeta. Se apaga en Opciones. Falta:
+      pigmento en los bordes (Sobel), lavados, color que sangra, viñeta. Desde el 23/11 viene apagada (se prende en Opciones). Falta:
       verlo en un teléfono real y ajustar `uAmt`; littleprince.dev pide WebGPU y con swiftshader no
       termina de cargar (`--enable-unsafe-webgpu --enable-features=Vulkan,WebGPU
       --use-webgpu-adapter=swiftshader --use-vulkan=swiftshader` abre la portada nada más).
@@ -200,7 +200,7 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 
 ## P3 · Deuda técnica
 
-- [ ] **Dividir `src/main.js`** (≈2.870 líneas y creciendo) en módulos: ficha, formularios, familia,
+- [ ] **Dividir `src/main.js`** (≈2.980 líneas y creciendo) en módulos: ficha, formularios, familia,
       juego, guía, ascensor, presencia.
 - [ ] **Archivos fuera de Redis**: fotos (≈100–150 KB) y voces (hasta 600 KB) se guardan en base64 en
       Upstash; pasar a Vercel Blob/S3 y dejar sólo la URL.
@@ -209,7 +209,7 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       comandos (el plan gratis de Upstash da 500.000/mes). Con mucho más tráfico: WebSockets/SSE
       (Ably, Pusher, PartyKit) para que los demás se muevan en tiempo real y gastar todavía menos.
 - [ ] **Paquete JS**: three.js ya va en su propio archivo (≈193 KB comprimido, queda en caché entre
-      versiones) y la app en otro, que creció a ≈111 KB comprimido (305 KB sin comprimir, 23/11/2026;
+      versiones) y la app en otro, que creció a ≈118 KB comprimido (326 KB sin comprimir, 23/11/2026 a la noche;
       antes ≈76 KB). Falta cargar diferido lo que no hace falta al entrar: guía, compartir, voz, y del 3D
       lo que está lejos de la entrada (pisos del cielo, `skymagic.js`, ascensor, regalitos).
 - [ ] `GET /api/activity/:since` ya no lo usa la app (todo va por `POST /api/now` con `since`); queda por
