@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { createWatercolorPass } from './scene/watercolor.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
 import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF } from './scene/world.js';
@@ -169,12 +170,14 @@ let heaven = null; // el cielo que cambia con el piso
 let bloomPass = null;
 let composer = null;
 let adaptive = null;
+let watercolor = null; // estilo acuarela (pase final)
+const watercolorOn = () => store.get('huellita.watercolor') !== '0';
 
 function setupRenderer() {
   renderer.setSize(innerWidth, innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.12;
-  adaptive = createAdaptiveResolution(renderer, (r) => composer?.setPixelRatio(r), { max: tier.maxPixelRatio, min: tierName === 'low' ? 0.7 : 0.85 });
+  adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: tier.maxPixelRatio, min: tierName === 'low' ? 0.7 : 0.85 });
   if (tier.bloom) {
     const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: tierName === 'high' ? 4 : 2 });
     composer = new EffectComposer(renderer, rt);
@@ -184,7 +187,16 @@ function setupRenderer() {
     bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.45, 0.9);
     composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
+    // Acuarela: el último pase, en el color final de la pantalla.
+    watercolor = createWatercolorPass(watercolorOn() ? 1 : 0);
+    composer.addPass(watercolor.pass);
+    sizeWatercolor();
   }
+}
+function sizeWatercolor() {
+  if (!watercolor) return;
+  const pr = adaptive?.ratio || renderer.getPixelRatio();
+  watercolor.setSize(innerWidth * pr, innerHeight * pr, pr);
 }
 
 function resize() {
@@ -192,6 +204,7 @@ function resize() {
   camera.updateProjectionMatrix();
   renderer?.setSize(innerWidth, innerHeight);
   composer?.setSize(innerWidth, innerHeight);
+  sizeWatercolor();
 }
 addEventListener('resize', resize);
 
@@ -1067,11 +1080,17 @@ function openMenu() {
   closeModals();
   $('#opt-music').checked = isMusicOn();
   $('#opt-sounds').checked = isSoundsOn();
+  $('#opt-watercolor').checked = watercolorOn();
+  $('#opt-watercolor').disabled = !watercolor;
   const q = savedQuality();
   $$('#opt-quality button').forEach((b) => b.classList.toggle('on', b.dataset.q === q));
   $('#menu').showModal();
 }
 $('#opt-music').onchange = (e) => { setMusic(e.target.checked); syncMusicBtn(); store.set('huellita.music', e.target.checked ? '1' : '0'); };
+$('#opt-watercolor').onchange = (e) => {
+  store.set('huellita.watercolor', e.target.checked ? '1' : '0');
+  if (watercolor) watercolor.amount = e.target.checked ? 1 : 0;
+};
 $('#opt-sounds').onchange = (e) => { setSounds(e.target.checked); store.set('huellita.sounds', e.target.checked ? '1' : '0'); };
 $$('#opt-quality button').forEach((b) => {
   b.onclick = () => {

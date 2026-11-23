@@ -467,7 +467,7 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
     group.add(arc(5.6, 7.9, false, 0.22, true), arc(9.0, 10.4, true, 0.09, false));
     // Polvo de luz de colores que cae de los arcos (todo en el shader).
     {
-      const N = Math.round(220 * density);
+      const N = Math.round(110 * density);
       const t = new Float32Array(N);
       const sd = new Float32Array(N);
       for (let i = 0; i < N; i++) { t[i] = r(); sd[i] = r(); }
@@ -496,7 +496,7 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
             float face = smoothstep(0.25, 0.7, abs(dot(V, normalize(mat3(modelMatrix) * vec3(0.0, 0.0, 1.0)))));
             vC = band(outer > 0.5 ? 1.0 - k : k) * 1.4;
             vA = (1.0 - f) * smoothstep(0.0, 0.15, f) * face * smoothstep(-0.3, 1.5, w.y) * (outer > 0.5 ? 0.5 : 1.0);
-            gl_PointSize = clamp(60.0 / -mv.z, 1.5, 6.0);
+            gl_PointSize = clamp(40.0 / -mv.z, 1.2, 4.0);
           }`,
         fragmentShader: `varying vec3 vC; varying float vA;
           void main(){ float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vC, smoothstep(0.5, 0.0, d) * vA); }`,
