@@ -56,11 +56,13 @@ const FRAME_W = 0.8;
 const FRAME_H = 1.0;
 const COL_X = [-1.45, 0, 1.45];
 const ROW_Y = [3.05, 1.95, 0.85];
-const POST_H = 5.0;
-const POLE_H = 6.9;
+// Paredes del muro más grandes (marcos, repisas y techitos crecen juntos) para el salón amplio.
+export const WALL_SCALE = 1.25;
+export const POST_H = 6.3;
+const POLE_H = 8.9;
 // La ofrenda central es grande (se ve desde la entrada y domina el salón en tercera persona).
 export const ALTAR_SCALE = 1.75;
-export const EASEL_POS = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 4.25);
+export const EASEL_POS = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 5.2);
 
 export function candleLevel(n) {
   return n >= 12 ? 3 : n >= 5 ? 2 : n >= 1 ? 1 : 0;
@@ -108,6 +110,7 @@ export function buildHall(scene, colliders, tier) {
     const a = panelAngle(p);
     const panel = new THREE.Group();
     panel.position.set(HALL_CENTER.x + Math.sin(a) * HALL_RADIUS, 0, HALL_CENTER.z + Math.cos(a) * HALL_RADIUS);
+    panel.scale.setScalar(WALL_SCALE);
     panel.lookAt(HALL_CENTER.x, 0, HALL_CENTER.z);
     scene.add(panel);
 
@@ -230,7 +233,7 @@ export function buildHall(scene, colliders, tier) {
     // Cartel de bienvenida colgado en la entrada.
     const a = posts[0];
     const b = posts[posts.length - 1];
-    const sign = twoSided(new THREE.PlaneGeometry(3.4, 0.55), new THREE.MeshBasicMaterial({
+    const sign = twoSided(new THREE.PlaneGeometry(4.6, 0.75), new THREE.MeshBasicMaterial({
       map: labelTexture('Jardín de las huellitas', { w: 1024, h: 166, font: '400 70px "Young Serif", Georgia, serif', bg: 'rgba(74,48,34,0.96)', fg: '#f6e3c4' }),
     }));
     sign.position.set((a.x + b.x) / 2, POST_H - 0.55, (a.z + b.z) / 2);
@@ -312,7 +315,7 @@ export function buildHall(scene, colliders, tier) {
   const bulbColor = new THREE.Color();
 
   // Luz cálida general del salón (las guirnaldas).
-  const hallLight = new THREE.PointLight('#ffbf7a', 9, 20, 1.6);
+  const hallLight = new THREE.PointLight('#ffbf7a', 13, 30, 1.5);
   hallLight.position.set(HALL_CENTER.x, POLE_H - 1.2, HALL_CENTER.z);
   scene.add(hallLight);
 
@@ -633,7 +636,7 @@ export function buildHall(scene, colliders, tier) {
       const normal = new THREE.Vector3(0, 0, 1).transformDirection(s.photo.matrixWorld);
       const right = new THREE.Vector3(1, 0, 0).transformDirection(s.photo.matrixWorld);
       const target = frame.clone().addScaledVector(right, shift);
-      const stand = target.clone().addScaledVector(normal, (3.1 + Math.max(0, target.y - 1.6) * 0.9) * distMul);
+      const stand = target.clone().addScaledVector(normal, (3.1 * WALL_SCALE + Math.max(0, target.y - 1.6) * 0.9) * distMul);
       stand.y = 1.6;
       target.y = (target.y + 1.6) / 2 + 0.15;
       return { stand, target, frame };
