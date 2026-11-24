@@ -231,7 +231,8 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     let best = d;
     for (const s of colliders.segments) {
       const t = segHit(from.x, from.z, from.x + o.x, from.z + o.z, s);
-      if (t !== null) best = Math.min(best, Math.max(0.9, t * d - 0.35));
+      // Mirando un nicho (foco), el punto mirado está pegado a la pared: esa pared no cuenta.
+      if (t !== null && (circles || t * d > 0.95)) best = Math.min(best, Math.max(0.9, t * d - 0.35));
     }
     // Postes, troncos y faroles: si quedan en la línea de la cámara, se acerca para no taparte.
     const len = Math.hypot(o.x, o.z) || 1;

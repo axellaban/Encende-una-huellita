@@ -36,73 +36,80 @@ function tex(c, repeat) {
 
 // ---------- texturas ----------
 const picadoCache = new Map();
-// Papel picado: banderita de papel con recortes (flores, huellitas, calaveritas y flecos).
+// Papel picado: banderita de papel con UN recorte grande y limpio en el medio (flor, huellita,
+// calaverita o corazón), una fila de agujeritos arriba y flecos abajo. Antes tenía muchos recortes
+// chiquitos que de lejos se mezclaban y no se entendía el dibujo.
 export function papelPicadoTexture(color, variant = 0) {
   const k = `${color}:${variant % 4}`;
   if (picadoCache.has(k)) return picadoCache.get(k);
-  const [c, g] = canvas(256, 300);
+  const [c, g] = canvas(512, 600);
+  g.scale(2, 2); // se dibuja en 256x300 con el doble de resolución (bordes nítidos)
   g.fillStyle = color;
   g.fillRect(0, 0, 256, 300);
   g.globalCompositeOperation = 'destination-out';
   // Flecos de abajo.
-  for (let x = 0; x < 256; x += 16) {
+  for (let x = 0; x < 256; x += 21.33) {
     g.beginPath();
     g.moveTo(x, 300);
-    g.lineTo(x + 8, 268);
-    g.lineTo(x + 16, 300);
+    g.lineTo(x + 10.66, 270);
+    g.lineTo(x + 21.33, 300);
     g.fill();
   }
-  // Borde de agujeritos.
-  for (let x = 14; x < 256; x += 22) {
-    g.beginPath(); g.arc(x, 22, 5, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.arc(x, 250, 4, 0, Math.PI * 2); g.fill();
-  }
-  for (let y = 44; y < 240; y += 24) {
-    g.beginPath(); g.arc(14, y, 4, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.arc(242, y, 4, 0, Math.PI * 2); g.fill();
-  }
-  const cx = 128;
-  const cy = 140;
+  // Fila de agujeritos arriba (donde se dobla sobre el hilo) y una guarda de rombitos abajo.
+  for (let x = 20; x < 250; x += 27) { g.beginPath(); g.arc(x, 20, 5, 0, Math.PI * 2); g.fill(); }
+  for (let x = 24; x < 240; x += 26) { g.beginPath(); g.moveTo(x, 246); g.lineTo(x + 7, 254); g.lineTo(x, 262); g.lineTo(x - 7, 254); g.fill(); }
   const v = variant % 4;
+  g.save();
+  g.translate(128, 140);
   if (v === 0) {
-    // Flor grande.
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
+    // Flor: 6 pétalos separados por puentes de papel y el centro de papel con un agujero.
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
       g.beginPath();
-      g.ellipse(cx + Math.cos(a) * 44, cy + Math.sin(a) * 44, 22, 12, a, 0, Math.PI * 2);
+      g.ellipse(Math.cos(a) * 52, Math.sin(a) * 52, 30, 17, a, 0, Math.PI * 2);
       g.fill();
     }
-    g.beginPath(); g.arc(cx, cy, 18, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(0, 0, 11, 0, Math.PI * 2); g.fill();
   } else if (v === 1) {
-    // Huellita (nuestro sello).
-    g.beginPath(); g.ellipse(cx, cy + 22, 36, 30, 0, 0, Math.PI * 2); g.fill();
-    for (const [dx, dy] of [[-48, -14], [48, -14], [-20, -46], [20, -46]]) {
-      g.beginPath(); g.ellipse(cx + dx, cy + dy, 14, 19, dx * 0.006, 0, Math.PI * 2); g.fill();
+    // Huellita: almohadilla grande y cuatro deditos, con papel entre medio.
+    g.beginPath();
+    g.moveTo(0, -4);
+    g.bezierCurveTo(34, -8, 56, 30, 40, 52);
+    g.bezierCurveTo(26, 70, -26, 70, -40, 52);
+    g.bezierCurveTo(-56, 30, -34, -8, 0, -4);
+    g.fill();
+    for (const [dx, dy, rot] of [[-62, -24, -0.45], [-24, -64, -0.15], [24, -64, 0.15], [62, -24, 0.45]]) {
+      g.beginPath(); g.ellipse(dx, dy, 17, 23, rot, 0, Math.PI * 2); g.fill();
     }
   } else if (v === 2) {
-    // Calaverita.
-    g.beginPath(); g.arc(cx, cy - 8, 52, 0, Math.PI * 2); g.fill();
+    // Calaverita: la cabeza recortada y los ojos, la nariz y los dientes de papel.
+    g.beginPath(); g.arc(0, -10, 66, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.roundRect?.(-34, 40, 68, 34, 10); g.fill();
     g.globalCompositeOperation = 'source-over';
     g.fillStyle = color;
-    g.beginPath(); g.arc(cx - 20, cy - 10, 14, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.arc(cx + 20, cy - 10, 14, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.moveTo(cx, cy + 4); g.lineTo(cx - 7, cy + 18); g.lineTo(cx + 7, cy + 18); g.fill();
-    for (let i = -2; i <= 2; i++) g.fillRect(cx + i * 10 - 3, cy + 26, 6, 14);
+    g.beginPath(); g.arc(-25, -14, 19, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(25, -14, 19, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.moveTo(0, 6); g.lineTo(-10, 26); g.lineTo(10, 26); g.closePath(); g.fill();
+    for (let i = -2; i <= 2; i++) g.fillRect(i * 13 - 2.5, 40, 5, 34);
+    g.fillRect(-36, 54, 72, 5);
     g.globalCompositeOperation = 'destination-out';
-    g.beginPath(); g.arc(cx - 20, cy - 10, 5, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.arc(cx + 20, cy - 10, 5, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(-25, -14, 7, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(25, -14, 7, 0, Math.PI * 2); g.fill();
   } else {
-    // Corazón con rombos.
-    g.beginPath();
-    g.moveTo(cx, cy + 50);
-    g.bezierCurveTo(cx - 80, cy - 10, cx - 30, cy - 70, cx, cy - 26);
-    g.bezierCurveTo(cx + 30, cy - 70, cx + 80, cy - 10, cx, cy + 50);
-    g.fill();
+    // Corazón grande con un corazoncito de papel adentro.
+    const heart = (s) => {
+      g.beginPath();
+      g.moveTo(0, 70 * s);
+      g.bezierCurveTo(-100 * s, 0, -46 * s, -86 * s, 0, -34 * s);
+      g.bezierCurveTo(46 * s, -86 * s, 100 * s, 0, 0, 70 * s);
+      g.fill();
+    };
+    heart(1);
+    g.globalCompositeOperation = 'source-over';
+    g.fillStyle = color;
+    heart(0.42);
   }
-  // Rombos y gotitas alrededor.
-  for (const [x, y] of [[50, 70], [206, 70], [50, 210], [206, 210]]) {
-    g.beginPath(); g.moveTo(x, y - 12); g.lineTo(x + 9, y); g.lineTo(x, y + 12); g.lineTo(x - 9, y); g.fill();
-  }
+  g.restore();
   g.globalCompositeOperation = 'source-over';
   const t = tex(c);
   picadoCache.set(k, t);
@@ -305,16 +312,21 @@ export function picadoBanner(a, b, { sag = 0.4, flags = 10, size = 0.42, seed = 
     p.y -= Math.sin(Math.PI * t) * sag;
     const color = PICADO_COLORS[(i + seed) % PICADO_COLORS.length];
     const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
-      map: papelPicadoTexture(color, i + seed), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide,
-      emissive: color, emissiveIntensity: 0.28,
+      map: papelPicadoTexture(color, i + seed), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide,
+      emissive: color, emissiveIntensity: 0.4,
     }));
     m.position.copy(p);
     m.rotation.y = yaw;
     group.add(m);
     pieces.push({ m, seed: seed * 7 + i });
   }
+  // Una brisa suave: se mecen despacio y en ola a lo largo de la hilera (antes subían y bajaban
+  // rápido y el dibujo no se llegaba a leer).
   group.userData.flutter = (t) => {
-    for (const pc of pieces) pc.m.rotation.x = Math.sin(t * 2.2 + pc.seed) * 0.18 + Math.sin(t * 5.1 + pc.seed * 2) * 0.05;
+    for (const pc of pieces) {
+      pc.m.rotation.x = Math.sin(t * 1.1 + pc.seed * 0.55) * 0.07 + Math.sin(t * 2.3 + pc.seed) * 0.015;
+      pc.m.rotation.z = Math.sin(t * 0.8 + pc.seed * 0.55) * 0.03;
+    }
   };
   return group;
 }

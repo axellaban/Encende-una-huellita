@@ -45,12 +45,12 @@ export function createGame() {
     },
     get streak() { return s.streak; },
 
-    missions({ hasPet, featuredName }) {
+    missions({ hasPet }) {
       const d = today();
       return [
         hasPet
           ? { id: 'own', icon: '🕯️', label: 'Encendé la vela de hoy para tu mascota', done: d.own }
-          : { id: 'own', icon: '🕯️', label: `Encendé una vela para ${featuredName}`, done: d.featured },
+          : { id: 'own', icon: '🕯️', label: 'Encendé tu primera vela de hoy', done: d.featured || d.lit.length >= 1 },
         { id: 'lit', icon: '🌙', label: 'Encendé velas para 3 huellitas', sub: `${Math.min(3, d.lit.length)} de 3`, done: d.lit.length >= 3 },
         { id: 'gift', icon: '🎁', label: 'Dejale un regalito a alguien', done: d.gift },
         { id: 'words', icon: '✍️', label: 'Dejá unas palabras amables', done: d.words },
@@ -58,7 +58,7 @@ export function createGame() {
     },
     allDone(hasPet) {
       const d = today();
-      return [hasPet ? d.own : d.featured, d.lit.length >= 3, d.gift, d.words].every(Boolean);
+      return [hasPet ? d.own : (d.featured || d.lit.length >= 1), d.lit.length >= 3, d.gift, d.words].every(Boolean);
     },
     progress(ctx) {
       const m = this.missions(ctx);

@@ -45,7 +45,6 @@
           </button>
         </div>
         <nav class="chips filters desk" aria-label="Explorar">
-          <button class="chip featured-chip" data-featured>🕯️ Visitar a <span class="featured-name">Luca</span></button>
           <button class="chip today-chip" data-today>✨ Hoy <b class="today-count">0/4</b></button>
           <button class="chip" data-list="all">🐾 Todas las huellitas</button>
           <button class="chip" data-list="waiting">🌙 Esperando una vela</button>
@@ -151,7 +150,7 @@
         <li><span>🖼️</span><div><b>Dale un lugar.</b> Tocá un marco libre para sumar a tu mascota.</div></li>
         <li><span>🐾</span><div><b>Sacalo a pasear.</b> Su espíritu te acompaña y juega en el Prado.</div></li>
       </ul>
-      <button class="btn primary wide" data-close data-then="featured">🕯️ Conocer a <span class="featured-name">Luca</span></button>
+      <button class="btn primary wide" data-close data-then="featured">🕯️ Visitar una huellita</button>
       <button class="btn soft wide" data-close data-then="add">🐾 Darle un lugar a mi mascota</button>
       <button class="btn soft wide" data-close data-then="guide">🕯️ La sexta etapa del duelo</button>
       <button class="btn link wide" data-close>Explorar el jardín</button>
@@ -216,6 +215,7 @@
             <button class="voice-btn" id="s-voice" hidden>🔊 Escuchar su voz</button>
           </div>
         </div>
+        <p class="msg" id="s-msg"></p>
         <div class="counts">
           <span><i>🕯️</i><b id="s-candles">0</b> velas</span>
           <span><i>🌸</i><b id="s-flowers">0</b> flores</span>
@@ -238,7 +238,6 @@
         <div class="glow-card" id="s-glow" hidden></div>
         <div class="shelf-row" id="s-shelf" hidden></div>
         <div class="gifts-row" id="s-gifts" hidden></div>
-        <p class="msg" id="s-msg"></p>
         <figure class="estampita" id="s-card" hidden><img alt="" /></figure>
         <button class="btn pass-btn wide" id="s-pass" hidden><span>✨</span><span id="s-pass-label">Pasá la luz</span></button>
         <button class="btn walk-btn wide" id="s-walk" hidden><span class="paw">🐾</span><span id="s-walk-label">Sacar a pasear</span></button>
@@ -318,7 +317,7 @@
       </div>
       <div class="hub-grid">
         <button data-list="all"><span class="ic">🐾</span><span>Huellitas</span></button>
-        <button data-featured><span class="ic">🕯️</span><span class="featured-name">Luca</span></button>
+        <button data-featured><span class="ic">🕯️</span><span>Visitar</span></button>
         <button data-today><span class="ic">✨<i class="badge today-count">0/4</i></span><span>Hoy</span></button>
         <button class="hub-add" data-then="add"><span class="ic">＋</span><span>Sumar mascota</span></button>
         <button data-then="floors"><span class="ic">🛗</span><span>Piso <b class="floor-num">1</b></span></button>

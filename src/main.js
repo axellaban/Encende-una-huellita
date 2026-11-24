@@ -848,7 +848,7 @@ function visitWelcome() {
     placeNear(stand, frame, 1.6, 5.4);
     controls.flyTo(stand, target, () => hall.pulse('featured'));
   }
-  toast('🌹 “Pero yo le hice mi amigo y ahora es único en el mundo.” · Bienvenidos al jardín 🤍', { label: 'Visitar a Luca', fn: visitFeatured });
+  toast('🌹 “Pero yo le hice mi amigo y ahora es único en el mundo.” · Bienvenidos al jardín 🤍');
 }
 
 function visit(m) {
@@ -1593,7 +1593,7 @@ function renderList() {
   }
   for (const m of list.slice(0, 300)) {
     const b = document.createElement('button');
-    b.className = `card${m.featured ? ' featured-card' : ''}`;
+    b.className = 'card';
     const img = document.createElement('img');
     img.loading = 'lazy';
     img.alt = '';

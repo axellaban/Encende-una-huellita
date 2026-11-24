@@ -1089,7 +1089,7 @@ export function buildHall(scene, colliders, tier) {
     const b = picadoBanner(new THREE.Vector3(-w / 2, h - 0.01, front), new THREE.Vector3(w / 2, h - 0.01, front), { sag: 0.0, flags: Math.round(w / 0.32), size: 0.27, seed: i * 5 });
     b.children.forEach((ch) => { if (ch.isMesh) ch.rotation.y = 0; });
     easel.add(b);
-    animators.push((t) => { if (easel.visible) b.children.forEach((ch, k) => { if (ch.isMesh) ch.rotation.x = Math.sin(t * 1.6 + k + i) * 0.06; }); });
+    animators.push((t) => { if (easel.visible) b.children.forEach((ch, k) => { if (ch.isMesh) ch.rotation.x = Math.sin(t * 1.0 + k * 0.6 + i) * 0.03; }); });
   });
   // Flores en macetas a los costados y en los escalones.
   {
@@ -1414,15 +1414,18 @@ export function buildHall(scene, colliders, tier) {
       }
       const s = slots[key];
       const frame = new THREE.Vector3();
-      s.photo.getWorldPosition(frame);
+      s.group.getWorldPosition(frame);
       const normal = new THREE.Vector3(0, 0, 1).transformDirection(s.group.matrixWorld);
       const right = new THREE.Vector3(1, 0, 0).transformDirection(s.group.matrixWorld);
-      const target = frame.clone().addScaledVector(right, shift * 0.55);
-      // Vista cercana del nicho en 3D con sus repisas, lucecitas y foto detrás del vidrio.
-      const dist = Math.min(2 * HW - 0.5, (1.85 + Math.max(0, frame.y - 1.7) * 0.42) * distMul);
+      frame.addScaledVector(normal, 0.04);
+      const cy = frame.y - 0.02;
+      frame.y = cy;
+      const target = frame.clone().addScaledVector(right, shift * 0.48);
+      target.y = cy;
+      // Vista completa del nicho en 3D con su plaquita, repisa, lucecitas y foto detrás del vidrio.
+      const dist = Math.min(2 * HW - 0.55, 2.15 * distMul);
       const stand = target.clone().addScaledVector(normal, dist);
-      stand.y = 1.6 + Math.max(0, frame.y - 2.4) * 0.35;
-      target.y = (target.y + 1.6) / 2 + 0.2;
+      stand.y = cy + 0.05;
       return { stand, target, frame };
     },
     setAltar(list) {
