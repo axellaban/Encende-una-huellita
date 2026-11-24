@@ -8,6 +8,7 @@ export const FURS = [
   { id: 'blanco', name: 'Blanco', hex: '#f2ede4' },
   { id: 'gris', name: 'Gris', hex: '#8f8c8a' },
   { id: 'rojizo', name: 'Colorado', hex: '#b4552b' },
+  { id: 'caramelo', name: 'Caramelo', hex: '#9e5a2c' },
   { id: 'atigrado', name: 'Atigrado', hex: '#87683f' },
 ];
 export const EARS = [
