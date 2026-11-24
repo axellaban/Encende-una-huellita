@@ -3,7 +3,7 @@
 > **Empezá por acá.** Después leé [`PENDIENTES.md`](PENDIENTES.md) (arriba de todo, "🧭 Plan": qué falta, en orden),
 > [`README.md`](README.md) (qué hace la app), [`MONETIZACION.md`](MONETIZACION.md) (qué será pago)
 > y [`docs/investigacion-rea.md`](docs/investigacion-rea.md) (relevamiento del sitio de referencia).
-> Lo que sólo se puede hacer en los paneles web (Vercel, Upstash) o en teléfonos reales:
+> Configuración de cuentas (paneles web, CLI o conectores) y pruebas en teléfonos reales:
 > [`docs/tareas-con-computadora.md`](docs/tareas-con-computadora.md).
 
 ## Qué es
@@ -18,15 +18,15 @@ textos y arte propios. La huellita destacada del centro es **Luca**, el perro de
 - Habla español rioplatense (vos, tocá, encendé). **Toda la interfaz y los textos van en ese registro.**
 - Quiere ver los avances desplegados: **mergear a `main` cuando algo esté listo y probado**.
   El trabajo se hace en una rama y después se empuja también a `main`.
-- **Ojo: hoy Vercel publica como producción la rama `claude/ecstatic-gates-rt74m2`, no `main`**
-  (verificado el 23/11/2026: `main` se construía pero el sitio seguía en la versión vieja). Después de
-  mergear a `main`, empujá `main` también a esa rama con avance rápido
-  (`git push origin origin/main:refs/heads/claude/ecstatic-gates-rt74m2`) y verificá que
-  `https://encende-una-huellita.vercel.app/` cargue el mismo `assets/index-*.js` que `npm run build`.
-  Se arregla del todo en Vercel → Settings → Environments → Production Branch = `main`.
-- **Ojo también: producción está en modo demo.** `/api/health` responde `ok:false` porque falta conectar
-  Upstash en Vercel (revisado al cierre del 23/11/2026). Lo que se suma en el sitio publicado queda sólo
-  en el navegador de cada visitante; no le prometas al dueño que "ya lo ven todos" hasta conectarlo.
+- **Producción publica `main`** (corregido el 23/11/2026). Ya no hace falta empujar a
+  `claude/ecstatic-gates-rt74m2`. Vercel está configurado con Node 22, igual que `package.json`.
+- **Upstash ya está conectado en producción**: `/api/health` responde `{"ok":true,"storage":"upstash"}`.
+  Base `encende-una-huellita`, región `iad1`, plan Free; eviction y autoUpgrade desactivados para
+  no borrar recuerdos al llenar la base ni cambiar de plan automáticamente. Las variables
+  `KV_REST_API_URL`/`KV_REST_API_TOKEN` están sólo en Production; las previews siguen en modo demo.
+  Fotos, voz, diario, libro, velas, flores, regalitos y presencia ya se verificaron con la base real.
+  **Los datos del modo demo anterior no se importaron**: siguen en los navegadores que los crearon.
+  No borrar ese almacenamiento; el rescate sigue en PENDIENTES. `.env*` y `.vercel` no se suben a Git.
 - Prioridad absoluta: **experiencia en el celular** (mobile-first, que se sienta como un juego amable).
 - Es un proyecto con carga emocional (Luca murió hace poco). Tono cálido, nunca frívolo.
 - Decisiones ya tomadas que **no hay que revertir**:
@@ -43,7 +43,7 @@ textos y arte propios. La huellita destacada del centro es **Luca**, el perro de
 npm install
 npm run build && npm start   # http://localhost:8787 (datos en data/kv.json)
 npm run dev                  # Vite con recarga (5173) + API (8787)
-npm test                     # 23 tests de API: servidor local Y función de Vercel con Upstash simulado
+npm test                     # 24 pruebas: API local/Vercel y conservación de recuerdos al reiniciar
 ```
 
 Node 22. Sin dependencias de servidor (sólo `three` y `vite`).

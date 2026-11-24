@@ -86,8 +86,9 @@ nombres ni imágenes del original: tomar la idea, que es la de un columbario/mem
 **Tareas que requieren usar la computadora** (Vercel, Upstash, teléfonos reales, vistas previas): paso a
 paso en [`docs/tareas-con-computadora.md`](docs/tareas-con-computadora.md).
 
-**Lo que sigue del plan** (abajo, en orden): verificar en teléfonos reales; Upstash y rama de producción
-(sólo el dueño, en Vercel); moderación; el resto de P1/P2/P3.
+**Lo que sigue del plan** (abajo, en orden): verificar en teléfonos reales; rescatar los recuerdos del
+modo demo anterior; vistas previas en las apps; moderación; el resto de P1/P2/P3. Upstash y la rama
+de producción `main` ya están configurados y verificados.
 
 ## 🧭 Plan: lo que falta para mejorarlo todo (en orden)
 
@@ -168,7 +169,7 @@ con capas de profundidad, masas de árboles en flor, y moverse planeando. Etapa 
       original), en lugar de la foto plana de la ficha.
 - [ ] Expresiones del personaje (sonrisa al regalar), más ropa a elegir.
 - [ ] Regalitos con su gracia al llegar (la pelota rebota, el globo tira para arriba).
-- [ ] Todo lo de P0 (Upstash, rama de producción de Vercel, moderación), P1, P2 y P3 de abajo.
+- [ ] Lo que sigue abierto de P0 (migración del modo demo, teléfonos reales, moderación), P1, P2 y P3.
 
 ## ✅ Ya hecho: lo que pidió el dueño (23/11/2026) — hecho y lo que falta
 
@@ -219,32 +220,34 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 - [x] **Del original**: 36 regalitos con modelo 3D y botón **Recuerdo** (estampita 1080x1350 para
       guardar o compartir, `drawKeepsake` en `share.js`).
 
-## P0 · Verificaciones que nunca se hicieron en el mundo real
+## P0 · Producción y verificaciones reales
 
-- [ ] **Rama de producción de Vercel**: hoy es `claude/ecstatic-gates-rt74m2` (ver AGENTS). Cambiarla a
-      `main` en Vercel → Settings → Environments → Production Branch. (Al cierre del 23/11/2026 `main` y
-      esa rama apuntan al mismo commit y el sitio sirve el mismo `index-*.js` que `npm run build`.)
-- [ ] **Conectar Upstash en producción**: `/api/health` sigue respondiendo `ok:false` ("Falta conectar
-      Upstash Redis", revisado de nuevo al cierre del 23/11/2026), así que el sitio está en **modo demo**:
-      cada visitante solo, sin presencia compartida, y lo que suma la gente se pierde al borrar el
-      navegador. Es lo que más falta para mostrarlo. Vercel → Storage → Create Database → Upstash for
-      Redis → conectar a Production y Preview → Redeploy.
-- [ ] **Deploy real en Vercel + Upstash.** Todo se probó con un Upstash simulado (`server/api.test.js`).
-      Confirmar: rewrite `/api/:path*` → `api/handler.js`, lectura de `KV_REST_API_URL`/`TOKEN`,
-      fotos servidas con caché de CDN, y que sin Upstash la app caiga bien al **modo demo**.
+- [x] **Rama de producción de Vercel**: corregida a `main`, con Node 22. No hace falta seguir
+      empujando a la rama anterior (ver AGENTS).
+- [x] **Conectar Upstash en producción**: base `encende-una-huellita`, región `iad1`, plan Free,
+      eviction y autoUpgrade desactivados. Variables `KV_REST_API_URL`/`TOKEN` en Production.
+      `/api/health` responde `{"ok":true,"storage":"upstash"}`. Las previews siguen en demo;
+      para probar escritura en ellas, usar otra base para no modificar recuerdos de producción.
+- [x] **Deploy real en Vercel + Upstash.** Verificados los rewrites, fotos principal y extra, voz,
+      diario, libro, velas, flores y regalitos contra la base real. La huellita técnica de prueba
+      se quita al terminar; las pruebas no modifican los recuerdos de Luca.
 - [x] **Conservar los recuerdos al crecer el jardín**: se quitaron los recortes que borraban las
       páginas del diario después de 200, las firmas después de 500, los regalitos después de 50,
       las notas del frasco/consuelo después de 300 y los gestos después de 200. Las lecturas siguen
       acotadas. `server/history.test.js` supera esos límites y vuelve a abrir la base desde disco
       para verificar que los primeros recuerdos, los corazones y el acceso familiar siguen ahí.
-- [ ] **Rescatar los datos del modo demo antes de pasar a la base compartida**: conectar Upstash no
+- [ ] **Rescatar los datos del modo demo anterior**: conectar Upstash no
       importa `huellita.local.v2`; queda guardado en cada navegador, pero la app deja de mostrarlo
       al pasar a modo servidor. Falta exportar/importar con reintentos sin duplicados (huellitas,
       fotos, voz, diario, libros, regalitos y notas), conservando el permiso de edición. No borrar
       el almacenamiento del navegador para probar la conexión.
-- [ ] **Verificación con dos visitantes reales** después de conectar: ambos deben verse en el mismo
-      piso, y una vela/flor/mensaje creado en uno debe aparecer en el otro. Cerrar y volver a abrir
-      para comprobar el guardado. El movimiento hoy se actualiza cada 5–12 s (no hay WebSockets).
+- [x] **Dos clientes independientes de la API**: presencia en ambas direcciones y velas/flores/
+      mensajes que llegan por el siguiente latido; una vela repetida no suma dos veces.
+- [ ] **Verificación visual con dos navegadores**: confirmar los personajes 3D y el contador de
+      visitantes en el mismo piso. El movimiento se actualiza cada 5–12 s (no hay WebSockets).
+      La prueba de dos sesiones Chromium quedó pendiente: la segunda no terminó de iniciar antes
+      de 120 s. Una sesión sí entró con la base compartida. No confundir esto con teléfonos físicos
+      ni con la prueba de API, que sí pasó en ambas direcciones.
 - [ ] **Teléfonos reales** (iPhone Safari y Android Chrome): rendimiento del 3D, calidad automática
       (`src/quality.js`), palanca, hoja deslizable, teclado sobre formularios, áreas seguras del notch.
       Con la tercera persona: que la cámara no se meta en los muros, que la palanca se sienta natural
