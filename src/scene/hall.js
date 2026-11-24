@@ -1,11 +1,12 @@
-// El salón: muro en semicírculo con marcos, pérgola con guirnaldas de luces, y el atril central
-// con la huellita destacada rodeada de velas.
+// El salón de las huellitas, como un columbario: un salón redondo con la pérgola de luces y la ofrenda
+// de la huellita destacada (sólo en el piso 1), y cinco pasillos anchos que salen de él con las dos
+// paredes cubiertas de nichos. Los nichos libres son puertitas de madera oscura con una plaquita de
+// bronce; cuando llega una huellita, la puertita se abre y queda la foto en un marco claro detrás de un
+// vidrio, con una guirnalda de lucecitas de colores alrededor y, adentro, lo que le dejaron.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HALL_CENTER, HALL_RADIUS, rand } from './world.js';
-import {
-  emptySlotTexture, portraitTexture, photoTexture, labelTexture, twoSided, flameTexture, glowTexture, woodTexture, lightConeTexture, emojiTexture, lanternTexture,
-} from './textures.js';
+import { HALL_CENTER, ROOM_R, ROOM_WALL_H, CORRIDOR, CORRIDOR_DEG, ROOM_ARCS, LIFT_ARC, corridorFrame, rand, uTime } from './world.js';
+import { portraitTexture, photoTexture, labelTexture, twoSided, flameTexture, glowTexture, woodTexture, lightConeTexture, emojiTexture, lanternTexture } from './textures.js';
 import { stageOf } from '../../server/glow.js';
 import { giftMesh, idleGift } from './gifts3d.js';
 import { CORRIDOR_NAMES } from '../floors.js';
@@ -15,7 +16,41 @@ import { PALETTE, paintedWallTexture, talaveraTexture, marigoldGeometry, marigol
 // Ramo del jarrito: [x, y, z, tamaño] de cada flor (se van sumando con las flores que le dejan).
 const BOUQUET = [[0, 0.135, 0, 1.15], [-0.032, 0.12, 0.018, 1], [0.03, 0.125, -0.012, 1], [0.006, 0.118, 0.034, 0.95], [-0.012, 0.15, -0.028, 0.9]];
 
-const WALL_COLORS = ['#178f8c', '#c2186b', '#d9901c', '#6a2aa6', '#239a62', '#d9661a', '#2f6fd6', '#b5307a', '#159aa0', '#7b3fc4'];
+const WALL_COLORS = ['#178f8c', '#c2186b', '#d9901c', '#6a2aa6', '#239a62', '#d9661a', '#2f6fd6', '#b5307a'];
+
+// ---------- el plano de los nichos ----------
+export const CORRIDORS = CORRIDOR_DEG.length;
+const COLS = 3; // nichos a lo largo de cada pared
+const ROWS = 3;
+export const PER_CORRIDOR = 2 * COLS * ROWS;
+export const SLOTS_PER_FLOOR = CORRIDORS * PER_CORRIDOR; // 90, igual que antes (los lugares guardados no cambian de número)
+const PX = 1.32; // paso entre columnas de nichos
+const OW = 1.0; // hueco de cada nicho
+const OH = 0.9;
+const DEPTH = 0.4; // lo hondo del nicho
+const ROWS_Y = [0.75, 1.91, 3.07]; // de abajo hacia arriba
+// Orden de los lugares: primero la fila del medio (a la altura de los ojos), después la de abajo y la de arriba.
+const ROW_ORDER = [1, 0, 2];
+const Z0 = 0.7; // dónde empieza la grilla de nichos, desde la boca del pasillo
+const ZB = Z0 + COLS * PX;
+const PW = 0.48; // foto (384x480)
+const PH = 0.6;
+const PHOTO_Y = 0.08;
+const { hw: HW, wall: WALL, len: LEN, h: WALL_H } = CORRIDOR;
+
+export const POST_H = 7.4;
+const POLE_H = 11.5;
+// La ofrenda central es grande (se ve desde la entrada y domina el salón en tercera persona).
+export const ALTAR_SCALE = 2.2;
+export const EASEL_POS = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 5.2);
+const BED_R = 2.2; // cantero de flores alrededor del poste central
+
+export function candleLevel(n) {
+  return n >= 12 ? 3 : n >= 5 ? 2 : n >= 1 ? 1 : 0;
+}
+
+const rad = THREE.MathUtils.degToRad;
+const onRing = (deg, r, y = 0) => new THREE.Vector3(HALL_CENTER.x + Math.sin(rad(deg)) * r, y, HALL_CENTER.z + Math.cos(rad(deg)) * r);
 
 // Brillo de cada lugar según su Glow: 🏮 farolito, ⭐ estrella, ✨ constelación.
 const starMatBase = new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -53,30 +88,6 @@ function setStage(fx, stage, eternal = false) {
   fx.star.visible = stage >= 2;
   fx.cons.forEach((c) => { c.visible = stage >= 3; });
 }
-
-export const PANELS = 10;
-export const PER_PANEL = 9; // 3 x 3
-export const SLOTS_PER_FLOOR = PANELS * PER_PANEL;
-
-const FRAME_W = 0.8;
-const FRAME_H = 1.0;
-const COL_X = [-1.8, 0, 1.8];
-const PANEL_W = 5.8; // ancho de cada pared (local, antes de escalar)
-const ROW_Y = [3.05, 1.95, 0.85];
-// Paredes del muro más grandes (marcos, repisas y techitos crecen juntos) para el salón amplio.
-export const WALL_SCALE = 1.45;
-export const POST_H = 7.4;
-const POLE_H = 11.5;
-// La ofrenda central es grande (se ve desde la entrada y domina el salón en tercera persona).
-export const ALTAR_SCALE = 2.2;
-export const EASEL_POS = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 9.5);
-const BED_R = 3.3; // cantero de flores del centro
-
-export function candleLevel(n) {
-  return n >= 12 ? 3 : n >= 5 ? 2 : n >= 1 ? 1 : 0;
-}
-
-const panelAngle = (p) => THREE.MathUtils.degToRad(40 + p * (280 / (PANELS - 1)));
 
 // Veladoras de vidrio de colores (como las de las ofrendas), con la cera y la llamita adentro.
 const VELA_COLS = ['#d6246e', '#f7951f', '#7b2cbf', '#14b3b0', '#e63946', '#ffc61a'];
@@ -131,80 +142,222 @@ function giftHolder(scale) {
   return g;
 }
 
-// Postigo de madera pintada (claro: el color lo pone cada instancia): tablas, un marco, un corazón
-// calado y una manijita.
-let shutterTex = null;
-function shutterTexture() {
-  if (shutterTex) return shutterTex;
-  const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 256;
-  const g = c.getContext('2d');
-  g.fillStyle = '#f4efe6';
-  g.fillRect(0, 0, 128, 256);
-  g.strokeStyle = 'rgba(90,70,50,0.35)';
-  g.lineWidth = 2;
-  for (let x = 32; x < 128; x += 32) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 256); g.stroke(); }
-  g.strokeStyle = 'rgba(255,255,255,0.9)';
-  g.lineWidth = 10;
-  g.strokeRect(5, 5, 118, 246);
-  g.strokeStyle = 'rgba(70,50,35,0.45)';
-  g.lineWidth = 2;
-  g.strokeRect(12, 12, 104, 232);
-  // Corazón calado.
-  g.fillStyle = 'rgba(60,35,30,0.55)';
+function rrect(g, x, y, w, h, r) {
   g.beginPath();
-  g.moveTo(64, 112);
-  g.bezierCurveTo(40, 92, 44, 68, 64, 80);
-  g.bezierCurveTo(84, 68, 88, 92, 64, 112);
-  g.fill();
-  // Flor chiquita abajo.
-  g.fillStyle = 'rgba(255,255,255,0.85)';
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    g.beginPath(); g.arc(64 + Math.cos(a) * 9, 186 + Math.sin(a) * 9, 6, 0, Math.PI * 2); g.fill();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+function canvasTex(w, h, draw, { repeat = false, srgb = true } = {}) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// La puertita de un nicho libre: madera de nogal con un panel biselado y una plaquita de bronce en el
+// medio. `glow` es la máscara de brillo (la plaquita y el bisel se ven aunque el pasillo esté oscuro).
+let doorTex = null;
+function doorTextures() {
+  if (doorTex) return doorTex;
+  const W = 256;
+  const H = 232;
+  const panel = (g, inset) => rrect(g, inset, inset, W - inset * 2, H - inset * 2, 6);
+  const plaque = (g) => rrect(g, W / 2 - 46, H / 2 - 15, 92, 30, 5);
+  const map = canvasTex(W, H, (g) => {
+    g.fillStyle = '#3e2618';
+    g.fillRect(0, 0, W, H);
+    // Veta de la madera.
+    for (let i = 0; i < 70; i++) {
+      g.strokeStyle = `rgba(${Math.random() < 0.5 ? '120,80,50' : '20,10,5'},${0.08 + Math.random() * 0.1})`;
+      g.lineWidth = 1 + Math.random() * 2;
+      const y = Math.random() * H;
+      g.beginPath();
+      g.moveTo(0, y);
+      g.bezierCurveTo(W * 0.3, y + (Math.random() - 0.5) * 10, W * 0.6, y + (Math.random() - 0.5) * 10, W, y + (Math.random() - 0.5) * 6);
+      g.stroke();
+    }
+    // Marco: la luz viene de arriba a la izquierda (bisel claro arriba, oscuro abajo).
+    g.lineWidth = 6;
+    g.strokeStyle = 'rgba(255,214,160,0.28)';
+    g.beginPath(); g.moveTo(5, H - 5); g.lineTo(5, 5); g.lineTo(W - 5, 5); g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,0.55)';
+    g.beginPath(); g.moveTo(W - 5, 5); g.lineTo(W - 5, H - 5); g.lineTo(5, H - 5); g.stroke();
+    // Panel central rehundido y biselado.
+    g.fillStyle = 'rgba(0,0,0,0.18)';
+    panel(g, 30);
+    g.fill();
+    g.lineWidth = 9;
+    g.strokeStyle = 'rgba(0,0,0,0.5)';
+    g.beginPath(); g.moveTo(30, H - 30); g.lineTo(30, 30); g.lineTo(W - 30, 30); g.stroke();
+    g.strokeStyle = 'rgba(255,210,150,0.24)';
+    g.beginPath(); g.moveTo(W - 30, 30); g.lineTo(W - 30, H - 30); g.lineTo(30, H - 30); g.stroke();
+    g.strokeStyle = 'rgba(255,220,170,0.14)';
+    g.lineWidth = 2;
+    panel(g, 40);
+    g.stroke();
+    // La plaquita de bronce con sus tornillitos y una florcita grabada.
+    const gr = g.createLinearGradient(0, H / 2 - 15, 0, H / 2 + 15);
+    gr.addColorStop(0, '#f6dc8e');
+    gr.addColorStop(0.5, '#c9973f');
+    gr.addColorStop(1, '#8a5f22');
+    g.fillStyle = gr;
+    plaque(g);
+    g.fill();
+    g.strokeStyle = '#5a3a14';
+    g.lineWidth = 2;
+    g.stroke();
+    g.fillStyle = '#6a4416';
+    for (const x of [W / 2 - 38, W / 2 + 38]) { g.beginPath(); g.arc(x, H / 2, 2.6, 0, Math.PI * 2); g.fill(); }
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      g.beginPath(); g.arc(W / 2 + Math.cos(a) * 5, H / 2 + Math.sin(a) * 5, 3, 0, Math.PI * 2); g.fill();
+    }
+    // Tirador.
+    g.fillStyle = '#d8a94c';
+    g.beginPath(); g.arc(W - 18, H / 2, 6, 0, Math.PI * 2); g.fill();
+  });
+  const glow = canvasTex(W, H, (g) => {
+    g.fillStyle = '#1c130d';
+    g.fillRect(0, 0, W, H);
+    g.lineWidth = 4;
+    g.strokeStyle = '#4a3420';
+    g.beginPath(); g.moveTo(32, H - 32); g.lineTo(32, 32); g.lineTo(W - 32, 32); g.stroke();
+    g.fillStyle = '#d6a852';
+    plaque(g);
+    g.fill();
+    g.fillStyle = '#b8873a';
+    g.beginPath(); g.arc(W - 18, H / 2, 6, 0, Math.PI * 2); g.fill();
+  });
+  doorTex = { map, glow };
+  return doorTex;
+}
+
+// El vidrio de la ventanita: casi invisible, con dos reflejos en diagonal.
+function glassTexture() {
+  return canvasTex(128, 128, (g) => {
+    g.fillStyle = 'rgba(210,230,255,0.05)';
+    g.fillRect(0, 0, 128, 128);
+    for (const [x, w, a] of [[18, 22, 0.08], [52, 7, 0.06], [96, 12, 0.04]]) {
+      g.fillStyle = `rgba(255,255,255,${a})`;
+      g.beginPath();
+      g.moveTo(x, 128); g.lineTo(x + w, 128); g.lineTo(x + w + 40, 0); g.lineTo(x + 40, 0);
+      g.fill();
+    }
+    g.strokeStyle = 'rgba(255,255,255,0.12)';
+    g.lineWidth = 3;
+    g.strokeRect(1.5, 1.5, 125, 125);
+  });
+}
+
+// El vitral del fondo de cada pasillo: un rosetón de vidrios de colores con una huellita en el medio.
+function vitralTexture(hue) {
+  return canvasTex(256, 256, (g) => {
+    const cx = 128;
+    const R = 126;
+    const cols = ['#ff9a1f', '#e0457b', '#2bb3a8', '#8b5cc7', '#ffcf3a', '#3f8fd8'].map((c, i) => (i + hue) % 6).map((i) => ['#ff9a1f', '#e0457b', '#2bb3a8', '#8b5cc7', '#ffcf3a', '#3f8fd8'][i]);
+    g.fillStyle = '#1a0f0a';
+    g.fillRect(0, 0, 256, 256);
+    // Anillo de 12 pétalos.
+    for (let i = 0; i < 12; i++) {
+      const a0 = (i / 12) * Math.PI * 2;
+      const a1 = ((i + 1) / 12) * Math.PI * 2;
+      g.fillStyle = cols[i % 3];
+      g.beginPath(); g.moveTo(cx, cx); g.arc(cx, cx, R - 6, a0 + 0.03, a1 - 0.03); g.closePath(); g.fill();
+      g.fillStyle = cols[3 + (i % 3)];
+      g.beginPath(); g.moveTo(cx, cx); g.arc(cx, cx, R * 0.66, a0 + 0.04, a1 - 0.04); g.closePath(); g.fill();
+    }
+    // Plomo entre vidrios.
+    g.strokeStyle = '#1a0f0a';
+    g.lineWidth = 5;
+    for (const r of [R * 0.4, R * 0.66, R - 6]) { g.beginPath(); g.arc(cx, cx, r, 0, Math.PI * 2); g.stroke(); }
+    // Centro: una huellita clara sobre ámbar.
+    g.fillStyle = '#ffd27a';
+    g.beginPath(); g.arc(cx, cx, R * 0.38, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff6e2';
+    g.beginPath(); g.ellipse(cx, cx + 10, 20, 17, 0, 0, Math.PI * 2); g.fill();
+    for (const [dx, dy] of [[-24, -14], [-9, -28], [9, -28], [24, -14]]) { g.beginPath(); g.ellipse(cx + dx, cx + dy, 7.5, 9.5, dx * 0.02, 0, Math.PI * 2); g.fill(); }
+    // Un poco de textura de vidrio soplado.
+    for (let i = 0; i < 260; i++) {
+      g.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`;
+      g.beginPath(); g.arc(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 3, 0, Math.PI * 2); g.fill();
+    }
+  });
+}
+
+// Alfombra del pasillo: roja con guarda dorada y cempasúchiles.
+function runnerTexture() {
+  return canvasTex(128, 256, (g) => {
+    g.fillStyle = '#7a1630';
+    g.fillRect(0, 0, 128, 256);
+    g.fillStyle = '#e0a634';
+    g.fillRect(6, 0, 7, 256);
+    g.fillRect(115, 0, 7, 256);
+    g.fillStyle = '#3a0a18';
+    g.fillRect(16, 0, 3, 256);
+    g.fillRect(109, 0, 3, 256);
+    for (let y = 32; y < 256; y += 64) {
+      g.fillStyle = '#ff9a1f';
+      for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; g.beginPath(); g.arc(64 + Math.cos(a) * 11, y + Math.sin(a) * 11, 7, 0, Math.PI * 2); g.fill(); }
+      g.fillStyle = '#ffd23a';
+      g.beginPath(); g.arc(64, y, 7, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#e0457b';
+      for (const dx of [-34, 34]) { g.beginPath(); g.moveTo(64 + dx, y - 10); g.lineTo(64 + dx + 7, y); g.lineTo(64 + dx, y + 10); g.lineTo(64 + dx - 7, y); g.fill(); }
+    }
+  }, { repeat: true });
+}
+
+// Una caja con las UV escaladas a metros (para texturas que se repiten, como la madera o la talavera).
+function box(w, h, d, x, y, z, uvScale = 0) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  if (uvScale) {
+    const uv = g.attributes.uv;
+    const n = g.attributes.normal;
+    for (let i = 0; i < uv.count; i++) {
+      const ax = Math.abs(n.getX(i));
+      const ay = Math.abs(n.getY(i));
+      const su = ax > 0.5 ? d : w;
+      const sv = ay > 0.5 ? d : h;
+      uv.setXY(i, uv.getX(i) * su * uvScale, uv.getY(i) * sv * uvScale);
+    }
   }
-  g.fillStyle = 'rgba(200,150,60,0.9)';
-  g.beginPath(); g.arc(64, 186, 5, 0, Math.PI * 2); g.fill();
-  // Manijita de bronce.
-  g.fillStyle = '#c9973f';
-  g.beginPath(); g.arc(110, 128, 6, 0, Math.PI * 2); g.fill();
-  shutterTex = new THREE.CanvasTexture(c);
-  shutterTex.colorSpace = THREE.SRGBColorSpace;
-  return shutterTex;
+  return g.translate(x, y, z).toNonIndexed();
 }
 
 export function buildHall(scene, colliders, tier) {
   const r = rand(11);
-  const panelMat = new THREE.MeshLambertMaterial({ map: woodTexture('#4a3022') });
-  const frameMat = new THREE.MeshLambertMaterial({ color: '#cdb390' });
+  const frameMat = new THREE.MeshLambertMaterial({ color: '#efe2c8', emissive: '#3a2a1a', emissiveIntensity: 0.5 });
   const goldMat = new THREE.MeshStandardMaterial({ color: '#d9a748', roughness: 0.35, metalness: 0.8, emissive: '#6b4300', emissiveIntensity: 0.55 });
   const matMat = new THREE.MeshLambertMaterial({ color: '#f1e6d4' });
-  const ledgeMat = new THREE.MeshLambertMaterial({ color: '#c8b39a' });
   const waxMat = new THREE.MeshLambertMaterial({ color: '#fff3e0', emissive: '#7a5226', emissiveIntensity: 0.45 });
   const postMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture('#b5307a') });
   const marigoldGeo = marigoldGeometry(0.04, '#ffffff', r);
   const flowerMats = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a'].map((c) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, color: c, emissive: c, emissiveIntensity: 0.25 }));
-  const tileMat = new THREE.MeshLambertMaterial({ map: talaveraTexture() });
+  const talavera = (() => { const t = talaveraTexture().clone(); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true; return t; })();
+  const tileMat = new THREE.MeshLambertMaterial({ map: talavera, emissive: '#ffffff', emissiveMap: talavera, emissiveIntensity: 0.12 });
+  // Madera de los muros: un poco de luz propia, para que de noche no queden negros.
+  const darkWood = woodTexture('#4a2c1c');
+  darkWood.wrapS = darkWood.wrapT = THREE.RepeatWrapping;
+  const nicheMat = new THREE.MeshLambertMaterial({ map: darkWood, emissive: '#ffffff', emissiveMap: darkWood, emissiveIntensity: 0.2 });
+  const trimWood = woodTexture('#8a5a36');
+  trimWood.wrapS = trimWood.wrapT = THREE.RepeatWrapping;
+  const trimMat = new THREE.MeshLambertMaterial({ map: trimWood, emissive: '#ffffff', emissiveMap: trimWood, emissiveIntensity: 0.22 });
+  const creamMat = new THREE.MeshLambertMaterial({ color: '#fbefd9', emissive: '#3a2a1a', emissiveIntensity: 0.6 });
+  const roofMat = new THREE.MeshLambertMaterial({ color: '#b5482a', emissive: '#2a0e06' });
   const animators = [];
-  // Cada lugar del muro es una ventanita: un marco hondo (con alféizar) donde la foto queda
-  // metida adentro, y dos postigos de madera pintada que se abren cuando llega una huellita.
-  const WIN_W = FRAME_W + 0.16;
-  const WIN_H = FRAME_H + 0.16;
-  const windowFrameGeo = (() => {
-    const t = 0.08;
-    const d = 0.17;
-    const parts = [
-      new THREE.BoxGeometry(WIN_W, t, d).translate(0, WIN_H / 2 - t / 2, 0.06),
-      new THREE.BoxGeometry(WIN_W, t, d).translate(0, -WIN_H / 2 + t / 2, 0.06),
-      new THREE.BoxGeometry(t, WIN_H - 2 * t, d).translate(-WIN_W / 2 + t / 2, 0, 0.06),
-      new THREE.BoxGeometry(t, WIN_H - 2 * t, d).translate(WIN_W / 2 - t / 2, 0, 0.06),
-      new THREE.BoxGeometry(WIN_W + 0.1, 0.045, 0.14).translate(0, -WIN_H / 2 - 0.02, 0.12),
-      new THREE.BoxGeometry(WIN_W - 0.02, WIN_H - 0.02, 0.02).translate(0, 0, -0.02),
-    ];
-    return mergeGeometries(parts.map((g) => g.toNonIndexed()));
-  })();
-  // Jarrito de barro de la repisa (geometrías compartidas por todos los marcos).
+  // Lo que tapa los toques (muros): así no se abre un nicho que está del otro lado de una pared.
+  const blockers = [];
+
+  // Jarrito de barro de la repisa (geometrías compartidas por todos los nichos).
   const jarGeo = new THREE.LatheGeometry([[0.0, 0], [0.032, 0], [0.045, 0.03], [0.046, 0.055], [0.034, 0.08], [0.03, 0.095], [0.038, 0.105]].map(([x, y]) => new THREE.Vector2(x, y)), 14);
   const jarRimGeo = new THREE.TorusGeometry(0.036, 0.006, 6, 16).rotateX(Math.PI / 2).translate(0, 0.105, 0);
   const jarLeafGeo = mergeGeometries([0, 1, 2, 3].map((i) => new THREE.SphereGeometry(0.03, 6, 4).scale(1.6, 0.25, 0.7).rotateZ(0.5).translate(0.04, 0.1, 0).rotateY(i * 1.57 + 0.4)));
@@ -214,204 +367,497 @@ export function buildHall(scene, colliders, tier) {
   const slots = [];
   const flames = [];
   const glowFx = [];
-  const panelLabels = [];
+  const corridorLabels = [];
   const pickables = [];
+  const bulbs = []; // lucecitas de las guirnaldas (pérgola y pasillos)
 
-  // ---------- paneles del muro ----------
-  for (let p = 0; p < PANELS; p++) {
-    const a = panelAngle(p);
-    const panel = new THREE.Group();
-    panel.position.set(HALL_CENTER.x + Math.sin(a) * HALL_RADIUS, 0, HALL_CENTER.z + Math.cos(a) * HALL_RADIUS);
-    panel.scale.setScalar(WALL_SCALE);
-    panel.lookAt(HALL_CENTER.x, 0, HALL_CENTER.z);
-    scene.add(panel);
-
-    // Pared pintada de colores, con techito y un friso de talavera abajo.
-    const wallMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture(WALL_COLORS[p % WALL_COLORS.length]) });
-    const board = new THREE.Mesh(new THREE.BoxGeometry(PANEL_W, 3.9, 0.22), wallMat);
-    board.position.set(0, 2.05, -0.12);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(PANEL_W + 0.3, 0.14, 0.7), new THREE.MeshLambertMaterial({ color: '#b5482a' }));
-    roof.position.set(0, 4.06, 0.08);
-    const plinth = new THREE.Mesh(new THREE.BoxGeometry(PANEL_W + 0.1, 0.2, 0.36), panelMat);
-    plinth.position.set(0, 0.1, -0.05);
-    const tiles = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W, 0.3), tileMat.clone());
-    tiles.material.map = talaveraTexture().clone();
-    tiles.material.map.repeat.set(20, 1);
-    tiles.material.map.needsUpdate = true;
-    tiles.position.set(0, 0.36, 0.0);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(PANEL_W + 0.04, 0.06, 0.05), new THREE.MeshLambertMaterial({ color: '#fbefd9' }));
-    trim.position.set(0, 3.98, 0.0);
-    panel.add(board, roof, plinth, tiles, trim);
-
-    // Aplique de luz y su haz sobre el muro.
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.05, 0.08), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 1.15, 0.75) }));
-    bar.position.set(0, 3.93, 0.32);
-    const cone = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W - 0.1, 3.7), new THREE.MeshBasicMaterial({ map: lightConeTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.3 }));
-    cone.position.set(0, 2.08, 0.0);
-    panel.add(bar, cone);
-
-    // Cartel del pasillo, colgado de dos cadenitas sobre el techito.
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 0.52), new THREE.MeshBasicMaterial({ transparent: true }));
-    label.position.set(0, 4.62, 0.36);
-    for (const sx of [-1.35, 1.35]) {
-      const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.34, 4), new THREE.MeshLambertMaterial({ color: '#c9973f' }));
-      chain.position.set(sx, 5.02, 0.36);
-      panel.add(chain);
-    }
-    panel.add(label);
-    panelLabels.push(label);
-
-    panel.updateMatrixWorld();
-    const lp = new THREE.Vector3(-PANEL_W / 2 - 0.05, 0, 0).applyMatrix4(panel.matrixWorld);
-    const rp = new THREE.Vector3(PANEL_W / 2 + 0.05, 0, 0).applyMatrix4(panel.matrixWorld);
-    colliders.segments.push([lp.x, lp.z, rp.x, rp.z]);
-
-    for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 3; col++) {
-        const local = p * PER_PANEL + row * 3 + col;
-        const g = new THREE.Group();
-        g.position.set(COL_X[col], ROW_Y[row], 0.03);
-        panel.add(g);
-
-        const border = new THREE.Mesh(windowFrameGeo, frameMat);
-        border.position.z = 0.01;
-        const mat = new THREE.Mesh(new THREE.PlaneGeometry(FRAME_W + 0.04, FRAME_H + 0.04), new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#3a2a20', emissiveIntensity: 0.3 }));
-        mat.position.z = 0.05;
-        const photo = new THREE.Mesh(new THREE.PlaneGeometry(FRAME_W - 0.06, FRAME_H - 0.06), new THREE.MeshBasicMaterial({ map: emptySlotTexture(), transparent: true, color: '#e8e0d4' }));
-        photo.position.z = 0.055;
-        const name = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.15), new THREE.MeshBasicMaterial({ transparent: true }));
-        name.position.set(0, -FRAME_H / 2 - 0.19, 0.2);
-        name.visible = false;
-
-        const shelf = new THREE.Group();
-        shelf.position.set(0, -FRAME_H / 2 - 0.29, 0.13);
-        shelf.add(new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.04, 0.22), ledgeMat));
-        const candles = [0, 1, 2].map((i) => {
-          const c = makeCandle(waxMat, 0.09 + i * 0.03, flames, tier.bloom);
-          c.position.set([0.31, 0.39, 0.25][i], 0.02, [0.03, -0.05, -0.07][i]);
-          c.visible = false;
-          shelf.add(c);
-          return c;
-        });
-        // Jarrito de barro con el ramo de cempasúchil (más flores, más ramo).
-        const jar = new THREE.Group();
-        jar.position.set(-0.35, 0.02, -0.02);
-        jar.scale.setScalar(1.25);
-        jar.add(new THREE.Mesh(jarGeo, jarMat), new THREE.Mesh(jarRimGeo, jarMat), new THREE.Mesh(jarLeafGeo, leafMat));
-        jar.visible = false;
-        shelf.add(jar);
-        const flowers = BOUQUET.map(([x, y, z, s], i) => {
-          const f = new THREE.Mesh(marigoldGeo, flowerMats[(local + i) % flowerMats.length]);
-          f.position.set(x, y, z);
-          f.scale.setScalar(s);
-          f.rotation.set(x * 4, i, z * 4);
-          f.visible = false;
-          jar.add(f);
-          return f;
-        });
-        const gifts = [0, 1, 2].map((i) => {
-          const h = giftHolder(0.17);
-          h.position.set(-0.17 + i * 0.18, 0.02, 0.035);
-          h.rotation.y = (i - 1) * 0.3;
-          shelf.add(h);
-          return h;
-        });
-        shelf.visible = false;
-        const fx = makeGlowFx(glowFx);
-        fx.group.visible = false;
-
-        g.add(border, mat, photo, name, shelf, fx.group);
-        photo.userData = { kind: 'slot', local };
-        pickables.push(photo);
-        slots.push({ group: g, border, mat, photo, name, shelf, candles, jar, flowers, gifts, fx, memorial: null, textures: [] });
+  // ---------- el muro del salón ----------
+  // Cada tramo es una serie de paredes rectas (cuerdas del círculo): por fuera pintadas, por dentro
+  // con zócalo de madera, una franja de talavera, el revoque de color y una cornisa.
+  {
+    const outer = [];
+    const wains = [];
+    const tiles = [];
+    const trims = [];
+    const cornices = [];
+    const T = 0.4;
+    const outerMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture('#c9663a'), emissive: '#2a0e06' });
+    ROOM_ARCS.forEach(([a0, a1], ai) => {
+      if (LIFT_ARC && a0 === LIFT_ARC[0]) return; // ese tramo es la pared del ascensor (elevator.js)
+      const n = Math.max(1, Math.ceil((a1 - a0) / 9));
+      const inner = [];
+      for (let k = 0; k < n; k++) {
+        const ta = a0 + ((a1 - a0) * k) / n;
+        const tb = a0 + ((a1 - a0) * (k + 1)) / n;
+        const pa = onRing(ta, ROOM_R);
+        const pb = onRing(tb, ROOM_R);
+        const len = pa.distanceTo(pb) + 0.06;
+        const mid = onRing((ta + tb) / 2, ROOM_R * Math.cos(rad((tb - ta) / 2)));
+        const ry = rad((ta + tb) / 2) + Math.PI; // la cara +z mira al centro
+        const place = (g) => g.rotateY(ry).translate(mid.x, 0, mid.z);
+        outer.push(place(box(len, ROOM_WALL_H, T, 0, ROOM_WALL_H / 2, 0)));
+        inner.push(place(new THREE.PlaneGeometry(len, ROOM_WALL_H - 1.5).translate(0, 1.4 + (ROOM_WALL_H - 1.5) / 2, T / 2 + 0.005).toNonIndexed()));
+        wains.push(place(box(len, 1.1, 0.05, 0, 0.55, T / 2 + 0.025, 1)));
+        tiles.push(place(box(len, 0.3, 0.02, 0, 1.25, T / 2 + 0.012, 3.4)));
+        trims.push(place(box(len, 0.06, 0.08, 0, 1.1, T / 2 + 0.04)), place(box(len, 0.05, 0.05, 0, 1.4, T / 2 + 0.025)));
+        cornices.push(place(box(len + 0.04, 0.2, T + 0.3, 0, ROOM_WALL_H, 0)));
+        colliders.segments.push([pa.x, pa.z, pb.x, pb.z]);
       }
-    }
+      const paint = new THREE.Mesh(mergeGeometries(inner), new THREE.MeshLambertMaterial({ map: paintedWallTexture(WALL_COLORS[ai % WALL_COLORS.length]), emissive: '#1a0c08' }));
+      scene.add(paint);
+      // Papel picado a lo largo de los tramos largos y coronas de cempasúchil en la pared.
+      if (a1 - a0 > 30) {
+        for (let k = 0; k < 2; k++) {
+          const ta = a0 + 4 + k * ((a1 - a0 - 8) / 2);
+          const tb = ta + (a1 - a0 - 8) / 2;
+          const b = picadoBanner(onRing(ta, ROOM_R - 0.35, ROOM_WALL_H - 0.35), onRing(tb, ROOM_R - 0.35, ROOM_WALL_H - 0.35), { sag: 0.4, flags: 9, size: 0.34, seed: ai * 3 + k });
+          scene.add(b);
+          animators.push(b.userData.flutter);
+          const wreathAt = onRing((ta + tb) / 2, ROOM_R - 0.32, 2.75);
+          const pts = [];
+          for (let i = 0; i < 46; i++) {
+            const a = (i / 46) * Math.PI * 2;
+            pts.push([Math.cos(a) * 0.55, Math.sin(a) * 0.55, 0, 0.9 + r() * 0.5]);
+          }
+          const wreath = marigoldCluster(pts, { r: 0.1, rnd: r });
+          wreath.position.copy(wreathAt);
+          wreath.lookAt(HALL_CENTER.x, 2.75, HALL_CENTER.z);
+          scene.add(wreath);
+        }
+      }
+    });
+    const walls = new THREE.Mesh(mergeGeometries(outer), outerMat);
+    walls.userData.kind = 'wall';
+    blockers.push(walls);
+    scene.add(walls, new THREE.Mesh(mergeGeometries(wains), nicheMat), new THREE.Mesh(mergeGeometries(tiles), tileMat), new THREE.Mesh(mergeGeometries(trims), creamMat), new THREE.Mesh(mergeGeometries(cornices), roofMat));
   }
 
-  // ---------- postigos de las ventanitas (todos en un solo dibujo) ----------
-  const SHUTTER_COLS = ['#2bb3a8', '#e0457b', '#f2b33d', '#5b8fd8', '#8b5cc7', '#e8743b', '#3fae6a'].map((c) => new THREE.Color(c));
-  const shutterGeo = new THREE.BoxGeometry(WIN_W / 2, WIN_H, 0.035).translate(WIN_W / 4, 0, 0);
-  const shutters = new THREE.InstancedMesh(shutterGeo, new THREE.MeshLambertMaterial({ map: shutterTexture(), side: THREE.DoubleSide }), slots.length * 2);
-  shutters.frustumCulled = false;
+  // Geometrías y materiales compartidos por los nichos (se usan dentro de makeSlot).
+  const frameGeo = (() => {
+    const t = 0.05;
+    const w = PW + 2 * t;
+    const h = PH + 2 * t;
+    return mergeGeometries([
+      new THREE.BoxGeometry(w, t, 0.03).translate(0, h / 2 - t / 2, 0),
+      new THREE.BoxGeometry(w, t, 0.03).translate(0, -h / 2 + t / 2, 0),
+      new THREE.BoxGeometry(t, h - 2 * t, 0.03).translate(-w / 2 + t / 2, 0, 0),
+      new THREE.BoxGeometry(t, h - 2 * t, 0.03).translate(w / 2 - t / 2, 0, 0),
+    ].map((x) => x.toNonIndexed()));
+  })();
+  const clothMat = new THREE.MeshLambertMaterial({ color: '#fbf3e6', emissive: '#4a3626', emissiveIntensity: 0.5 });
+  const glassMat = new THREE.MeshBasicMaterial({ map: glassTexture(), transparent: true, depthWrite: false });
+  const pickMat = new THREE.MeshBasicMaterial({ visible: false });
+
+  // ---------- los pasillos ----------
+  {
+    const wallParts = [];
+    const trimParts = [];
+    const roofParts = [];
+    const beamParts = [];
+    const potParts = [];
+    const leafParts = [];
+    const flowerPts = [];
+    const coneMat = new THREE.MeshBasicMaterial({ map: lightConeTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: tier.bloom ? 0.12 : 0.2 });
+    const runnerMat = new THREE.MeshLambertMaterial({ map: runnerTexture(), emissive: '#3a0a12', polygonOffset: true, polygonOffsetFactor: -2 });
+    const vitralGlow = new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.1, color: new THREE.Color(1.0, 0.7, 0.45) });
+    const leafMat2 = new THREE.MeshLambertMaterial({ color: '#3f7a35', emissive: '#0c1c08', side: THREE.DoubleSide });
+    const slotRow = (rowIdx) => ROWS_Y[ROW_ORDER[rowIdx]];
+
+    for (let c = 0; c < CORRIDORS; c++) {
+      const { u, o } = corridorFrame(c);
+      const cg = new THREE.Group();
+      cg.position.copy(o);
+      cg.rotation.y = Math.atan2(u.x, u.z);
+      scene.add(cg);
+      cg.updateMatrixWorld(true);
+      const M = cg.matrixWorld;
+      const toWorld = (g) => g.applyMatrix4(M);
+      const P = (x, z) => new THREE.Vector3(x, 0, z).applyMatrix4(M);
+      const lw = [];
+      const lt = [];
+      const lr = [];
+
+      // Paredes de nichos (las dos) y la del fondo.
+      for (const sd of [-1, 1]) {
+        const xf = sd * HW; // cara de los nichos
+        const xm = sd * (HW + DEPTH / 2);
+        const xb = sd * (HW + DEPTH + (WALL - DEPTH) / 2);
+        const zs = -0.65;
+        // Fondo macizo, partes sin nichos y las franjas entre filas y columnas.
+        lw.push(box(WALL - DEPTH, WALL_H, LEN - zs, xb, WALL_H / 2, (zs + LEN) / 2, 1));
+        lw.push(box(DEPTH, WALL_H, Z0 - zs, xm, WALL_H / 2, (zs + Z0) / 2, 1));
+        lw.push(box(DEPTH, WALL_H, LEN - ZB, xm, WALL_H / 2, (ZB + LEN) / 2, 1));
+        const bandY = [0, ...ROWS_Y.flatMap((y) => [y - OH / 2, y + OH / 2]), WALL_H];
+        for (let k = 0; k < bandY.length; k += 2) {
+          const y0 = bandY[k];
+          const y1 = bandY[k + 1];
+          lw.push(box(DEPTH, y1 - y0, ZB - Z0, xm, (y0 + y1) / 2, (Z0 + ZB) / 2, 1));
+        }
+        for (const y of ROWS_Y) {
+          for (let k = 0; k <= COLS; k++) {
+            const za = k === 0 ? Z0 : Z0 + k * PX - (PX - OW) / 2;
+            const zb = k === COLS ? ZB : Z0 + k * PX + (PX - OW) / 2;
+            lw.push(box(DEPTH, OH, zb - za, xm, y, (za + zb) / 2, 1));
+          }
+          // Moldura clara alrededor de cada hueco (el bisel del nicho).
+          for (let k = 0; k < COLS; k++) {
+            const zc = Z0 + PX / 2 + k * PX;
+            const xt = xf - sd * 0.012;
+            lt.push(
+              box(0.03, 0.05, OW + 0.1, xt, y + OH / 2 + 0.025, zc),
+              box(0.03, 0.05, OW + 0.1, xt, y - OH / 2 - 0.025, zc),
+              box(0.03, OH, 0.05, xt, y, zc - OW / 2 - 0.025),
+              box(0.03, OH, 0.05, xt, y, zc + OW / 2 + 0.025),
+            );
+          }
+        }
+        // Cornisa arriba y zócalo.
+        lr.push(box(WALL + 0.25, 0.16, LEN - zs + 0.3, sd * (HW + WALL / 2 - 0.1), WALL_H + 0.08, (zs + LEN) / 2 + 0.1));
+        lt.push(box(0.04, 0.16, Z0 - zs, xf - sd * 0.02, 0.08, (zs + Z0) / 2), box(0.04, 0.16, LEN - ZB, xf - sd * 0.02, 0.08, (ZB + LEN) / 2));
+        // Haz de luz cálida sobre la pared de nichos.
+        const cone = new THREE.Mesh(new THREE.PlaneGeometry(ZB - Z0 + 0.8, WALL_H - 0.1), coneMat);
+        cone.position.set(xf - sd * 0.03, WALL_H / 2, (Z0 + ZB) / 2);
+        cone.rotation.y = -sd * Math.PI / 2;
+        cg.add(cone);
+        // Macetas con plantas, después de los nichos.
+        const pot = P(sd * (HW - 0.38), ZB + 0.6);
+        potParts.push(toWorld(new THREE.CylinderGeometry(0.3, 0.21, 0.55, 14).translate(sd * (HW - 0.38), 0.27, ZB + 0.6).toNonIndexed()));
+        for (let i = 0; i < 9; i++) {
+          const a = (i / 9) * Math.PI * 2 + r();
+          const tilt = 0.5 + r() * 0.5;
+          const leaf = new THREE.SphereGeometry(0.11, 6, 4).scale(0.55, 0.12, 2.4).translate(0, 0, 0.24);
+          leaf.rotateX(-tilt).rotateY(a).translate(sd * (HW - 0.38), 0.62 + r() * 0.12, ZB + 0.6);
+          leafParts.push(toWorld(leaf.toNonIndexed()));
+        }
+        for (let i = 0; i < 10; i++) {
+          const a = r() * Math.PI * 2;
+          const p = new THREE.Vector3(sd * (HW - 0.38) + Math.cos(a) * 0.16, 0.66 + r() * 0.18, ZB + 0.6 + Math.sin(a) * 0.16).applyMatrix4(M);
+          flowerPts.push([p.x, p.y, p.z, 0.8 + r() * 0.5]);
+        }
+        colliders.circles.push({ x: pot.x, z: pot.z, r: 0.36 });
+        // Choque: la cara de los nichos.
+        const a = P(xf, zs);
+        const b = P(xf, LEN);
+        colliders.segments.push([a.x, a.z, b.x, b.z]);
+      }
+      // Pared del fondo con el vitral, y un banco abajo.
+      lw.push(box(2 * (HW + WALL), WALL_H, 0.3, 0, WALL_H / 2, LEN + 0.15, 1));
+      lr.push(box(2 * (HW + WALL) + 0.3, 0.16, 0.6, 0, WALL_H + 0.08, LEN + 0.15));
+      {
+        const e1 = P(-HW, LEN);
+        const e2 = P(HW, LEN);
+        colliders.segments.push([e1.x, e1.z, e2.x, e2.z]);
+        const vit = new THREE.Mesh(new THREE.CircleGeometry(0.82, 40), new THREE.MeshBasicMaterial({ map: vitralTexture(c), color: tier.bloom ? new THREE.Color(1.08, 1.0, 0.95) : new THREE.Color(0.95, 0.9, 0.85) }));
+        vit.position.set(0, 2.3, LEN - 0.006);
+        vit.rotation.y = Math.PI;
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.84, 0.06, 8, 40), goldMat);
+        ring.position.copy(vit.position).setZ(LEN - 0.02);
+        const gl = new THREE.Sprite(vitralGlow);
+        gl.scale.setScalar(2.2);
+        gl.position.set(0, 2.3, LEN - 0.3);
+        cg.add(vit, ring, gl);
+        // Banco de madera bajo el vitral.
+        beamParts.push(
+          toWorld(box(1.7, 0.08, 0.42, 0, 0.46, LEN - 0.42)),
+          toWorld(box(1.7, 0.4, 0.06, 0, 0.78, LEN - 0.2)),
+          ...[-0.75, 0.75].flatMap((x) => [toWorld(box(0.08, 0.46, 0.38, x, 0.23, LEN - 0.42))]),
+        );
+        for (const x of [-0.5, 0.5]) { const p = P(x, LEN - 0.4); colliders.circles.push({ x: p.x, z: p.z, r: 0.35 }); }
+      }
+      // Vigas cruzadas arriba, alfombra y una guirnalda de lucecitas en zigzag de viga a viga.
+      const beamZ = [0.0, 1.6, 3.2, 4.8, LEN - 0.2];
+      for (const z of beamZ) beamParts.push(toWorld(box(2 * (HW + WALL) + 0.3, 0.16, 0.2, 0, WALL_H + 0.24, z)));
+      for (let k = 0; k < beamZ.length - 1; k++) {
+        const sd = k % 2 ? 1 : -1;
+        const a = new THREE.Vector3(sd * (HW - 0.2), WALL_H + 0.12, beamZ[k]);
+        const b = new THREE.Vector3(-sd * (HW - 0.2), WALL_H + 0.12, beamZ[k + 1]);
+        const n = Math.max(4, Math.round(tier.bulbsPerStrand * 0.4));
+        for (let i = 1; i < n; i++) {
+          const t = i / n;
+          const p = new THREE.Vector3().lerpVectors(a, b, t);
+          p.y -= Math.sin(Math.PI * t) * 0.35 + 0.06;
+          bulbs.push(p.applyMatrix4(M));
+        }
+      }
+      const runner = new THREE.Mesh(new THREE.PlaneGeometry(1.5, LEN - 0.9).rotateX(-Math.PI / 2), runnerMat);
+      runner.material.map.repeat.set(1, (LEN - 0.9) / 1.6);
+      runner.position.set(0, 0.168, (LEN - 0.9) / 2 + 0.05);
+      cg.add(runner);
+      // Un farolito de papel colgando en el medio del pasillo.
+      {
+        const hang = new THREE.Group();
+        hang.position.set(0, WALL_H + 0.24, 2.4);
+        const string = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.36, 4), new THREE.MeshBasicMaterial({ color: '#2a1d16' }));
+        string.position.y = -0.18;
+        const TINTS = [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [0.8, 1.8, 1.6], [2.2, 1.7, 0.6], [1.3, 0.9, 2.0]];
+        const l = paperLantern({ scale: 1.4, tint: TINTS[c % TINTS.length], glow: 1.0 });
+        l.position.y = -0.48;
+        hang.add(string, l);
+        cg.add(hang);
+        animators.push((tt) => { hang.rotation.z = Math.sin(tt * 0.9 + c) * 0.05; hang.rotation.x = Math.sin(tt * 0.7 + c * 2) * 0.04; flickerLantern(l, tt); });
+      }
+      // La boca del pasillo: dintel sobre la entrada y el cartel colgado con el nombre del pasillo.
+      {
+        lr.push(box(2 * (HW + WALL) + 0.2, 0.42, 0.5, 0, ROOM_WALL_H - 0.21, -0.25));
+        const labelMat = new THREE.MeshBasicMaterial({ transparent: true });
+        const label = twoSided(new THREE.PlaneGeometry(3.1, 0.5), labelMat);
+        label.userData.mat = labelMat;
+        label.position.set(0, 3.78, -0.62);
+        label.rotation.y = Math.PI; // mira al salón
+        cg.add(label);
+        for (const sx of [-1.25, 1.25]) {
+          const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.5, 4), new THREE.MeshLambertMaterial({ color: '#c9973f' }));
+          chain.position.set(sx, 4.25, -0.62);
+          cg.add(chain);
+        }
+        corridorLabels.push(label);
+      }
+
+      // ---------- los nichos de este pasillo ----------
+      for (let rowIdx = 0; rowIdx < ROWS; rowIdx++) {
+        for (const [sdIdx, sd] of [[0, -1], [1, 1]]) {
+          for (let col = 0; col < COLS; col++) {
+            const local = c * PER_CORRIDOR + rowIdx * 2 * COLS + sdIdx * COLS + col;
+            const g = new THREE.Group();
+            g.position.set(sd * HW, slotRow(rowIdx), Z0 + PX / 2 + col * PX);
+            g.rotation.y = -sd * Math.PI / 2; // +z hacia el pasillo
+            cg.add(g);
+            slots[local] = makeSlot(g, local);
+          }
+        }
+      }
+      wallParts.push(...lw.map(toWorld));
+      trimParts.push(...lt.map(toWorld));
+      roofParts.push(...lr.map(toWorld));
+      cg.updateMatrixWorld(true);
+    }
+    const walls = new THREE.Mesh(mergeGeometries(wallParts), nicheMat);
+    walls.userData.kind = 'wall';
+    blockers.push(walls);
+    scene.add(walls);
+    scene.add(new THREE.Mesh(mergeGeometries(trimParts), trimMat));
+    scene.add(new THREE.Mesh(mergeGeometries(roofParts), roofMat));
+    scene.add(new THREE.Mesh(mergeGeometries(beamParts), nicheMat));
+    scene.add(new THREE.Mesh(mergeGeometries(potParts), new THREE.MeshLambertMaterial({ map: talavera })));
+    scene.add(new THREE.Mesh(mergeGeometries(leafParts), leafMat2));
+    scene.add(marigoldCluster(flowerPts, { r: 0.07, rnd: r }));
+  }
+  // Arma un nicho: la caja de adentro (fondo de color, marco claro, foto, vidrio), la repisa con velas,
+  // jarrito y regalitos, la plaquita con el nombre, el brillo y el área para tocar.
+  function makeSlot(g, local) {
+    const mat = new THREE.Mesh(new THREE.PlaneGeometry(OW - 0.02, OH - 0.02), new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#3a2a20', emissiveIntensity: 0.35 }));
+    mat.position.z = -DEPTH + 0.01;
+    const border = new THREE.Mesh(frameGeo, frameMat);
+    border.position.set(0, PHOTO_Y, -DEPTH + 0.035);
+    const photo = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+    photo.position.set(0, PHOTO_Y, -DEPTH + 0.04);
+    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(OW - 0.04, DEPTH - 0.04).rotateX(-Math.PI / 2), clothMat);
+    cloth.position.set(0, -OH / 2 + 0.003, -DEPTH / 2);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(OW, OH), glassMat);
+    glass.position.z = -0.015;
+    glass.renderOrder = 4;
+    const name = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.13), new THREE.MeshBasicMaterial({ transparent: true }));
+    name.position.set(0, -OH / 2 - 0.13, 0.008);
+    const pick = new THREE.Mesh(new THREE.PlaneGeometry(OW + 0.1, OH + 0.1), pickMat);
+    pick.position.z = 0.05;
+    pick.userData = { kind: 'slot', local };
+    pickables.push(pick);
+
+    const shelf = new THREE.Group();
+    shelf.position.set(0, -OH / 2, -DEPTH / 2 + 0.02);
+    shelf.scale.setScalar(1.2);
+    const candles = [0, 1, 2].map((i) => {
+      const c = makeCandle(waxMat, 0.09 + i * 0.03, flames, tier.bloom);
+      c.position.set([0.31, 0.38, 0.24][i], 0.0, [0.04, -0.04, -0.06][i]);
+      c.visible = false;
+      shelf.add(c);
+      return c;
+    });
+    // Jarrito de barro con el ramo de cempasúchil (más flores, más ramo).
+    const jar = new THREE.Group();
+    jar.position.set(-0.32, 0.0, -0.02);
+    jar.scale.setScalar(1.15);
+    jar.add(new THREE.Mesh(jarGeo, jarMat), new THREE.Mesh(jarRimGeo, jarMat), new THREE.Mesh(jarLeafGeo, leafMat));
+    jar.visible = false;
+    shelf.add(jar);
+    const flowers = BOUQUET.map(([x, y, z, s], i) => {
+      const f = new THREE.Mesh(marigoldGeo, flowerMats[(local + i) % flowerMats.length]);
+      f.position.set(x, y, z);
+      f.scale.setScalar(s);
+      f.rotation.set(x * 4, i, z * 4);
+      f.visible = false;
+      jar.add(f);
+      return f;
+    });
+    const gifts = [0, 1, 2].map((i) => {
+      const h = giftHolder(0.16);
+      h.position.set(-0.13 + i * 0.15, 0.0, 0.06);
+      h.rotation.y = (i - 1) * 0.3;
+      shelf.add(h);
+      return h;
+    });
+    const fx = makeGlowFx(glowFx, 0.72);
+    fx.group.position.set(0, 0.04, 0.02);
+    const inside = new THREE.Group();
+    inside.add(mat, border, photo, cloth, glass, name, shelf, fx.group);
+    inside.visible = false;
+    g.add(inside, pick);
+    return { group: g, inside, border, mat, photo, name, shelf, candles, jar, flowers, gifts, fx, memorial: null, textures: [], open: 0, openTarget: 0, openDelay: 0, local };
+  }
+
+  // ---------- puertitas de los nichos (todas en un solo dibujo) ----------
+  const DT = doorTextures();
+  const doorGeo = new THREE.BoxGeometry(OW - 0.02, OH - 0.02, 0.045).translate((OW - 0.02) / 2, 0, 0.0225);
+  const doorMat = new THREE.MeshLambertMaterial({ map: DT.map, emissive: '#ffcf8a', emissiveMap: DT.glow, emissiveIntensity: 0.75 });
+  const doors = new THREE.InstancedMesh(doorGeo, doorMat, SLOTS_PER_FLOOR);
+  doors.frustumCulled = false;
+  const doorBase = slots.map((_, i) => new THREE.Color().setHSL(0.07 + ((i * 37) % 10) * 0.003, 0.25, 0.62 + ((i * 53) % 7) * 0.03));
+  slots.forEach((s, i) => doors.setColorAt(i, doorBase[i]));
+  scene.add(doors);
+
+  // ---------- lucecitas alrededor de los nichos abiertos ----------
+  const PER_BULB = tier.bloom ? 18 : 12;
+  const bulbGeo = new THREE.IcosahedronGeometry(0.024, 0);
+  const nicheBulbMat = new THREE.MeshBasicMaterial();
+  nicheBulbMat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = uTime;
+    sh.vertexShader = `uniform float uTime;\nvarying float vTw;\n${sh.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vec3 ip = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+      vTw = 0.74 + 0.26 * sin(uTime * 2.1 + ip.x * 7.1 + ip.y * 5.3 + ip.z * 3.7) + 0.5 * step(0.992, sin(uTime * 4.3 + ip.x * 13.0 + ip.z * 11.0));`);
+    sh.fragmentShader = `varying float vTw;\n${sh.fragmentShader}`.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= vTw;');
+  };
+  nicheBulbMat.customProgramCacheKey = () => 'nicho-lucecitas-1';
+  const nicheBulbs = new THREE.InstancedMesh(bulbGeo, nicheBulbMat, SLOTS_PER_FLOOR * PER_BULB);
+  nicheBulbs.frustumCulled = false;
+  const BULB_COLS = ['#ff4fa0', '#ffb02e', '#37d6c8', '#a46bff', '#6fe36a', '#ff6a3d'].map((c) => new THREE.Color(c).multiplyScalar(tier.bloom ? 2.3 : 1.25));
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  // Puntos del contorno del hueco (en el sistema del nicho), con un poco de comba como una guirnalda.
+  const bulbLocal = [];
+  {
+    const w = OW + 0.12;
+    const h = OH + 0.12;
+    const per = 2 * (w + h);
+    for (let i = 0; i < PER_BULB; i++) {
+      let d = ((i + 0.5) / PER_BULB) * per;
+      let x;
+      let y;
+      if (d < w) { x = -w / 2 + d; y = h / 2 - Math.sin((d / w) * Math.PI) * 0.035; } else if ((d -= w) < h) { x = w / 2; y = h / 2 - d; } else if ((d -= h) < w) { x = w / 2 - d; y = -h / 2; } else { d -= w; x = -w / 2; y = -h / 2 + d; }
+      bulbLocal.push(new THREE.Vector3(x, y, 0.04));
+    }
+  }
+  const tmpM = new THREE.Matrix4();
+  const tmpV = new THREE.Vector3();
   slots.forEach((s, i) => {
-    s.open = 0;
-    s.openTarget = 0;
-    s.openDelay = 0;
-    for (let k = 0; k < 2; k++) {
-      shutters.setMatrixAt(i * 2 + k, zero);
-      shutters.setColorAt(i * 2 + k, SHUTTER_COLS[(i * 3 + Math.floor(i / 9)) % SHUTTER_COLS.length]);
+    for (let k = 0; k < PER_BULB; k++) {
+      nicheBulbs.setMatrixAt(i * PER_BULB + k, zero);
+      nicheBulbs.setColorAt(i * PER_BULB + k, BULB_COLS[(k + i) % BULB_COLS.length]);
     }
   });
-  scene.add(shutters);
-  const shM = new THREE.Matrix4();
-  const shL = new THREE.Matrix4();
-  const shT = new THREE.Matrix4();
-  const shR = new THREE.Matrix4();
-  const shS = new THREE.Matrix4();
+  scene.add(nicheBulbs);
+  function setBulbs(s, on) {
+    if (s.bulbsOn === on) return;
+    s.bulbsOn = on;
+    s.group.updateMatrixWorld(true);
+    for (let k = 0; k < PER_BULB; k++) {
+      if (on) {
+        tmpV.copy(bulbLocal[k]).applyMatrix4(s.group.matrixWorld);
+        tmpM.makeTranslation(tmpV.x, tmpV.y, tmpV.z);
+        nicheBulbs.setMatrixAt(s.local * PER_BULB + k, tmpM);
+      } else nicheBulbs.setMatrixAt(s.local * PER_BULB + k, zero);
+    }
+    nicheBulbs.instanceMatrix.needsUpdate = true;
+  }
+
+  // Las puertitas: cerradas en los lugares libres; cuando llega una huellita se abren hacia el pasillo
+  // (con un rebote) y se pliegan contra el marco, y quedan el vidrio y las lucecitas.
+  const dM = new THREE.Matrix4();
+  const dL = new THREE.Matrix4();
+  const dT = new THREE.Matrix4().makeTranslation(-(OW - 0.02) / 2, 0, 0.0);
+  const dR = new THREE.Matrix4();
+  const dS = new THREE.Matrix4();
   let lastAnimT = 0;
-  function updateShutters(t) {
+  let hoverDoor = -1;
+  function updateDoors(t) {
     const dt = Math.min(0.1, Math.max(0, t - lastAnimT));
     lastAnimT = t;
     let dirty = false;
-    slots.forEach((s, i) => {
-      if (!s.memorial) {
-        if (s.open !== -1) { shutters.setMatrixAt(i * 2, zero); shutters.setMatrixAt(i * 2 + 1, zero); s.open = -1; dirty = true; }
-        return;
-      }
-      if (s.open < 0) s.open = 0;
+    for (const s of slots) {
+      const target = s.memorial ? 1 : 0;
+      s.openTarget = target;
+      if (s.open === target && s.drawn) continue;
       if (s.openDelay > 0) s.openDelay -= dt;
-      else s.open += (s.openTarget - s.open) * Math.min(1, dt * 2.4);
-      // Se abren con un pequeño rebote, como postigos de verdad.
-      const e = s.open < 0.999 ? s.open + Math.sin(s.open * Math.PI) * 0.08 : 1;
-      const ang = e * 2.45;
-      for (let k = 0; k < 2; k++) {
-        const sd = k === 0 ? -1 : 1;
-        shT.makeTranslation(sd * WIN_W / 2, 0, 0.15);
-        shR.makeRotationY(-sd * ang);
-        shS.makeScale(-sd, 1, 1);
-        shL.multiplyMatrices(shT, shR).multiply(shS);
-        shM.multiplyMatrices(s.group.matrixWorld, shL);
-        shutters.setMatrixAt(i * 2 + k, shM);
+      else {
+        const sp = dt * (target ? 1.5 : 2.6);
+        s.open = target > s.open ? Math.min(target, s.open + sp) : Math.max(target, s.open - sp);
       }
+      const e = s.open;
+      // 0 → 0,7: se abre hasta ~105° (con un pequeño rebote); 0,7 → 1: se pliega contra la bisagra.
+      const swing = Math.min(1, e / 0.7);
+      const ang = (swing + Math.sin(swing * Math.PI) * 0.06) * 1.83;
+      const fold = e > 0.7 ? 1 - (e - 0.7) / 0.3 : 1;
+      if (fold <= 0.001) dL.copy(zero);
+      else {
+        dR.makeRotationY(-ang);
+        dS.makeScale(Math.max(0.001, fold), 1, 1);
+        dL.multiplyMatrices(dT, dR).multiply(dS);
+      }
+      dM.multiplyMatrices(s.group.matrixWorld, dL);
+      doors.setMatrixAt(s.local, fold <= 0.001 ? zero : dM);
+      s.drawn = true;
       dirty = true;
-    });
-    if (dirty) shutters.instanceMatrix.needsUpdate = true;
+      // Adentro y las lucecitas aparecen apenas se entreabre.
+      const showIn = e > 0.08;
+      if (s.inside.visible !== showIn) s.inside.visible = showIn;
+      setBulbs(s, e > 0.55);
+    }
+    if (dirty) doors.instanceMatrix.needsUpdate = true;
+  }
+  function setDoorHover(i) {
+    if (i === hoverDoor) return;
+    if (hoverDoor >= 0) doors.setColorAt(hoverDoor, doorBase[hoverDoor]);
+    hoverDoor = i;
+    if (i >= 0) doors.setColorAt(i, doorBase[i].clone().multiplyScalar(1.45));
+    if (doors.instanceColor) doors.instanceColor.needsUpdate = true;
   }
 
+  // Las lucecitas de los pasillos (ya están en `bulbs`) brillan menos que las de la pérgola: están cerca de la cámara.
+  const corridorBulbs = bulbs.length;
+
   // ---------- pérgola y guirnaldas ----------
-  const posts = [];
-  for (let p = 0; p <= PANELS; p++) {
-    const a = THREE.MathUtils.degToRad(40 + (p - 0.5) * (280 / (PANELS - 1)));
-    posts.push(new THREE.Vector3(HALL_CENTER.x + Math.sin(a) * (HALL_RADIUS + 0.1), 0, HALL_CENTER.z + Math.cos(a) * (HALL_RADIUS + 0.1)));
+  // Pilares en los bordes de cada boca de pasillo y de la entrada (y cada tanto en los tramos largos).
+  const postDeg = [];
+  for (const [a0, a1] of ROOM_ARCS) {
+    postDeg.push(a0);
+    const n = Math.floor((a1 - a0) / 22);
+    for (let k = 1; k <= n; k++) postDeg.push(a0 + ((a1 - a0) * k) / (n + 1));
+    postDeg.push(a1);
   }
+  const posts = postDeg.map((d) => onRing(d, ROOM_R - 0.38));
   {
     const parts = [];
     for (const pt of posts) {
-      const g = new THREE.BoxGeometry(0.22, POST_H, 0.22);
-      g.translate(pt.x, POST_H / 2, pt.z);
-      parts.push(g);
+      parts.push(new THREE.BoxGeometry(0.26, POST_H, 0.26).translate(pt.x, POST_H / 2, pt.z).toNonIndexed());
       colliders.circles.push({ x: pt.x, z: pt.z, r: 0.2 });
     }
-    // Vigas entre postes (incluida la de la entrada).
+    // Vigas entre pilares, todo alrededor (también sobre la entrada y las bocas).
     for (let i = 0; i < posts.length; i++) {
       const a = posts[i];
       const b = posts[(i + 1) % posts.length];
       const g = new THREE.BoxGeometry(a.distanceTo(b) + 0.2, 0.2, 0.18);
       g.rotateY(-Math.atan2(b.z - a.z, b.x - a.x));
       g.translate((a.x + b.x) / 2, POST_H, (a.z + b.z) / 2);
-      parts.push(g);
+      parts.push(g.toNonIndexed());
     }
     const pole = new THREE.CylinderGeometry(0.07, 0.1, POLE_H, 10);
     pole.translate(HALL_CENTER.x, POLE_H / 2, HALL_CENTER.z);
-    parts.push(pole);
-    scene.add(new THREE.Mesh(mergeGeometries(parts.map((g) => g.toNonIndexed())), postMat));
+    parts.push(pole.toNonIndexed());
+    scene.add(new THREE.Mesh(mergeGeometries(parts), postMat));
 
     // Cartel de bienvenida colgado en la entrada.
-    const a = posts[0];
-    const b = posts[posts.length - 1];
-    const sign = twoSided(new THREE.PlaneGeometry(6.4, 1.04), new THREE.MeshBasicMaterial({
-      map: labelTexture('Jardín de las huellitas', { w: 1024, h: 166, font: '400 70px "Young Serif", Georgia, serif', bg: 'rgba(74,48,34,0.96)', fg: '#f6e3c4' }),
+    const a = onRing(-17, ROOM_R - 0.38);
+    const b = onRing(17, ROOM_R - 0.38);
+    const sign = twoSided(new THREE.PlaneGeometry(5.6, 0.92), new THREE.MeshBasicMaterial({
+      map: labelTexture('Jardín de las huellitas', { w: 1024, h: 168, font: '400 70px "Young Serif", Georgia, serif', bg: 'rgba(74,48,34,0.96)', fg: '#f6e3c4' }),
     }));
     sign.position.set((a.x + b.x) / 2, POST_H - 0.55, (a.z + b.z) / 2);
     sign.lookAt(sign.position.x, sign.position.y, sign.position.z + 10);
@@ -428,7 +874,6 @@ export function buildHall(scene, colliders, tier) {
     flames.push({ spin: star });
   }
 
-  const bulbs = [];
   const wire = [];
   const top = new THREE.Vector3(HALL_CENTER.x, POLE_H - 0.2, HALL_CENTER.z);
   function strand(a, b, n, sag) {
@@ -447,8 +892,8 @@ export function buildHall(scene, colliders, tier) {
       bulbs.push(p);
     }
   }
-  for (const pt of posts) strand(new THREE.Vector3(pt.x, POST_H + 0.1, pt.z), top, tier.bulbsPerStrand, 0.9);
-  // Farolitos de papel colgando de las guías de luces de la pérgola (uno cada dos postes, a dos alturas).
+  for (const pt of posts) strand(new THREE.Vector3(pt.x, POST_H + 0.1, pt.z), top, Math.round(tier.bulbsPerStrand * 0.7), 0.7);
+  // Farolitos de papel colgando de las guías de luces de la pérgola (uno cada dos pilares, a dos alturas).
   {
     const TINTS = [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [0.8, 1.8, 1.6], [2.2, 1.7, 0.6], [1.3, 0.9, 2.0]];
     posts.forEach((pt, i) => {
@@ -456,13 +901,13 @@ export function buildHall(scene, colliders, tier) {
       const a = new THREE.Vector3(pt.x, POST_H + 0.1, pt.z);
       for (const [j, t] of [0.32, 0.62].entries()) {
         const p = new THREE.Vector3().lerpVectors(a, top, t);
-        p.y -= Math.sin(Math.PI * t) * 0.9;
+        p.y -= Math.sin(Math.PI * t) * 0.7;
         const hang = new THREE.Group();
         hang.position.copy(p);
         const string = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 4), new THREE.MeshBasicMaterial({ color: '#2a1d16' }));
         string.position.y = -0.25;
-        const l = paperLantern({ scale: 1.9, tint: TINTS[(i + j) % TINTS.length], glow: 1.4 });
-        l.position.y = -0.85;
+        const l = paperLantern({ scale: 1.7, tint: TINTS[(i + j) % TINTS.length], glow: 1.4 });
+        l.position.y = -0.8;
         hang.add(string, l);
         scene.add(hang);
         const ph = i * 1.3 + j;
@@ -470,30 +915,33 @@ export function buildHall(scene, colliders, tier) {
       }
     });
   }
-  // Papel picado entre los postes y cruzando hacia el poste central.
-  for (let i = 0; i < posts.length - 1; i++) {
-    const b = picadoBanner(new THREE.Vector3(posts[i].x, POST_H - 0.12, posts[i].z), new THREE.Vector3(posts[i + 1].x, POST_H - 0.12, posts[i + 1].z), { sag: 0.35, flags: 9, size: 0.36, seed: i });
-    scene.add(b);
-    animators.push(b.userData.flutter);
+  // Papel picado entre los pilares y cruzando hacia el poste central.
+  for (let i = 0; i < posts.length; i++) {
+    const a = posts[i];
+    const b = posts[(i + 1) % posts.length];
+    if (a.distanceTo(b) < 1) continue;
+    const pb = picadoBanner(new THREE.Vector3(a.x, POST_H - 0.12, a.z), new THREE.Vector3(b.x, POST_H - 0.12, b.z), { sag: 0.3, flags: Math.max(4, Math.round(a.distanceTo(b) / 0.42)), size: 0.34, seed: i });
+    scene.add(pb);
+    animators.push(pb.userData.flutter);
   }
   for (let i = 0; i < posts.length; i += 2) {
     const a = new THREE.Vector3(posts[i].x, POST_H - 0.4, posts[i].z);
-    const mid = new THREE.Vector3().lerpVectors(a, new THREE.Vector3(HALL_CENTER.x, POLE_H - 1.0, HALL_CENTER.z), 0.92);
-    const b = picadoBanner(a, mid, { sag: 0.6, flags: 12, size: 0.34, seed: i * 3 });
+    const mid = new THREE.Vector3().lerpVectors(a, new THREE.Vector3(HALL_CENTER.x, POLE_H - 1.0, HALL_CENTER.z), 0.9);
+    const b = picadoBanner(a, mid, { sag: 0.5, flags: 10, size: 0.32, seed: i * 3 });
     scene.add(b);
     animators.push(b.userData.flutter);
   }
   // Arco de cempasúchil en la entrada.
   {
-    const a = posts[0];
-    const b = posts[posts.length - 1];
+    const a = onRing(-16, ROOM_R + 0.45);
+    const b = onRing(16, ROOM_R + 0.45);
     const pts = [];
     const gatePts = [];
     for (let i = 0; i <= 64; i++) {
       const t = i / 64;
       const x = THREE.MathUtils.lerp(a.x, b.x, t);
       const z = THREE.MathUtils.lerp(a.z, b.z, t);
-      const y = 0.3 + Math.sin(t * Math.PI) * (POST_H + 0.9) * (0.65 + 0.35 * Math.sin(t * Math.PI));
+      const y = 0.3 + Math.sin(t * Math.PI) * (POST_H - 0.4) * (0.62 + 0.38 * Math.sin(t * Math.PI));
       for (let k = 0; k < 3; k++) pts.push([x + (r() - 0.5) * 0.16, y + (r() - 0.5) * 0.16, z + (r() - 0.5) * 0.16, 0.9 + r() * 0.5]);
       gatePts.push(new THREE.Vector3(x, y, z));
     }
@@ -518,27 +966,19 @@ export function buildHall(scene, colliders, tier) {
   const bulbColor = new THREE.Color();
 
   // Luz cálida general del salón (las guirnaldas).
-  const hallLight = new THREE.PointLight('#ffbf7a', 18, 44, 1.4);
+  const hallLight = new THREE.PointLight('#ffbf7a', 18, 46, 1.3);
   hallLight.position.set(HALL_CENTER.x, POLE_H - 1.2, HALL_CENTER.z);
   scene.add(hallLight);
 
-  // ---------- cantero central ----------
+  // ---------- cantero alrededor del poste ----------
   {
-    const bed = new THREE.Mesh(new THREE.CylinderGeometry(BED_R, BED_R + 0.15, 0.45, 48), new THREE.MeshLambertMaterial({ color: '#8b7d72' }));
+    const bed = new THREE.Mesh(new THREE.CylinderGeometry(BED_R, BED_R + 0.15, 0.45, 40), new THREE.MeshLambertMaterial({ color: '#8b7d72' }));
     bed.position.copy(HALL_CENTER).setY(0.3);
-    const soil = new THREE.Mesh(new THREE.CylinderGeometry(BED_R - 0.18, BED_R - 0.18, 0.05, 48), new THREE.MeshLambertMaterial({ color: '#3b2a20' }));
+    const soil = new THREE.Mesh(new THREE.CylinderGeometry(BED_R - 0.18, BED_R - 0.18, 0.05, 40), new THREE.MeshLambertMaterial({ color: '#3b2a20' }));
     soil.position.copy(HALL_CENTER).setY(0.53);
     scene.add(bed, soil);
     colliders.circles.push({ x: HALL_CENTER.x, z: HALL_CENTER.z, r: BED_R + 0.4 });
-    const petals = [];
-    for (let i = 0; i < 5; i++) {
-      const p = new THREE.CircleGeometry(0.05, 6);
-      p.translate(0.055, 0, 0);
-      p.rotateZ((i / 5) * Math.PI * 2);
-      petals.push(p);
-    }
-    void petals;
-    const n = 520;
+    const n = 300;
     const fl = new THREE.InstancedMesh(marigoldGeometry(0.075, '#ffffff', r), marigoldMaterial(), n);
     const pal = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#e04b8a', '#ff9a1f'].map((c) => new THREE.Color(c));
     const m = new THREE.Object3D();
@@ -555,23 +995,57 @@ export function buildHall(scene, colliders, tier) {
     scene.add(fl);
   }
 
-  // ---------- atril de la huellita destacada ----------
+  // ---------- en los pisos de arriba, donde está la ofrenda: una fuente con velitas flotando ----------
+  const fountain = new THREE.Group();
+  fountain.position.set(EASEL_POS.x, 0, EASEL_POS.z);
+  fountain.visible = false;
+  scene.add(fountain);
+  const fountainCol = { x: EASEL_POS.x, z: EASEL_POS.z, r: -100 };
+  colliders.circles.push(fountainCol);
+  const floaters = [];
+  {
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(2.0, 0.16, 10, 48).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ map: talavera }));
+    rim.position.y = 0.42;
+    const wallB = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.05, 0.42, 48, 1, true), new THREE.MeshLambertMaterial({ map: talavera, side: THREE.DoubleSide }));
+    wallB.position.y = 0.21;
+    const water = new THREE.Mesh(new THREE.CircleGeometry(1.95, 48).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#1b4d6b', emissive: '#0f3a5a', emissiveIntensity: 0.8, transparent: true, opacity: 0.92 }));
+    water.position.y = 0.34;
+    fountain.add(rim, wallB, water);
+    for (let i = 0; i < 7; i++) {
+      const c = makeCandle(waxMat, 0.08 + r() * 0.06, flames, tier.bloom);
+      const a = (i / 7) * Math.PI * 2 + r();
+      const d = 0.5 + r() * 1.1;
+      const pad = new THREE.Mesh(new THREE.CircleGeometry(0.12, 10).rotateX(-Math.PI / 2), leafMat);
+      pad.position.y = -0.005;
+      c.add(pad);
+      c.position.set(Math.cos(a) * d, 0.35, Math.sin(a) * d);
+      c.scale.setScalar(1.6);
+      fountain.add(c);
+      floaters.push({ c, a, d, s: 0.05 + r() * 0.08 });
+    }
+    const pts = [];
+    for (let i = 0; i < 70; i++) { const a = (i / 70) * Math.PI * 2; pts.push([Math.cos(a) * 2.0, 0.6 + r() * 0.06, Math.sin(a) * 2.0, 0.9 + r() * 0.4]); }
+    fountain.add(marigoldCluster(pts, { r: 0.09, rnd: r }));
+  }
+
+  // ---------- la ofrenda de la huellita destacada (sólo en el piso 1) ----------
   const easel = new THREE.Group();
   easel.position.copy(EASEL_POS);
   scene.add(easel);
-  colliders.circles.push({ x: EASEL_POS.x, z: EASEL_POS.z - 0.2 * ALTAR_SCALE, r: 1.7 * ALTAR_SCALE });
+  const easelCol = { x: EASEL_POS.x, z: EASEL_POS.z - 0.2 * ALTAR_SCALE, r: 1.7 * ALTAR_SCALE };
+  colliders.circles.push(easelCol);
   // Ofrenda de tres escalones con mantel, papel picado, flores, calaveritas y pan de muerto.
   const cloth = new THREE.MeshLambertMaterial({ color: '#fbf3e6', emissive: '#2a1a14' });
   const steps = [[3.0, 0.35, 1.7, -0.15], [2.4, 0.7, 1.15, -0.42], [1.8, 1.05, 0.6, -0.7]];
   steps.forEach(([w, h, d, z], i) => {
-    const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cloth);
-    box.position.set(0, h / 2, z);
-    easel.add(box);
+    const bx = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cloth);
+    bx.position.set(0, h / 2, z);
+    easel.add(bx);
     const front = z + d / 2 + 0.01;
     const b = picadoBanner(new THREE.Vector3(-w / 2, h - 0.01, front), new THREE.Vector3(w / 2, h - 0.01, front), { sag: 0.0, flags: Math.round(w / 0.32), size: 0.27, seed: i * 5 });
-    b.children.forEach((c) => { if (c.isMesh) c.rotation.y = 0; });
+    b.children.forEach((ch) => { if (ch.isMesh) ch.rotation.y = 0; });
     easel.add(b);
-    animators.push((t) => b.children.forEach((c, k) => { if (c.isMesh) c.rotation.x = Math.sin(t * 1.6 + k + i) * 0.06; }));
+    animators.push((t) => { if (easel.visible) b.children.forEach((ch, k) => { if (ch.isMesh) ch.rotation.x = Math.sin(t * 1.6 + k + i) * 0.06; }); });
   });
   // Flores en macetas a los costados y en los escalones.
   {
@@ -622,7 +1096,6 @@ export function buildHall(scene, colliders, tier) {
   spot.add(spotBorder, spotPhoto);
   spot.visible = false;
   easel.add(spot);
-  pickables.push(spotPhoto);
 
   // Estampita de la familia (si la huellita destacada tiene una), apoyada en el escalón.
   const card = new THREE.Group();
@@ -634,19 +1107,18 @@ export function buildHall(scene, colliders, tier) {
   const cardPhoto = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#f2ece4' }));
   cardPhoto.userData = { kind: 'featured' };
   card.add(cardBorder, cardPhoto);
-  pickables.push(cardPhoto);
   let cardSrc = null;
-  function setCard(c) {
-    card.visible = !!c;
-    if (!c || c.src === cardSrc) return;
-    cardSrc = c.src;
+  function setCard(cd) {
+    card.visible = !!cd;
+    if (!cd || cd.src === cardSrc) return;
+    cardSrc = cd.src;
     const h = 0.62;
-    const w = h * (c.w / c.h);
+    const w = h * (cd.w / cd.h);
     cardBorder.scale.set(w + 0.05, h + 0.05, 1);
     cardBorder.position.set(0, h / 2 + 0.03, 0);
     cardPhoto.scale.set(w, h, 1);
     cardPhoto.position.set(0, h / 2 + 0.03, 0.017);
-    new THREE.TextureLoader().load(c.src, (t) => {
+    new THREE.TextureLoader().load(cd.src, (t) => {
       t.colorSpace = THREE.SRGBColorSpace;
       t.anisotropy = 4;
       cardPhoto.material.map = t;
@@ -665,7 +1137,8 @@ export function buildHall(scene, colliders, tier) {
   plaque.position.set(0, 0.47, 0.32);
   plaque.rotation.x = -0.25;
   easel.add(fBorder, fMat, fPhoto, plaque);
-  pickables.push(fPhoto);
+  // Lo que se toca de la ofrenda (sólo cuenta en el piso 1: el rayo no mira si algo está escondido).
+  const featuredPicks = [fPhoto, spotPhoto, cardPhoto];
   // Velas alrededor del atril: se encienden más a medida que llegan velas.
   const clusterCandles = [];
   for (let i = 0; i < 26; i++) {
@@ -713,47 +1186,43 @@ export function buildHall(scene, colliders, tier) {
 
   // ---------- estado ----------
   let floor = 0;
-  let labelFloor = -1;
   let hovered = null;
+  // La ofrenda (y lo que la rodea) sólo en el piso 1; arriba, en su lugar, la fuente.
+  function showAltar(on) {
+    easel.visible = on;
+    easelLight.visible = on;
+    easelCol.r = on ? 1.7 * ALTAR_SCALE : -100;
+    fountain.visible = !on;
+    fountainCol.r = on ? -100 : 2.25;
+  }
+  showAltar(true);
 
   function clearSlot(s) {
-    s.openTarget = 0;
     s.textures.forEach((t) => t.dispose());
     s.textures = [];
     s.memorial = null;
-    s.photo.material.map = emptySlotTexture();
-    s.photo.material.opacity = 0.75;
-    s.photo.material.needsUpdate = true;
-    s.border.visible = false;
-    s.mat.visible = false;
-    s.name.visible = false;
     s.shelf.visible = false;
     s.fx.group.visible = false;
+    s.name.visible = false;
   }
 
   function fillSlot(s, m) {
     const prev = s.memorial;
-    if (!prev || prev.id !== m.id) { s.open = 0; s.openDelay = Math.random() * 0.7; }
-    s.openTarget = 1;
-    if (!(prev && prev.id === m.id && prev.photo === m.photo)) {
+    // Al llegar una huellita nueva (o al cambiar de piso) las puertitas se abren de a una.
+    if (!prev || prev.id !== m.id) { s.open = 0; s.drawn = false; s.openDelay = Math.random() * 0.9; }
+    if (!(prev && prev.id === m.id && prev.photo === m.photo && prev.name === m.name)) {
       clearSlot(s);
-      s.openTarget = 1;
       const tex = m.photo ? photoTexture(m.photo) : portraitTexture(m);
       s.textures.push(tex);
       s.photo.material.map = tex;
-      s.photo.material.opacity = 1;
       s.photo.material.needsUpdate = true;
-      if (m.photo) {
-        const lt = labelTexture(m.name, { w: 384, h: 72, font: '700 50px Caveat, cursive' });
-        s.textures.push(lt);
-        s.name.material.map = lt;
-        s.name.material.needsUpdate = true;
-        s.name.visible = true;
-      }
+      const lt = labelTexture(m.name, { w: 400, h: 74, font: '400 44px "Young Serif", Georgia, serif', bg: 'rgba(201,151,63,0.98)', fg: '#3a2410' });
+      s.textures.push(lt);
+      s.name.material.map = lt;
+      s.name.material.needsUpdate = true;
     }
     s.memorial = m;
-    s.border.visible = true;
-    s.mat.visible = true;
+    s.name.visible = true;
     s.border.material = m.candles >= 20 || m.eternal ? goldMat : frameMat;
     if (s.bg !== m.bg) {
       s.mat.material.map = backgroundTexture(m.bg || 'crema');
@@ -815,34 +1284,39 @@ export function buildHall(scene, colliders, tier) {
     }
     slots.forEach((s, i) => (here.has(i) ? fillSlot(s, here.get(i)) : clearSlot(s)));
     // Cada pasillo con su nombre y cuántas huellitas tiene en este piso.
-    const per = new Array(PANELS).fill(0);
-    for (const i of here.keys()) per[Math.floor(i / PER_PANEL)]++;
-    labelFloor = floor;
-    panelLabels.forEach((lbl, p) => {
-      const n = per[p];
-      const text = n ? `${CORRIDOR_NAMES[p]} · ${n} ${n === 1 ? 'huellita' : 'huellitas'}` : CORRIDOR_NAMES[p];
+    const per = new Array(CORRIDORS).fill(0);
+    for (const i of here.keys()) per[Math.floor(i / PER_CORRIDOR)]++;
+    corridorLabels.forEach((lbl, c) => {
+      const n = per[c];
+      const text = n ? `${CORRIDOR_NAMES[c]} · ${n} ${n === 1 ? 'huellita' : 'huellitas'}` : CORRIDOR_NAMES[c];
       if (lbl.userData.text === text) return;
       lbl.userData.text = text;
-      lbl.material.map?.dispose();
-      lbl.material.map = labelTexture(text, { w: 1100, h: 172, font: '400 70px "Young Serif", Georgia, serif', bg: 'rgba(58,36,24,0.95)', fg: '#f6e3c4' });
-      lbl.material.needsUpdate = true;
+      const mat = lbl.userData.mat;
+      mat.map?.dispose();
+      mat.map = labelTexture(text, { w: 1100, h: 178, font: '400 70px "Young Serif", Georgia, serif', bg: 'rgba(58,36,24,0.95)', fg: '#f6e3c4' });
+      mat.needsUpdate = true;
     });
   }
 
-  const objFor = (key) => (key === 'featured' ? easel : slots[key]?.group);
+  const objFor = (key) => (key === 'featured' ? easel : slots[key]?.inside);
+  const _n = new THREE.Vector3();
 
   return {
     slots,
+    blockers,
     get featured() { return featured; },
     get floor() { return floor; },
     setFloor(n, memorials) {
       floor = n;
+      showAltar(n === 0);
       render(memorials);
     },
     render,
     pickables() {
-      return pickables;
+      return floor === 0 ? [...pickables, ...featuredPicks] : pickables;
     },
+    // De qué pasillo es un lugar (0..4).
+    corridorOf: (i) => Math.floor(i / PER_CORRIDOR),
     // Dónde pararse para mirar un lugar. `shift` corre la vista para que la ficha no tape el marco.
     viewpoint(key, shift = 0, distMul = 1) {
       if (key === 'featured') {
@@ -854,12 +1328,14 @@ export function buildHall(scene, colliders, tier) {
       const s = slots[key];
       const frame = new THREE.Vector3();
       s.photo.getWorldPosition(frame);
-      const normal = new THREE.Vector3(0, 0, 1).transformDirection(s.photo.matrixWorld);
-      const right = new THREE.Vector3(1, 0, 0).transformDirection(s.photo.matrixWorld);
-      const target = frame.clone().addScaledVector(right, shift);
-      const stand = target.clone().addScaledVector(normal, (3.1 * WALL_SCALE + Math.max(0, target.y - 1.6) * 0.9) * distMul);
-      stand.y = 1.6;
-      target.y = (target.y + 1.6) / 2 + 0.15;
+      const normal = new THREE.Vector3(0, 0, 1).transformDirection(s.group.matrixWorld);
+      const right = new THREE.Vector3(1, 0, 0).transformDirection(s.group.matrixWorld);
+      const target = frame.clone().addScaledVector(right, shift * 0.55);
+      // El pasillo tiene 4,6 m: la cámara no puede irse más lejos que la pared de enfrente.
+      const dist = Math.min(2 * HW - 0.5, (2.6 + Math.max(0, frame.y - 1.7) * 0.5) * distMul);
+      const stand = target.clone().addScaledVector(normal, dist);
+      stand.y = 1.6 + Math.max(0, frame.y - 2.4) * 0.35;
+      target.y = (target.y + 1.6) / 2 + 0.2;
       return { stand, target, frame };
     },
     setAltar(list) {
@@ -870,26 +1346,33 @@ export function buildHall(scene, colliders, tier) {
       spotIdx = 0;
       if (list.length) showSpot(list[0]);
     },
-    // Para encuadrar o soltar efectos desde un memorial.
+    // Para encuadrar o soltar efectos desde un memorial (null si no está a la vista en este piso).
     memorialKey(m) {
-      if (m.slot < 0) return 'featured';
+      if (m.slot < 0) return floor === 0 ? 'featured' : null;
       return Math.floor(m.slot / SLOTS_PER_FLOOR) === floor ? m.slot % SLOTS_PER_FLOOR : null;
     },
-    worldPos(key) {
+    // Dónde está la foto; con `out`, ese tanto hacia afuera del nicho (hacia el pasillo).
+    worldPos(key, out = 0) {
       const v = new THREE.Vector3();
       if (key === 'featured') return fPhoto.getWorldPosition(v);
-      return slots[key]?.photo.getWorldPosition(v) || null;
+      const s = slots[key];
+      if (!s) return null;
+      s.photo.getWorldPosition(v);
+      if (out) v.addScaledVector(_n.set(0, 0, 1).transformDirection(s.group.matrixWorld), out + DEPTH);
+      return v;
     },
     setHover(key) {
+      const occupied = key !== null && key !== 'featured' && typeof key === 'number' && slots[key]?.memorial;
       if (hovered !== null && hovered !== key && hovered !== 'featured') objFor(hovered)?.scale.setScalar(1);
       hovered = key;
-      if (key !== null && key !== 'featured') objFor(key)?.scale.setScalar(1.06);
+      if (occupied) objFor(key)?.scale.setScalar(1.04);
+      setDoorHover(typeof key === 'number' && !occupied ? key : -1);
     },
     pulse(key) {
       const g = objFor(key);
       if (!g) return;
       const start = performance.now();
-      const amp = key === 'featured' ? 0.05 : 0.12;
+      const amp = key === 'featured' ? 0.05 : 0.06;
       const tick = () => {
         const k = (performance.now() - start) / 700;
         const base = g.userData.baseScale || 1;
@@ -911,6 +1394,7 @@ export function buildHall(scene, colliders, tier) {
       }
       const s = slots[key];
       if (!s) return null;
+      s.group.updateMatrixWorld(true);
       if (kind === 'candle') return s.shelf.localToWorld(v.set(0.31, 0.15, 0.03));
       if (kind === 'flower') return s.jar.localToWorld(v.set(0, 0.13, 0));
       if (kind === 'gift') return s.gifts[0].getWorldPosition(v);
@@ -929,7 +1413,7 @@ export function buildHall(scene, colliders, tier) {
       h.visible = !on && !!h.userData.ch;
     },
     animate(t) {
-      updateShutters(t);
+      updateDoors(t);
       for (const f of flames) {
         if (f.spin) { f.spin.rotation.y = t * 0.6; continue; }
         if (!f.group.visible) continue;
@@ -940,10 +1424,10 @@ export function buildHall(scene, colliders, tier) {
         } else f.flame.scale.set(0.06 + n * 0.006, 0.12 + n * 0.02, 1);
         f.glow.material.opacity = f.base + n * 0.06;
       }
-      for (const h of featuredGifts) if (h.visible && h.children[0]) idleGift(h.children[0], t);
-      for (const s of slots) if (s.shelf.visible) for (const h of s.gifts) if (h.visible && h.children[0]?.userData.idle) idleGift(h.children[0], t);
+      if (easel.visible) for (const h of featuredGifts) if (h.visible && h.children[0]) idleGift(h.children[0], t);
+      for (const s of slots) if (s.inside.visible && s.shelf.visible) for (const h of s.gifts) if (h.visible && h.children[0]?.userData.idle) idleGift(h.children[0], t);
       for (const fx of glowFx) {
-        if (fx.stage < 1 || !fx.group.parent?.visible) continue;
+        if (fx.stage < 1 || !fx.group.visible || !fx.group.parent?.visible) continue;
         fx.lantern.rotation.z = Math.sin(t * 1.3 + fx.seed) * 0.08;
         if (fx.stage >= 2) {
           const k = 1 + Math.sin(t * 2.2 + fx.seed) * 0.12;
@@ -958,6 +1442,7 @@ export function buildHall(scene, colliders, tier) {
         }
       }
       animators.forEach((fn) => fn(t));
+      if (fountain.visible) for (const f of floaters) { const a = f.a + t * f.s; f.c.position.x = Math.cos(a) * f.d; f.c.position.z = Math.sin(a) * f.d; f.c.position.y = 0.35 + Math.sin(t * 1.3 + f.a) * 0.01; }
       // Ofrenda: cambiar de huellita cada 6 s.
       if (spotList.length && t - spotT > 6) {
         spotT = t;
@@ -967,7 +1452,7 @@ export function buildHall(scene, colliders, tier) {
       // Guirnaldas que titilan suave.
       for (let i = 0; i < bulbs.length; i++) {
         const k = 1.7 + Math.sin(t * 1.3 + bulbPhase[i]) * 0.35 + (Math.sin(t * 7 + bulbPhase[i] * 3) > 0.985 ? 0.8 : 0);
-        bulbColor.copy(bulbBase[i]).multiplyScalar(tier.bloom ? k : 1);
+        bulbColor.copy(bulbBase[i]).multiplyScalar(tier.bloom ? (i < corridorBulbs ? k * 0.5 : k) : i < corridorBulbs ? 0.8 : 1);
         bulbMesh.setColorAt(i, bulbColor);
       }
       bulbMesh.instanceColor.needsUpdate = true;

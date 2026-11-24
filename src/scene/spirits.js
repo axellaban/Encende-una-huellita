@@ -960,12 +960,21 @@ export function createSpirits(scene, { blocked, tier }) {
     leashTube.visible = true;
   }
 
+  // En los pisos del cielo el Prado no está: la manada y su pelota se esconden (tu mascota de paseo, no).
+  let up = false;
+  function setUp(v) {
+    up = v;
+    for (const a of pack) a.pet.group.visible = !up;
+    ball.mesh.visible = !up;
+  }
+
   return {
     pickables,
     ball,
     get companion() { return companion; },
     get pack() { return pack; },
-    setPack,
+    setPack(memorials, excludeId) { setPack(memorials, excludeId); setUp(up); },
+    setUp,
     walk,
     throwBall,
     setRemote,

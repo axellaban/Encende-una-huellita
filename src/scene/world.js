@@ -2,15 +2,55 @@
 // camino con balizas, faroles, bancos y luciérnagas. Todo procedural (sin modelos ni imágenes externas).
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { grassTexture, stoneTexture, woodTexture, floorTexture, glowTexture, blobShadowTexture, moonTexture, lanternTexture } from './textures.js';
+import { grassTexture, stoneTexture, woodTexture, floorTexture, glowTexture, blobShadowTexture, moonTexture } from './textures.js';
 import { marigoldGeometry, marigoldMaterial, buildPueblo, PALETTE } from './muertos.js';
 import { paperLantern, flickerLantern } from './lanterns.js';
 
 // Plano del jardín (en metros). Todo lo demás se ubica a partir de estos números.
 export const HALL_CENTER = new THREE.Vector3(0, 0, -14);
-// El salón es grande: con la cámara en tercera persona tiene que sentirse amplio (antes 11,5).
+// Todo lo que ocupa el salón con sus pasillos entra en este radio (el jardín empieza afuera).
 export const HALL_RADIUS = 21;
-const HK = HALL_RADIUS / 11.5; // cuánto creció (para lo que estaba medido con el salón viejo)
+// El salón central: redondo, con la ofrenda y la pérgola de luces. De él salen los pasillos.
+export const ROOM_R = 12; // radio del muro del salón
+export const ROOM_WALL_H = 4.6;
+// Los pasillos: anchos (4,6 m libres), con nichos en las dos paredes y un vitral al fondo.
+// `hw` medio ancho libre, `wall` espesor de la pared de nichos, `len` largo desde la boca, `h` alto.
+export const CORRIDOR = { hw: 2.3, wall: 0.55, len: 6.6, h: 3.8 };
+// Hacia dónde sale cada pasillo (grados: 0 = hacia la entrada, 90 = a la derecha de quien entra,
+// 180 = al fondo). El orden es el de los lugares: el pasillo 0 es el del fondo, de frente a la entrada.
+export const CORRIDOR_DEG = [180, 135, 225, 90, 270];
+// El ascensor: en la pared del salón, entre los pasillos de 225° y 270°.
+export const LIFT_DEG = 247.5;
+const ENTRY_DEG = 17; // medio ancho de la entrada al salón (en grados)
+const MOUTH_DEG = THREE.MathUtils.radToDeg(Math.asin((CORRIDOR.hw + CORRIDOR.wall) / ROOM_R));
+const dirOf = (deg) => { const a = THREE.MathUtils.degToRad(deg); return new THREE.Vector3(Math.sin(a), 0, Math.cos(a)); };
+// El sistema de un pasillo: `o` la boca (sobre el muro del salón), `u` hacia afuera, `v` de costado.
+export function corridorFrame(c) {
+  const deg = CORRIDOR_DEG[c];
+  const u = dirOf(deg);
+  const v = new THREE.Vector3(u.z, 0, -u.x);
+  return { deg, u, v, o: HALL_CENTER.clone().addScaledVector(u, ROOM_R) };
+}
+// Los tramos del muro del salón [desde, hasta] (grados), entre la entrada y las bocas de los pasillos.
+export const ROOM_ARCS = (() => {
+  const gaps = [[-ENTRY_DEG, ENTRY_DEG], ...CORRIDOR_DEG.map((a) => [a - MOUTH_DEG, a + MOUTH_DEG])].sort((p, q) => p[0] - q[0]);
+  return gaps.map((g, i) => [g[1], i + 1 < gaps.length ? gaps[i + 1][0] : 360 - ENTRY_DEG]);
+})();
+// El tramo del ascensor es una sola pared recta (la cuerda del arco): la puerta queda en el medio.
+export const LIFT_ARC = ROOM_ARCS.find(([a, b]) => LIFT_DEG > a && LIFT_DEG < b);
+const LIFT_HALF = THREE.MathUtils.degToRad((LIFT_ARC[1] - LIFT_ARC[0]) / 2);
+export const LIFT_WIDTH = 2 * ROOM_R * Math.sin(LIFT_HALF);
+export function inCorridor(x, z, pad = 0) {
+  const rx = x - HALL_CENTER.x;
+  const rz = z - HALL_CENTER.z;
+  for (const deg of CORRIDOR_DEG) {
+    const a = THREE.MathUtils.degToRad(deg);
+    const s = rx * Math.sin(a) + rz * Math.cos(a) - ROOM_R;
+    const t = rx * Math.cos(a) - rz * Math.sin(a);
+    if (s > -1.2 && s < CORRIDOR.len + 0.35 + pad && Math.abs(t) < CORRIDOR.hw + CORRIDOR.wall + pad) return true;
+  }
+  return false;
+}
 export const GARDEN_RADIUS = 58;
 // Llegás del otro lado del río y cruzás el Puente del Arcoíris para entrar al jardín.
 export const SPAWN = new THREE.Vector3(0, 1.6, 50);
@@ -20,8 +60,16 @@ export const CREEK_HALF = 2.8; // medio ancho del río
 // El Prado de los espíritus: un claro sin árboles donde juegan las mascotas de luz.
 export const MEADOW = new THREE.Vector3(24, 0, 20);
 export const MEADOW_R = 9;
-// El ascensor (al costado de la entrada del salón): sin árboles adelante para que se vea.
-export const ELEVATOR_POS = new THREE.Vector3(-9.5, 0, 17);
+// El ascensor: el centro de su pared, en el muro del salón (ver LIFT_DEG); la cabina queda detrás.
+export const ELEVATOR_POS = HALL_CENTER.clone().addScaledVector(dirOf(LIFT_DEG), ROOM_R * Math.cos(LIFT_HALF));
+export function inLift(x, z, pad = 0) {
+  const u = dirOf(LIFT_DEG);
+  const rx = x - ELEVATOR_POS.x;
+  const rz = z - ELEVATOR_POS.z;
+  const s = rx * u.x + rz * u.z;
+  const t = rx * u.z - rz * u.x;
+  return s > -0.5 && s < 2.9 + pad && Math.abs(t) < 1.5 + pad;
+}
 // El río serpentea (dos ondas, para que no se vea dibujado con regla).
 export const creekZ = (x) => CREEK_Z + Math.sin(x * 0.07) * 3.2 + Math.sin(x * 0.19 + 1) * 0.9;
 // El Puente del Arcoíris: la única forma de cruzar el río (entrar y salir del jardín).
@@ -87,31 +135,19 @@ function paint(geo, color) {
 }
 
 // Donde empieza el camino (justo afuera del piso del salón).
-export const PATH_START = HALL_CENTER.z + HALL_RADIUS + 2;
+export const PATH_START = HALL_CENTER.z + ROOM_R + 1.5;
 
 // Canteros de flores con borde de piedra y un estanque chiquito (el pasto, las flores sueltas y los
 // árboles no se meten adentro).
 export const POND = { x: -14.2, z: 28, r: 2.7 };
 export const BEDS = [[-6.8, 27.2, 1.7], [6.6, 31.4, 1.6], [7.2, 12.8, 1.8], [-14.5, 21.6, 1.7], [11.5, 33.5, 1.5]];
 export const inFeature = (x, z, pad = 0) => Math.hypot(x - POND.x, z - POND.z) < POND.r + 0.5 + pad || BEDS.some(([bx, bz, br]) => Math.hypot(x - bx, z - bz) < br + 0.25 + pad);
+// Adentro del salón, de un pasillo o de la cabina del ascensor (lo que tiene piso de madera).
 export function insideHall(x, z, pad = 0) {
-  return Math.hypot(x - HALL_CENTER.x, z - HALL_CENTER.z) < HALL_RADIUS + 1.6 + pad;
-}
-// Caminito al ascensor: sale del camino principal y llega a la puerta de la torre
-// (la torre mira hacia el camino con este ángulo, igual que en elevator.js).
-const ELEV_RY = Math.atan2(-ELEVATOR_POS.x, 6);
-const ELEV_DIR = new THREE.Vector3(Math.sin(ELEV_RY), 0, Math.cos(ELEV_RY));
-export const ELEV_PATH_B = ELEVATOR_POS.clone().addScaledVector(ELEV_DIR, 2.2);
-export const ELEV_PATH_A = ELEV_PATH_B.clone().addScaledVector(ELEV_DIR, (-PATH_HALF + 0.3 - ELEV_PATH_B.x) / ELEV_DIR.x);
-const ELEV_PATH_HALF = 0.95;
-function onElevatorPath(x, z, pad = 0) {
-  const ax = ELEV_PATH_A.x, az = ELEV_PATH_A.z, bx = ELEV_PATH_B.x, bz = ELEV_PATH_B.z;
-  const dx = bx - ax, dz = bz - az;
-  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
-  return Math.hypot(x - (ax + dx * t), z - (az + dz * t)) < ELEV_PATH_HALF + pad;
+  return Math.hypot(x - HALL_CENTER.x, z - HALL_CENTER.z) < ROOM_R + 0.7 + pad || inCorridor(x, z, pad) || inLift(x, z, pad);
 }
 export function onPath(x, z, pad = 0) {
-  return (Math.abs(x) < PATH_HALF + pad && z > HALL_CENTER.z + HALL_RADIUS - 1 && z < SPAWN.z + 6) || onElevatorPath(x, z, pad);
+  return Math.abs(x) < PATH_HALF + pad && z > HALL_CENTER.z + ROOM_R - 0.6 && z < SPAWN.z + 6;
 }
 
 export function buildWorld(scene, tier) {
@@ -172,21 +208,28 @@ export function buildWorld(scene, tier) {
             // brillantes, una veta oscura en el medio y colores lila, rosa y celeste.
             vec3 nmw = normalize(vec3(0.42, 0.5, 0.76));
             float dm = dot(d, nmw);
-            float band = exp(-dm * dm * 26.0);
+            float band = exp(-dm * dm * 20.0);
+            float core = exp(-dm * dm * 95.0);
             float f1 = fbm3(d * 5.0);
             float f2 = fbm3(d * 13.0 + 4.0);
             float lz = dm * 9.0 + (f1 - 0.5) * 1.6;
-            float lane = 1.0 - 0.75 * exp(-lz * lz) * smoothstep(0.35, 0.7, f2);
+            float lane = 1.0 - 0.8 * exp(-lz * lz) * smoothstep(0.35, 0.7, f2);
             vec3 mw = mix(vec3(0.28, 0.24, 0.55), vec3(0.62, 0.36, 0.52), f1);
             mw = mix(mw, vec3(0.35, 0.55, 0.75), smoothstep(0.55, 0.8, f2) * 0.5);
-            c += mw * band * (0.25 + 0.75 * f2) * lane * 0.55 * alt * night;
-            // Polvo de estrellas finito, más tupido dentro de la franja.
+            c += mw * band * (0.25 + 0.75 * f2) * lane * 0.8 * alt * night;
+            // El corazón de la franja: nubes de estrellas más claras y tibias.
+            c += vec3(0.85, 0.72, 0.78) * core * smoothstep(0.4, 0.85, f2) * lane * 0.32 * alt * night;
+            // Polvo de estrellas finito, mucho más tupido dentro de la franja (cielo bien cargado).
             vec3 q = d * 420.0;
             float sh = h3(floor(q));
-            float dens = 0.988 - band * 0.035;
+            float dens = 0.984 - band * 0.06;
             float sd = smoothstep(dens, 1.0, sh) * (1.0 - smoothstep(0.0, 0.5, length(fract(q) - 0.5)));
             float tw = 0.6 + 0.4 * sin(uTime * (1.0 + sh * 3.0) + sh * 50.0);
             c += vec3(1.2, 1.15, 1.25) * sd * tw * 0.9 * alt * night;
+            vec3 q2 = d * 900.0;
+            float sh2 = h3(floor(q2) + 7.0);
+            float sd2 = smoothstep(0.985 - band * 0.08, 1.0, sh2) * (1.0 - smoothstep(0.0, 0.5, length(fract(q2) - 0.5)));
+            c += vec3(0.95, 1.0, 1.2) * sd2 * (0.4 + band * 0.6) * alt * night;
             // Nebulosas suaves, rosa y turquesa.
             float neb = fbm3(d * 2.2 + vec3(3.0, 1.0, 0.0));
             float neb2 = fbm3(d * 3.1 + vec3(-2.0, 5.0, 1.0));
@@ -343,57 +386,38 @@ export function buildWorld(scene, tier) {
       groundRoot.add(edge);
     }
   };
-  pathPiece(HALL_CENTER.z + HALL_RADIUS - 1, BRIDGE.z - BRIDGE.halfL + 0.25, stoneTexture(), '#ffffff', '#6d625a');
+  pathPiece(HALL_CENTER.z + ROOM_R - 0.6, BRIDGE.z - BRIDGE.halfL + 0.25, stoneTexture(), '#ffffff', '#6d625a');
   pathPiece(BRIDGE.z + BRIDGE.halfL - 0.25, SPAWN.z + 6, stoneTexture(), '#8a7864', '#4a4038');
-  // El caminito al ascensor, con dos farolitos de papel que lo marcan.
-  {
-    const d = ELEV_PATH_B.clone().sub(ELEV_PATH_A);
-    const len = d.length();
-    const g = new THREE.Group();
-    g.position.copy(ELEV_PATH_A).addScaledVector(d, 0.5);
-    g.rotation.y = Math.atan2(d.x, d.z);
-    const tex = stoneTexture();
-    tex.repeat.set(0.6, len / 4);
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(ELEV_PATH_HALF * 2, len), new THREE.MeshLambertMaterial({ map: tex }));
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.y = 0.016;
-    mesh.name = 'ground';
-    g.add(mesh);
-    walkable.push(mesh);
-    for (const s of [-1, 1]) {
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, len), new THREE.MeshLambertMaterial({ color: '#6d625a' }));
-      edge.position.set(s * (ELEV_PATH_HALF + 0.04), 0.035, 0);
-      g.add(edge);
-      // Farolito de papel colgado de un poste curvo, a cada lado.
-      const z = s * len * 0.18;
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.7, 8), new THREE.MeshLambertMaterial({ color: '#3a2a22' }));
-      post.position.set(s * (ELEV_PATH_HALF + 0.35), 0.85, z);
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.45, 6), post.material);
-      arm.rotation.z = Math.PI / 2;
-      arm.position.set(s * (ELEV_PATH_HALF + 0.15), 1.68, z);
-      const lan = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.1, 0.3, 10, 1, true), new THREE.MeshBasicMaterial({ map: lanternTexture(), color: new THREE.Color(2.2, 1.2, 0.6), side: THREE.DoubleSide }));
-      lan.position.set(s * (ELEV_PATH_HALF - 0.05), 1.42, z);
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.6, color: new THREE.Color(1.3, 0.75, 0.4) }));
-      glow.scale.setScalar(1.3);
-      glow.position.copy(lan.position);
-      g.add(post, arm, lan, glow);
-      const wp = new THREE.Vector3(s * (ELEV_PATH_HALF + 0.35), 0, z).applyAxisAngle(new THREE.Vector3(0, 1, 0), g.rotation.y).add(g.position);
-      colliders.circles.push({ x: wp.x, z: wp.z, r: 0.12, ground: true });
-    }
-    groundRoot.add(g);
-  }
-
-  // Piso de madera del salón y borde de piedra.
+  // Piso de madera del salón (redondo) y de cada pasillo (tablas a lo largo).
   const floorTex = floorTexture();
-  const deck = new THREE.Mesh(new THREE.CylinderGeometry(HALL_RADIUS + 1.2, HALL_RADIUS + 1.35, 0.16, 64), new THREE.MeshLambertMaterial({ map: floorTex }));
+  const deckMat = new THREE.MeshLambertMaterial({ map: floorTex });
+  const deck = new THREE.Mesh(new THREE.CylinderGeometry(ROOM_R + 0.7, ROOM_R + 0.85, 0.16, 72), deckMat);
   deck.position.copy(HALL_CENTER).setY(0.08);
   deck.name = 'ground';
   scene.add(deck);
   walkable.push(deck);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(HALL_RADIUS + 1.3, 0.12, 6, 72), new THREE.MeshLambertMaterial({ color: '#7d7166' }));
-  rim.rotation.x = Math.PI / 2;
-  rim.position.copy(HALL_CENTER).setY(0.12);
-  scene.add(rim);
+  {
+    const W = 2 * (CORRIDOR.hw + CORRIDOR.wall) + 0.1;
+    const L = CORRIDOR.len + 1.6;
+    // Las tablas, a lo largo del pasillo.
+    const tex = floorTex.clone();
+    tex.center.set(0.5, 0.5);
+    tex.rotation = Math.PI / 2;
+    tex.repeat.set(L / 3.2, 1.2);
+    tex.needsUpdate = true;
+    const mat = new THREE.MeshLambertMaterial({ map: tex });
+    deck.userData.mats = [deckMat, mat];
+    for (let c = 0; c < CORRIDOR_DEG.length; c++) {
+      const { u, o } = corridorFrame(c);
+      const f = new THREE.Mesh(new THREE.BoxGeometry(W, 0.16, L), mat);
+      // Hijo del piso del salón (así comparten sombra y color en los pisos del cielo).
+      f.position.copy(o).addScaledVector(u, L / 2 - 1.2).sub(deck.position).setY(-0.006);
+      f.rotation.y = Math.atan2(u.x, u.z);
+      f.name = 'ground';
+      deck.add(f);
+      walkable.push(f);
+    }
+  }
 
   // ---------- pasto con viento ----------
   {
@@ -500,7 +524,6 @@ export function buildWorld(scene, tier) {
       if (Math.abs(x) < 5 && z > -2) continue;
       if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 6) continue;
       if (Math.hypot(x - MEADOW.x, z - MEADOW.z) < MEADOW_R + 2.5) continue;
-      if (Math.hypot(x - ELEVATOR_POS.x, z - ELEVATOR_POS.z) < 6) continue;
       if (Math.hypot(x - BRIDGE.x, z - BRIDGE.z) < 9) continue;
       if (inFeature(x, z, 2.5)) continue;
       if (Math.hypot(x, z) > GARDEN_RADIUS - 2.5 || nearCreek(x, z, 1.5)) continue;
@@ -530,12 +553,24 @@ export function buildWorld(scene, tier) {
       addBlob(x, z, 4.2);
       placed++;
     }
-    const trunks = new THREE.Mesh(mergeGeometries(trunkParts.map((g) => g.toNonIndexed())), new THREE.MeshLambertMaterial({ color: '#4a3223', flatShading: true }));
+    const trunks = new THREE.Mesh(mergeGeometries(trunkParts.map((g) => g.toNonIndexed())), new THREE.MeshLambertMaterial({ color: '#2e2018', flatShading: true }));
     groundRoot.add(trunks);
-    const leaves = new THREE.Mesh(mergeGeometries(leafParts), withWind(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'leaves',
+    const leafMat = withWind(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'leaves',
       `float k = max(0.0, position.y - 2.0);
        transformed.x += sin(uTime * 0.9 + position.x * 0.25 + position.z * 0.15) * 0.04 * k;
-       transformed.z += cos(uTime * 0.75 + position.z * 0.2) * 0.03 * k;`));
+       transformed.z += cos(uTime * 0.75 + position.z * 0.2) * 0.03 * k;`);
+    // De noche las copas son casi siluetas, con un borde de luz azul (como el agua que brilla).
+    const wind = leafMat.onBeforeCompile;
+    leafMat.onBeforeCompile = (sh) => {
+      wind(sh);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= 0.62;')
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  float rimK = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);
+  totalEmissiveRadiance += vec3(0.1, 0.36, 0.85) * rimK * rimK * rimK * 0.75;`);
+    };
+    leafMat.customProgramCacheKey = () => 'leaves-silueta-1';
+    const leaves = new THREE.Mesh(mergeGeometries(leafParts), leafMat);
     groundRoot.add(leaves);
   }
 
@@ -570,8 +605,9 @@ export function buildWorld(scene, tier) {
   const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 2.0, 0.9) });
   const lampSpots = [
     [2.7, 31], [-2.7, 25.5], [2.7, 20], [-2.7, 15], [2.7, 10],
-    [HALL_CENTER.x - 5.5 * HK, HALL_CENTER.z + 5.5 * HK], [HALL_CENTER.x + 5.5 * HK, HALL_CENTER.z + 5.5 * HK],
-    [HALL_CENTER.x - 6.5 * HK, HALL_CENTER.z - 4.5 * HK], [HALL_CENTER.x + 6.5 * HK, HALL_CENTER.z - 4.5 * HK],
+    // Adentro del salón: dos a los lados de la ofrenda y dos al fondo, entre las bocas de los pasillos.
+    [HALL_CENTER.x - 7.4, HALL_CENTER.z + 5.2], [HALL_CENTER.x + 7.4, HALL_CENTER.z + 5.2],
+    [HALL_CENTER.x - 3.6, HALL_CENTER.z - 8.6], [HALL_CENTER.x + 3.6, HALL_CENTER.z - 8.6],
   ];
   const lampParts = [];
   const hallLampParts = [];

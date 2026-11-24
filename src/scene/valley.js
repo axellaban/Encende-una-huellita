@@ -8,8 +8,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { HALL_CENTER, uTime, rand } from './world.js';
 import { glowTexture } from './textures.js';
 
-// EN PROCESO: apagado hasta que se vea bien (ver PENDIENTES → "Traspaso"). Ponerlo en true para probarlo.
-export const VALLEY_READY = false;
+// Se puede apagar (false) si en algún teléfono pesa demasiado.
+export const VALLEY_READY = true;
 
 const SUN = new THREE.Vector3(-0.45, 0.8, -0.4).normalize();
 
@@ -35,12 +35,15 @@ function hazeMaterial(uHaze, uRise) {
       varying vec3 vC; varying vec3 vN; varying vec3 vW;
       void main(){
         vec3 n = normalize(vN);
-        float lit = 0.5 + 0.62 * max(dot(n, uSun), 0.0) + 0.12 * max(n.y, 0.0);
+        // Luz de sol con sombra marcada (la piedra tiene volumen) y un poco de cielo desde arriba.
+        float lit = 0.34 + 0.86 * max(dot(n, uSun), 0.0) + 0.16 * max(n.y, 0.0);
         vec3 c = vC * lit;
         float d = length(vW.xz - uCenter);
-        float far = smoothstep(45.0, 270.0, d);
-        float low = 1.0 - smoothstep(-30.0, 10.0, vW.y);
-        c = mix(c, uHaze, clamp(far * 0.78 + low * 0.9, 0.0, 0.94));
+        // Lo lejano se aclara hacia el color del cielo (perspectiva aérea); lo cercano conserva el color.
+        float far = smoothstep(90.0, 330.0, d);
+        // La base se hunde en el mar de nubes: al llegar al nivel de las nubes ya es del color de la bruma.
+        float low = 1.0 - smoothstep(-1.0, 20.0, vW.y);
+        c = mix(c, uHaze, clamp(max(far * 0.72, low), 0.0, 1.0));
         gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -61,8 +64,8 @@ function paint(geo, c) {
 function pillarGeo(r, h, rnd) {
   const g = new THREE.CylinderGeometry(r * (0.7 + rnd() * 0.25), r, h, 7, 7, false).toNonIndexed();
   const p = g.attributes.position;
-  const rock = [col('#8f8aa6'), col('#7d7894'), col('#a39cb3')];
-  const moss = col('#7fae6a');
+  const rock = [col('#8c7f9c'), col('#6c6283'), col('#a8977e')];
+  const moss = col('#6fa45a');
   const cs = new Float32Array(p.count * 3);
   const seed = rnd() * 100;
   for (let i = 0; i < p.count; i++) {
@@ -87,19 +90,19 @@ function pillarGeo(r, h, rnd) {
 function bloomGeo(r, topY, rnd) {
   const parts = [];
   const PALS = [['#f6b3cf', '#f9cfe0'], ['#c9a7f0', '#e0cbfa'], ['#fbeef4', '#ffffff'], ['#f29ab8', '#f7c0d4']];
-  const n = 2 + Math.floor(rnd() * 4);
+  const n = 4 + Math.floor(rnd() * 4);
   for (let i = 0; i < n; i++) {
     const a = rnd() * Math.PI * 2;
-    const d = rnd() * r * 0.55;
+    const d = Math.sqrt(rnd()) * r * 0.62;
     const x = Math.cos(a) * d;
     const z = Math.sin(a) * d;
-    const s = r * (0.28 + rnd() * 0.22);
+    const s = r * (0.36 + rnd() * 0.26);
     const trunk = paint(new THREE.CylinderGeometry(s * 0.08, s * 0.12, s * 0.9, 5).translate(x, topY + s * 0.45, z).toNonIndexed(), col('#5a3e34'));
     parts.push(trunk);
     const pal = PALS[Math.floor(rnd() * PALS.length)];
     for (let j = 0; j < 3; j++) {
       const cs = s * (0.55 + rnd() * 0.35);
-      const cg = new THREE.IcosahedronGeometry(cs, 0).toNonIndexed();
+      const cg = new THREE.IcosahedronGeometry(cs, 1).toNonIndexed();
       cg.scale(1, 0.78, 1);
       cg.translate(x + (rnd() - 0.5) * s * 0.7, topY + s * (0.95 + rnd() * 0.35), z + (rnd() - 0.5) * s * 0.7);
       parts.push(paint(cg, col(pal[j % 2])));
@@ -182,7 +185,7 @@ export function createValley(scene, { tier } = {}) {
   for (let i = 0; i < N; i++) {
     // Cada vez más lejos (y más grandes), repartidos alrededor.
     const layer = i / N;
-    const dist = 62 + layer * 150 + rnd() * 25;
+    const dist = 96 + layer * 150 + rnd() * 25;
     const ang = i * 2.399 + rnd() * 0.4; // ángulo áureo: bien repartidos
     const x = HALL_CENTER.x + Math.cos(ang) * dist;
     const z = HALL_CENTER.z + Math.sin(ang) * dist;
@@ -201,7 +204,7 @@ export function createValley(scene, { tier } = {}) {
 
   // Puentes colgantes entre pilares cercanos entre sí (y no demasiado lejos tuyo).
   const bridges = [];
-  const near = pillars.filter((p) => p.dist < 150);
+  const near = pillars.filter((p) => p.dist < 185);
   const used = new Set();
   for (const a of near) {
     let best = null;
