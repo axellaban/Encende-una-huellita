@@ -1,11 +1,11 @@
 // Huellitas destacadas: viven en el código (nombre, foto, fechas, mensaje) y la base sólo guarda
 // sus velas, flores y libro de visitas. Para cambiar sus datos, editá este archivo y volvé a desplegar.
 //
-// `slot: -1` = el atril del centro del salón, lo primero que se ve al entrar.
+// `slot: 82` = lugar en el pasillo del piso 1 (al lado de Monarkito en el slot 81); en el atril central va la bienvenida del Principito.
 export const FEATURED = [
   {
     id: 'luca',
-    slot: -1,
+    slot: 82,
     name: 'Luca',
     species: 'perro',
     photo: '/huellitas/luca.jpg', // archivo en public/huellitas/

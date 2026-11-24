@@ -357,7 +357,7 @@ async function buildScene() {
       return;
     }
     const key = slotKeyFromHit(hit.object);
-    if (key === 'featured') return hall.featured && visit(hall.featured);
+    if (key === 'featured') return hall.featured ? visit(hall.featured) : visitWelcome();
     if (typeof key === 'string' && key.startsWith('spot:')) {
       const m = memorials.find((x) => x.id === key.slice(5));
       return m && visit(m);
@@ -837,6 +837,20 @@ function goFloor(f, quiet = false, instant = false) {
 // ---------- visitar ----------
 let current = null;
 
+function visitWelcome() {
+  closeModals();
+  closeSheet();
+  if (hall && controls) {
+    goFloor(0, true);
+    const distMul = camera.aspect < 0.8 ? 1.55 : camera.aspect < 1.2 ? 1.25 : 1;
+    const { stand, target, frame } = hall.viewpoint('featured', 0, distMul);
+    hideHint();
+    placeNear(stand, frame, 1.6, 5.4);
+    controls.flyTo(stand, target, () => hall.pulse('featured'));
+  }
+  toast('🌹 “Pero yo le hice mi amigo y ahora es único en el mundo.” · Bienvenidos al jardín 🤍', { label: 'Visitar a Luca', fn: visitFeatured });
+}
+
 function visit(m) {
   closeModals();
   if (hall && controls) {
@@ -1034,7 +1048,7 @@ function fillSheet(m) {
   if (m.birthYear && m.passedYear) bits.push(`${m.passedYear - m.birthYear} años de amor`);
   $('#s-meta').textContent = bits.filter(Boolean).join(' · ');
   $('#s-msg').textContent = m.message ? `“${m.message}”` : '';
-  const tag = m.featured ? 'Huellita destacada' : isBirthday(m) ? '🎂 Hoy es su cumpleaños' : m.slot >= 0 ? `Piso ${floorOf(m) + 1}` : '';
+  const tag = isBirthday(m) ? '🎂 Hoy es su cumpleaños' : m.slot >= 0 ? `Piso ${floorOf(m) + 1}` : m.featured ? 'Huellita destacada' : '';
   $('#s-tag').textContent = tag;
   $('#s-tag').hidden = !tag;
   const same = sheetEl.dataset.id === m.id;
@@ -1587,7 +1601,7 @@ function renderList() {
     const name = document.createElement('b');
     name.textContent = m.name;
     const s = document.createElement('small');
-    s.textContent = `🕯️ ${m.candles} · ${m.featured ? 'Centro del salón' : `Piso ${floorOf(m) + 1}`}`;
+    s.textContent = `🕯️ ${m.candles} · ${m.slot < 0 ? 'Centro del salón' : `Piso ${floorOf(m) + 1}`}`;
     b.append(img, name, s);
     b.onclick = () => visit(m);
     grid.append(b);
@@ -2477,12 +2491,15 @@ function computeAction() {
   const P = controls.player;
   const b = spirits?.ball;
   if (b && !b.held && !b.inAir && P.pos.distanceTo(_v.set(b.pos.x, 0, b.pos.z)) < 2.6) return { kind: 'ball', ic: '🎾', lbl: 'Tirar', key: 'ball', run: throwBall };
-  // La ofrenda de la destacada es enorme: se la ofrece desde la entrada del salón si la mirás.
+  // La ofrenda central del salón: se la ofrece desde la entrada si la mirás.
   const fd = Math.hypot(EASEL_POS.x - P.pos.x, EASEL_POS.z - P.pos.z);
   const ff = ((EASEL_POS.x - P.pos.x) * Math.sin(P.heading) + (EASEL_POS.z - P.pos.z) * Math.cos(P.heading)) / Math.max(fd, 1e-3);
-  if (hall.featured && hall.floor === 0 && (fd < 6 || (fd < 11.5 && ff > 0.5))) {
-    const f = hall.featured;
-    return { kind: 'visit', ic: '🕯️', lbl: f.name, key: `f:${f.id}`, run: () => visit(f) };
+  if (hall.floor === 0 && (fd < 6 || (fd < 11.5 && ff > 0.5))) {
+    if (hall.featured) {
+      const f = hall.featured;
+      return { kind: 'visit', ic: '🕯️', lbl: f.name, key: `f:${f.id}`, run: () => visit(f) };
+    }
+    return { kind: 'welcome', ic: '🌹', lbl: 'Bienvenida', key: 'welcome', run: () => visitWelcome() };
   }
   const fr = nearestFrame(P);
   if (fr) {

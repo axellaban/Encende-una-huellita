@@ -80,7 +80,7 @@ for (const name of ['local', 'vercel']) {
     const j = await (await call('/api/memorials')).json();
     const luca = j.memorials.find((m) => m.id === 'luca');
     assert.ok(luca, 'Luca tiene que estar');
-    assert.equal(luca.slot, -1);
+    assert.equal(luca.slot, 82);
     assert.equal(luca.featured, true);
     assert.ok(j.memorials.every((m) => !('tokenHash' in m)));
   });

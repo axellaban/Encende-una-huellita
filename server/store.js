@@ -88,6 +88,7 @@ export function createStore(kv) {
     for (const f of FEATURED) {
       cmds.push(['HSETNX', `${P}m:${f.id}`, 'data', JSON.stringify({ slot: f.slot, createdAt: 0, featured: true })]);
       cmds.push(['ZADD', `${P}ids`, '0', f.id]);
+      if (f.slot >= 0) cmds.push(['HSETNX', `${P}slots`, String(f.slot), f.id]);
     }
     if (cmds.length) await kv.pipeline(cmds);
     featuredReady = true;

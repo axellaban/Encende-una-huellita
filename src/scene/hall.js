@@ -1170,14 +1170,14 @@ export function buildHall(scene, colliders, tier) {
     });
   }
 
-  const fBorder = new THREE.Mesh(new THREE.BoxGeometry(1.36, 1.66, 0.08), goldMat);
+  const fBorder = new THREE.Mesh(new THREE.BoxGeometry(1.36, 1.68, 0.08), goldMat);
   fBorder.position.set(0, 1.9, -0.6);
-  const fMat = new THREE.Mesh(new THREE.PlaneGeometry(1.24, 1.54), matMat.clone());
+  const fMat = new THREE.Mesh(new THREE.PlaneGeometry(1.24, 1.56), matMat.clone());
   fMat.position.set(0, 1.9, -0.555);
-  const fPhoto = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.375), new THREE.MeshBasicMaterial({ color: '#e8e0d4' }));
+  const fPhoto = new THREE.Mesh(new THREE.PlaneGeometry(1.02, 1.43), new THREE.MeshBasicMaterial({ color: '#f5efe6' }));
   fPhoto.position.set(0, 1.9, -0.55);
   fPhoto.userData = { kind: 'featured' };
-  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.2), new THREE.MeshBasicMaterial({ transparent: true }));
+  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.12, 0.21), new THREE.MeshBasicMaterial({ transparent: true }));
   plaque.position.set(0, 0.47, 0.32);
   plaque.rotation.x = -0.25;
   easel.add(fBorder, fMat, fPhoto, plaque);
@@ -1320,12 +1320,41 @@ export function buildHall(scene, colliders, tier) {
     fMat.material.needsUpdate = true;
   }
 
+  let welcomeReady = false;
+  function setWelcomeAltar(memorials = []) {
+    featured = null;
+    fPhoto.userData.id = null;
+    if (!welcomeReady) {
+      welcomeReady = true;
+      new THREE.TextureLoader().load('/huellitas/luca-estampita.jpg', (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = 4;
+        fPhoto.material.map = t;
+        fPhoto.material.color.set('#ffffff');
+        fPhoto.material.needsUpdate = true;
+      });
+      const lt = labelTexture('Bienvenidos al jardín 🐾', { w: 680, h: 112, font: '700 60px Caveat, cursive', bg: 'rgba(74,48,34,0.95)', fg: '#f6e3c4' });
+      plaque.material.map = lt;
+      plaque.material.needsUpdate = true;
+      fMat.material.map = backgroundTexture('estrellas');
+      fMat.material.needsUpdate = true;
+    }
+    setCard(null);
+    const totalCandles = memorials.reduce((a, m) => a + (m.candles || 0), 0);
+    const lit = Math.min(clusterCandles.length, 8 + Math.ceil(totalCandles * 0.5));
+    clusterCandles.forEach((c, i) => { c.visible = i < lit; });
+    showGifts(featuredGifts, ['🌹', '👑', '⭐']);
+    setStage(featuredFx, 3, true);
+  }
+
   function render(memorials) {
     const here = new Map();
+    let hasCenterFeatured = false;
     for (const m of memorials) {
-      if (m.slot < 0) setFeatured(m);
+      if (m.slot < 0) { setFeatured(m); hasCenterFeatured = true; }
       else if (Math.floor(m.slot / SLOTS_PER_FLOOR) === floor) here.set(m.slot % SLOTS_PER_FLOOR, m);
     }
+    if (!hasCenterFeatured) setWelcomeAltar(memorials);
     slots.forEach((s, i) => (here.has(i) ? fillSlot(s, here.get(i)) : clearSlot(s)));
     // Cada pasillo con su nombre y cuántas huellitas tiene en este piso.
     const per = new Array(CORRIDORS).fill(0);
