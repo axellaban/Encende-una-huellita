@@ -15,10 +15,16 @@ const DIST_MAX = 10;
 
 export function createBlocker(colliders) {
   return function blocked(x, z, body = BODY) {
-    if (Math.hypot(x, z) > GARDEN_RADIUS - 0.6 - body) return true;
+    // En la planta baja el jardín es un mundo abierto infinito; arriba (las nubes) mantiene el radio de la terraza.
+    if (colliders.up && Math.hypot(x, z) > GARDEN_RADIUS - 0.6 - body) return true;
     for (const c of colliders.circles) {
       if (c.ground && colliders.up) continue; // en los pisos de arriba no hay árboles ni bancos
       if (Math.hypot(x - c.x, z - c.z) < c.r + body) return true;
+    }
+    if (!colliders.up && colliders.openCircles) {
+      for (const c of colliders.openCircles) {
+        if (Math.hypot(x - c.x, z - c.z) < c.r + body) return true;
+      }
     }
     for (const [x1, z1, x2, z2] of colliders.segments) {
       const dx = x2 - x1;
@@ -238,7 +244,8 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     const len = Math.hypot(o.x, o.z) || 1;
     const ux = o.x / len;
     const uz = o.z / len;
-    for (const c of circles ? colliders.circles : []) {
+    const allCircles = circles ? (colliders.up || !colliders.openCircles ? colliders.circles : [...colliders.circles, ...colliders.openCircles]) : [];
+    for (const c of allCircles) {
       if ((c.ground && colliders.up) || c.r <= 0) continue;
       const cx = c.x - from.x;
       const cz = c.z - from.z;
@@ -251,11 +258,13 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         best = Math.min(best, Math.max(1.0, (hitAt / len) * d - 0.1));
       }
     }
-    for (let k = 0; k < 6; k++) {
-      const x = from.x + (o.x * best) / d;
-      const z = from.z + (o.z * best) / d;
-      if (Math.hypot(x, z) < GARDEN_RADIUS + 0.3) break;
-      best *= 0.85;
+    if (colliders.up) {
+      for (let k = 0; k < 6; k++) {
+        const x = from.x + (o.x * best) / d;
+        const z = from.z + (o.z * best) / d;
+        if (Math.hypot(x, z) < GARDEN_RADIUS + 0.3) break;
+        best *= 0.85;
+      }
     }
     return best;
   }

@@ -326,11 +326,13 @@ export function createSpirits(scene, { blocked, tier }) {
     const d = Math.sqrt(R()) * rad;
     return new THREE.Vector3(MEADOW.x + Math.sin(a) * d, 0, MEADOW.z + Math.cos(a) * d);
   };
+  const wildCenter = new THREE.Vector3(MEADOW.x, 0, MEADOW.z);
   const zoneCenter = (a) => {
     const z = a?.zone || (up ? 'sky' : 'meadow');
     if (z === 'hall') return new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z - 3.6);
     if (z === 'sky') return SKY_TERRACE;
-    if (z === 'lawn') return LAWN;
+    if (z === 'wild') return wildCenter;
+    if (z === 'lawn') return Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 6 ? wildCenter : LAWN;
     return MEADOW;
   };
   const zonePoint = (a, radScale = 1) => {
@@ -348,8 +350,9 @@ export function createSpirits(scene, { blocked, tier }) {
       }
       return new THREE.Vector3(HALL_CENTER.x + (R() < 0.5 ? -5.6 : 5.6), 0, HALL_CENTER.z - 2.2);
     }
-    const c = z === 'sky' ? SKY_TERRACE : z === 'lawn' ? LAWN : MEADOW;
-    const maxR = z === 'sky' ? SKY_TERRACE_R : z === 'lawn' ? LAWN_R : (MEADOW_R - 1);
+    const useWild = z === 'wild' || (z === 'lawn' && !up && Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 6);
+    const c = z === 'sky' ? SKY_TERRACE : useWild ? wildCenter : z === 'lawn' ? LAWN : MEADOW;
+    const maxR = z === 'sky' ? SKY_TERRACE_R : useWild ? 11 : z === 'lawn' ? LAWN_R : (MEADOW_R - 1);
     const ang = R() * TAU;
     const d = radial() * maxR;
     return new THREE.Vector3(c.x + Math.sin(ang) * d, 0, c.z + Math.cos(ang) * d);
@@ -438,7 +441,7 @@ export function createSpirits(scene, { blocked, tier }) {
         }
       }
       const rd = Math.hypot(a.pos.x, a.pos.z);
-      if (rd > GARDEN_RADIUS - 3) { vx -= (a.pos.x / rd) * 1.2; vz -= (a.pos.z / rd) * 1.2; }
+      if (up && rd > GARDEN_RADIUS - 3) { vx -= (a.pos.x / rd) * 1.2; vz -= (a.pos.z / rd) * 1.2; }
       dHead = Math.atan2(vx, vz);
     }
     const dh = wrap(dHead - a.heading);
@@ -1133,9 +1136,9 @@ export function createSpirits(scene, { blocked, tier }) {
       } else v.y = 0;
     }
     if (ball.pos.y <= floorY + 0.001) { const f = Math.exp(-dt * 1.6); v.x *= f; v.z *= f; }
-    // Rebota contra el cerco, el salón y los árboles.
+    // Rebota contra el cerco (en las nubes), el salón y los árboles.
     const rd = Math.hypot(ball.pos.x, ball.pos.z);
-    if (rd > GARDEN_RADIUS - 1.2) { const nx = ball.pos.x / rd; const nz = ball.pos.z / rd; const dot = v.x * nx + v.z * nz; if (dot > 0) { v.x -= 1.6 * dot * nx; v.z -= 1.6 * dot * nz; } }
+    if (up && rd > GARDEN_RADIUS - 1.2) { const nx = ball.pos.x / rd; const nz = ball.pos.z / rd; const dot = v.x * nx + v.z * nz; if (dot > 0) { v.x -= 1.6 * dot * nx; v.z -= 1.6 * dot * nz; } }
     const hx = ball.pos.x - HALL_CENTER.x;
     const hz = ball.pos.z - HALL_CENTER.z;
     const hd = Math.hypot(hx, hz);
@@ -1149,8 +1152,9 @@ export function createSpirits(scene, { blocked, tier }) {
       ball.mesh.rotation.z -= (v.x / ball.r) * dt;
     }
     if (sp < 0.08 && !ball.inAir) ball.idle += dt; else ball.idle = 0;
-    // Si quedó olvidada lejos de la zona de juego, vuelve sola.
-    const playCenter = up ? SKY_TERRACE : MEADOW;
+    // Si quedó olvidada lejos de la zona de juego, vuelve sola (o cerca tuyo si estás explorando el mundo abierto).
+    const exploring = !up && Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 4;
+    const playCenter = up ? SKY_TERRACE : exploring ? wildCenter : MEADOW;
     const playRad = up ? SKY_TERRACE_R + 4 : MEADOW_R + 3;
     if (ball.idle > 25 && dist2(ball.pos, playCenter) > playRad && dist2(ball.pos, player.pos) > 8) {
       fx.emit(ball.pos, new THREE.Color(1.3, 1.5, 0.5), 12, { up: 1 });
@@ -1405,6 +1409,27 @@ export function createSpirits(scene, { blocked, tier }) {
     },
     update(dt, cam) {
       camPos = cam;
+      // En el mundo abierto infinito, los espíritus de la zona 'lawn' van apareciendo en los claros por donde caminás.
+      if (!up && Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 6) {
+        const aheadX = player.pos.x + Math.sin(player.heading) * 14;
+        const aheadZ = player.pos.z + Math.cos(player.heading) * 14;
+        if (Math.hypot(aheadX - wildCenter.x, aheadZ - wildCenter.z) > 22) {
+          wildCenter.set(aheadX, 0, aheadZ);
+        }
+        for (const a of pack) {
+          if (a.zone === 'lawn' && dist2(a.pos, player.pos) > 46) {
+            const p = zonePoint(a);
+            if (!blocked(p.x, p.z, 0.3)) {
+              a.pos.set(p.x, groundY(p.x, p.z, up), p.z);
+              a.goal = null;
+              a.fade = 0;
+              go(a, R() < 0.5 ? 'zoomies' : 'wander');
+            }
+          }
+        }
+      } else {
+        wildCenter.copy(LAWN);
+      }
       for (const a of remotes.values()) {
         const o = a.owner;
         const moved = o.pos.distanceTo(o.last);

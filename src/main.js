@@ -399,6 +399,7 @@ async function buildScene() {
     uTime.value = t;
     controls.update(dt);
     const P = controls.player;
+    if (!world.colliders.up) world.updateOpen?.(P.pos.x, P.pos.z);
     me.group.position.copy(P.pos);
     me.group.rotation.y = P.heading;
     me.leashing = !!(walking && spirits.companion && spirits.companion.state === 'follow');

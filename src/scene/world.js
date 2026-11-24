@@ -82,11 +82,36 @@ export const creekZ = (x) => CREEK_Z + Math.sin(x * 0.07) * 3.2 + Math.sin(x * 0
 // El Puente del Arcoíris: la única forma de cruzar el río (entrar y salir del jardín).
 export const BRIDGE = { x: 0, z: CREEK_Z + Math.sin(1) * 0.9, halfW: 1.05, halfL: 4.3, arch: 1.0 };
 export const onBridge = (x, z, pad = 0) => Math.abs(x - BRIDGE.x) < BRIDGE.halfW + pad && Math.abs(z - BRIDGE.z) < BRIDGE.halfL + pad;
-// ¿Está del lado de afuera (antes de cruzar el río)?
-export const outside = (x, z) => z > creekZ(x) + CREEK_HALF * 0.5;
-// En el agua (arroyo o estanque): al caminar por ahí el agua chapotea y brilla.
-export const inWater = (x, z) => (Math.abs(z - creekZ(x)) < CREEK_HALF + 0.08 && !onBridge(x, z, -0.05))
-  || Math.hypot(x - -14.2, z - 28) < 2.55;
+// ¿Está del lado de afuera (antes de cruzar el río principal)?
+export const outside = (x, z) => z > creekZ(x) + CREEK_HALF * 0.5 && Math.hypot(x, z) < GARDEN_RADIUS + 8;
+// Arroyos serpenteantes y lagunitas del mundo abierto infinito (fuera del jardín central).
+export const openStreamX = (z) => 76 + Math.sin(z * 0.042) * 18 + Math.cos(z * 0.11) * 6;
+export const openStreamZ = (x) => -74 + Math.sin(x * 0.045 + 1.2) * 18 + Math.cos(x * 0.11) * 6;
+export function openPondAt(cx, cz) {
+  const h = Math.imul((cx * 73856093) ^ (cz * 19349663), 1664525) >>> 0;
+  if ((h & 3) !== 1) return null;
+  const px = (cx + 0.28 + ((h >>> 4) & 255) / 580) * 32;
+  const pz = (cz + 0.28 + ((h >>> 12) & 255) / 580) * 32;
+  if (Math.hypot(px, pz) < GARDEN_RADIUS + 12) return null;
+  const r = 3.2 + ((h >>> 20) & 15) * 0.14;
+  return { x: px, z: pz, r, h };
+}
+export function inOpenWater(x, z) {
+  const d0 = Math.hypot(x, z);
+  if (d0 < GARDEN_RADIUS - 2) return false;
+  if (Math.abs(x) > 54 && Math.abs(z - creekZ(x)) < CREEK_HALF) return true;
+  if (d0 > GARDEN_RADIUS + 6) {
+    if (Math.abs(x - openStreamX(z)) < 2.2) return true;
+    if (Math.abs(z - openStreamZ(x)) < 2.2) return true;
+  }
+  const pond = openPondAt(Math.floor(x / 32), Math.floor(z / 32));
+  if (pond && Math.hypot(x - pond.x, z - pond.z) < pond.r - 0.15) return true;
+  return false;
+}
+// En el agua (arroyo, estanque o ríos y lagunitas del mundo abierto): al caminar por ahí el agua chapotea y brilla.
+export const inWater = (x, z) => (Math.abs(z - creekZ(x)) < CREEK_HALF + 0.08 && !onBridge(x, z, -0.05) && Math.abs(x) <= 72)
+  || Math.hypot(x - -14.2, z - 28) < 2.55
+  || inOpenWater(x, z);
 // Altura del piso donde se camina: el arco del puente, el piso de madera del salón y el cauce bajo del agua.
 export function groundY(x, z, up = false) {
   if (!up && onBridge(x, z, 0.15)) {
@@ -354,7 +379,9 @@ export function buildWorld(scene, tier) {
   groundRoot.add(ground);
   walkable.push(ground);
 
-  // Colinas lejanas.
+  // Colinas lejanas y pueblito en el horizonte: acompañan al caminante para que el horizonte sea infinito.
+  const horizon = new THREE.Group();
+  groundRoot.add(horizon);
   {
     const seg = 96;
     const pos = [];
@@ -366,7 +393,7 @@ export function buildWorld(scene, tier) {
       const a1 = ((i + 1) / seg) * Math.PI * 2;
       const h = (a) => 14 + Math.sin(a * 3) * 7 + Math.sin(a * 7 + 1) * 4 + Math.sin(a * 13) * 2;
       const p = (a, rad, y) => [Math.sin(a) * rad, y, Math.cos(a) * rad];
-      const quad = [p(a0, 95, -1), p(a1, 95, -1), p(a1, 160, h(a1)), p(a0, 160, h(a0))];
+      const quad = [p(a0, 125, -1), p(a1, 125, -1), p(a1, 195, h(a1)), p(a0, 195, h(a0))];
       for (const idx of [0, 1, 2, 0, 2, 3]) {
         pos.push(...quad[idx]);
         (idx < 2 ? near : far).toArray(col, col.length);
@@ -376,8 +403,10 @@ export function buildWorld(scene, tier) {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     const hills = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
-    groundRoot.add(hills);
-    groundRoot.add(buildPueblo(r));
+    horizon.add(hills);
+    const pueblo = buildPueblo(r);
+    pueblo.scale.setScalar(1.32);
+    horizon.add(pueblo);
   }
 
   // Camino: de piedra adentro del jardín y de tierra afuera (cortado por el río y el puente).
@@ -633,30 +662,25 @@ export function buildWorld(scene, tier) {
     groundRoot.add(leaves);
   }
 
-  // Cerco de ligustros alrededor del jardín y siluetas de árboles detrás.
+  // Setos abiertos con senderos hacia el valle infinito (permiten salir a caminar sin límite en todas direcciones).
   {
     const parts = [];
-    const n = Math.round(GARDEN_RADIUS * 4.2);
+    const n = Math.round(GARDEN_RADIUS * 2.2);
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + r() * 0.01;
-      const rad = GARDEN_RADIUS + 1.2 + r() * 0.4;
-      const g = lumpy(1.1 + r() * 0.5, 1, r, 0.2);
-      g.scale(1, 1.1 + r() * 0.5, 1);
-      g.translate(Math.sin(a) * rad, 0.8 + r() * 0.3, Math.cos(a) * rad);
+      const a = (i / n) * Math.PI * 2 + r() * 0.02;
+      // Dejamos amplios claros abiertos hacia los 8 rumbos para salir al mundo abierto.
+      if (Math.cos(a * 4) > -0.15) continue;
+      const rad = GARDEN_RADIUS + 1.2 + r() * 0.6;
+      const g = lumpy(1.0 + r() * 0.45, 1, r, 0.2);
+      g.scale(1, 1.05 + r() * 0.4, 1);
+      g.translate(Math.sin(a) * rad, 0.75 + r() * 0.25, Math.cos(a) * rad);
       parts.push(paint(g, ['#2f4a2b', '#38552f', '#2a4226'][i % 3]));
     }
-    for (let i = 0; i < 140; i++) {
-      const a = r() * Math.PI * 2;
-      const rad = GARDEN_RADIUS + 7 + r() * 28;
-      const h = 7 + r() * 9;
-      const g = new THREE.ConeGeometry(1.8 + r() * 1.6, h, 7).toNonIndexed();
-      g.deleteAttribute('uv');
-      g.translate(Math.sin(a) * rad, h / 2, Math.cos(a) * rad);
-      parts.push(paint(g, r() < 0.5 ? '#1f2d22' : '#25332a'));
+    if (parts.length) {
+      const hedge = new THREE.Mesh(mergeGeometries(parts), withWind(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'hedge',
+        'transformed.x += sin(uTime * 0.6 + position.z * 0.1) * 0.03 * max(0.0, position.y - 1.0);'));
+      groundRoot.add(hedge);
     }
-    const hedge = new THREE.Mesh(mergeGeometries(parts), withWind(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'hedge',
-      'transformed.x += sin(uTime * 0.6 + position.z * 0.1) * 0.03 * max(0.0, position.y - 1.0);'));
-    groundRoot.add(hedge);
   }
 
   // ---------- faroles ----------
@@ -1001,5 +1025,314 @@ export function buildWorld(scene, tier) {
     }
   }
 
-  return { colliders, animated, walkable, ground: groundRoot, deck, sky, stars: sky.userData.stars, moon, hemi, moonLight, warmFill, fog, flies: sky.userData.flies };
+  // ---------- mundo abierto infinito (celdas procedurales con pools de InstancedMesh: 0 memoria extra) ----------
+  let updateOpen = () => {};
+  {
+    colliders.openCircles = [];
+    const CHUNK = 32;
+    const RAD = 2; // ventana activa de 5x5 celdas (160x160 m) alrededor de tu personaje
+    const MAX_TREES = 130;
+    const MAX_CROWNS = 390;
+    const MAX_GRASS = tier.grass >= 20000 ? 1800 : 1000;
+    const MAX_FLOWERS = 650;
+    const MAX_WATER = 160;
+    const MAX_STONES = 220;
+    const MAX_LAMPS = 32;
+
+    // Geometría de tronco con raíces y ramas para un árbol instanciado.
+    const trunkBase = new THREE.CylinderGeometry(0.14, 0.34, 3.0, 8);
+    trunkBase.translate(0, 1.5, 0);
+    const br1 = new THREE.CylinderGeometry(0.05, 0.11, 1.3, 6).translate(0, 0.65, 0).rotateZ(0.6).translate(0, 2.1, 0);
+    const br2 = new THREE.CylinderGeometry(0.05, 0.11, 1.3, 6).translate(0, 0.65, 0).rotateZ(-0.55).rotateY(2.1).translate(0, 2.0, 0);
+    const rt1 = new THREE.CylinderGeometry(0.04, 0.14, 0.6, 5).rotateZ(0.55).translate(0.22, 0.2, 0);
+    const rt2 = new THREE.CylinderGeometry(0.04, 0.14, 0.6, 5).rotateZ(-0.55).translate(-0.22, 0.2, 0);
+    const trunkUnitGeo = mergeGeometries([trunkBase, br1, br2, rt1, rt2].map((g) => g.toNonIndexed()));
+    const openTrunks = new THREE.InstancedMesh(trunkUnitGeo, new THREE.MeshLambertMaterial({ color: '#38251a', emissive: '#120a06', flatShading: true }), MAX_TREES);
+    openTrunks.frustumCulled = false;
+
+    const crownUnitGeo = lumpy(1.35, 1, rand(99), 0.15);
+    const crownMat = withWind(new THREE.MeshLambertMaterial({ flatShading: true }), 'open-leaves',
+      `float k = max(0.0, position.y + 1.0);
+       transformed.x += sin(uTime * 1.1 + position.x * 0.4 + position.z * 0.3) * 0.045 * k;
+       transformed.z += cos(uTime * 0.9 + position.z * 0.35) * 0.035 * k;`);
+    const cw = crownMat.onBeforeCompile;
+    crownMat.onBeforeCompile = (sh) => {
+      cw(sh);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        vec3 Nl = normalize(normal);
+        float rimK = 1.0 - clamp(abs(dot(Nl, normalize(vViewPosition))), 0.0, 1.0);
+        float warmU = clamp(-Nl.y, 0.0, 1.0);
+        totalEmissiveRadiance += vec3(0.14, 0.42, 0.92) * rimK * rimK * 0.65 + diffuseColor.rgb * warmU * 0.24;`);
+    };
+    crownMat.customProgramCacheKey = () => 'open-leaves-1';
+    const openCrowns = new THREE.InstancedMesh(crownUnitGeo, crownMat, MAX_CROWNS);
+    openCrowns.frustumCulled = false;
+
+    // Pasto y flores instanciados para el valle infinito.
+    const bladeG = (w, hS, lX, lZ, rY) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([
+        -w, 0, 0, w, 0, 0,
+        -w * 0.78, 0.35 * hS, lZ * 0.25, w * 0.78, 0.35 * hS, lZ * 0.25,
+        -w * 0.44, 0.72 * hS, lZ * 0.65, w * 0.44, 0.72 * hS, lZ * 0.65,
+        lX, 1.05 * hS, lZ,
+      ], 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(7).fill([0, 1, 0]).flat(), 3));
+      const base = new THREE.Color('#21361a');
+      const mid = new THREE.Color('#4f7a38');
+      const tip = new THREE.Color('#c2df82');
+      const cols = [];
+      [0, 0, 0.35, 0.35, 0.72, 0.72, 1].forEach((h) => (h < 0.5 ? base.clone().lerp(mid, h * 2) : mid.clone().lerp(tip, (h - 0.5) * 2)).toArray(cols, cols.length));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+      g.setIndex([0, 1, 2, 2, 1, 3, 2, 3, 4, 4, 3, 5, 4, 5, 6]);
+      g.rotateY(rY);
+      return g.toNonIndexed();
+    };
+    const openGrass = new THREE.InstancedMesh(
+      mergeGeometries([bladeG(0.052, 1, 0, 0.08, 0), bladeG(0.044, 0.85, -0.05, 0.1, 1.1), bladeG(0.044, 0.88, 0.05, -0.1, -1.0)]),
+      withWind(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), 'open-grass',
+        `vec3 ip = instanceMatrix[3].xyz;
+         float h = clamp(position.y, 0.0, 1.2);
+         float bend = (sin(uTime * 1.45 + ip.x * 0.26 + ip.z * 0.19) * 0.6 + 0.3) * h * h;
+         transformed.x += bend * 0.22; transformed.z += bend * 0.11;`),
+      MAX_GRASS,
+    );
+    openGrass.frustumCulled = false;
+
+    const openFlowers = new THREE.InstancedMesh(marigoldGeometry(0.08, '#ffffff', rand(77)), marigoldMaterial(), MAX_FLOWERS);
+    openFlowers.frustumCulled = false;
+
+    // Discos de agua bioluminiscente para los arroyos serpenteantes y lagunitas del camino.
+    const waterDiscGeo = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
+    const waterDiscMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.08, 0.42, 0.68), transparent: true, opacity: 0.88, depthWrite: false });
+    const openWater = new THREE.InstancedMesh(waterDiscGeo, waterDiscMat, MAX_WATER);
+    openWater.frustumCulled = false;
+    openWater.renderOrder = 1;
+
+    const stoneUnitGeo = new THREE.DodecahedronGeometry(0.24, 0);
+    stoneUnitGeo.scale(1.3, 0.55, 1.1);
+    const openStones = new THREE.InstancedMesh(stoneUnitGeo, new THREE.MeshLambertMaterial({ color: '#7a7480', flatShading: true }), MAX_STONES);
+    openStones.frustumCulled = false;
+
+    // Faroles de camino junto a las lagunitas y claros.
+    const lampUnitGeo = mergeGeometries([
+      new THREE.CylinderGeometry(0.15, 0.19, 0.32, 8).translate(0, 0.16, 0),
+      new THREE.CylinderGeometry(0.045, 0.06, 2.7, 8).translate(0, 1.65, 0),
+      new THREE.ConeGeometry(0.25, 0.22, 4).rotateY(Math.PI / 4).translate(0, 3.45, 0),
+    ].map((g) => g.toNonIndexed()));
+    const openLamps = new THREE.InstancedMesh(lampUnitGeo, poleMat, MAX_LAMPS);
+    const openLampHeads = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.32, 0.24).translate(0, 3.18, 0), glassMat, MAX_LAMPS);
+    openLamps.frustumCulled = false;
+    openLampHeads.frustumCulled = false;
+
+    groundRoot.add(openTrunks, openCrowns, openGrass, openFlowers, openWater, openStones, openLamps, openLampHeads);
+
+    const dummy = new THREE.Object3D();
+    const colTmp = new THREE.Color();
+    const crownCols = ['#3d5a33', '#4b6b3b', '#56733f', '#9b72d6', '#a884e0', '#e7a7bd', '#f0bfcf'].map((c) => new THREE.Color(c));
+    const flowerCols = [PALETTE.cempasuchil, PALETTE.naranja, PALETTE.amarillo, '#d6246e', '#ff9a1f'].map((c) => new THREE.Color(c));
+    let curCx = null;
+    let curCz = null;
+
+    function rebuildOpenChunks(cx0, cz0) {
+      let nT = 0;
+      let nC = 0;
+      let nG = 0;
+      let nF = 0;
+      let nW = 0;
+      let nS = 0;
+      let nL = 0;
+      colliders.openCircles.length = 0;
+
+      // Arroyos continuos dentro de la ventana de 160x160 m.
+      const minX = (cx0 - RAD) * CHUNK;
+      const maxX = (cx0 + RAD + 1) * CHUNK;
+      const minZ = (cz0 - RAD) * CHUNK;
+      const maxZ = (cz0 + RAD + 1) * CHUNK;
+      for (let z = minZ; z <= maxZ && nW < MAX_WATER - 20; z += 3.2) {
+        const sx = openStreamX(z);
+        if (sx >= minX - 4 && sx <= maxX + 4 && Math.hypot(sx, z) > GARDEN_RADIUS + 6) {
+          dummy.position.set(sx, 0.038, z);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.set(2.35, 1, 2.35);
+          dummy.updateMatrix();
+          openWater.setMatrixAt(nW++, dummy.matrix);
+        }
+      }
+      for (let x = minX; x <= maxX && nW < MAX_WATER - 10; x += 3.2) {
+        const sz = openStreamZ(x);
+        if (sz >= minZ - 4 && sz <= maxZ + 4 && Math.hypot(x, sz) > GARDEN_RADIUS + 6) {
+          dummy.position.set(x, 0.038, sz);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.set(2.35, 1, 2.35);
+          dummy.updateMatrix();
+          openWater.setMatrixAt(nW++, dummy.matrix);
+        }
+        // Continuación infinita del río principal más allá de |x| > 70.
+        if (Math.abs(x) > 70 && nW < MAX_WATER - 6) {
+          const czMain = creekZ(x);
+          if (czMain >= minZ - 4 && czMain <= maxZ + 4) {
+            dummy.position.set(x, 0.04, czMain);
+            dummy.scale.set(CREEK_HALF * 1.05, 1, CREEK_HALF * 1.05);
+            dummy.updateMatrix();
+            openWater.setMatrixAt(nW++, dummy.matrix);
+          }
+        }
+      }
+
+      for (let dx = -RAD; dx <= RAD; dx++) {
+        for (let dz = -RAD; dz <= RAD; dz++) {
+          const cx = cx0 + dx;
+          const cz = cz0 + dz;
+          const x0 = cx * CHUNK;
+          const z0 = cz * CHUNK;
+          if (Math.hypot(x0 + CHUNK * 0.5, z0 + CHUNK * 0.5) < GARDEN_RADIUS - 8) continue;
+          const cr = rand(((cx * 73856093) ^ (cz * 19349663) ^ 0x9e3779b9) >>> 0);
+
+          // Lagunita oasis de la celda (si tiene).
+          const pond = openPondAt(cx, cz);
+          if (pond && nW < MAX_WATER) {
+            dummy.position.set(pond.x, 0.042, pond.z);
+            dummy.rotation.set(0, 0, 0);
+            dummy.scale.set(pond.r, 1, pond.r);
+            dummy.updateMatrix();
+            openWater.setMatrixAt(nW++, dummy.matrix);
+            for (let s = 0; s < 10 && nS < MAX_STONES; s++) {
+              const a = (s / 10) * Math.PI * 2 + cr() * 0.3;
+              dummy.position.set(pond.x + Math.cos(a) * (pond.r + 0.15), 0.08, pond.z + Math.sin(a) * (pond.r + 0.15));
+              dummy.rotation.set(0, a, 0);
+              dummy.scale.setScalar(0.8 + cr() * 0.6);
+              dummy.updateMatrix();
+              openStones.setMatrixAt(nS++, dummy.matrix);
+            }
+            if (nL < MAX_LAMPS) {
+              const lx = pond.x + pond.r + 1.1;
+              const lz = pond.z + 0.4;
+              dummy.position.set(lx, 0, lz);
+              dummy.rotation.set(0, 0, 0);
+              dummy.scale.setScalar(1);
+              dummy.updateMatrix();
+              openLamps.setMatrixAt(nL, dummy.matrix);
+              openLampHeads.setMatrixAt(nL, dummy.matrix);
+              nL++;
+              colliders.openCircles.push({ x: lx, z: lz, r: 0.25 });
+            }
+          } else if (((cx + cz) & 1) === 0 && nL < MAX_LAMPS) {
+            // Un farolito de sendero en claros del valle.
+            const lx = x0 + CHUNK * (0.35 + cr() * 0.3);
+            const lz = z0 + CHUNK * (0.35 + cr() * 0.3);
+            if (Math.hypot(lx, lz) > GARDEN_RADIUS + 6 && !inWater(lx, lz)) {
+              dummy.position.set(lx, 0, lz);
+              dummy.rotation.set(0, 0, 0);
+              dummy.scale.setScalar(1);
+              dummy.updateMatrix();
+              openLamps.setMatrixAt(nL, dummy.matrix);
+              openLampHeads.setMatrixAt(nL, dummy.matrix);
+              nL++;
+              colliders.openCircles.push({ x: lx, z: lz, r: 0.25 });
+            }
+          }
+
+          // Árboles del claro (3 a 5 por celda).
+          const treesInCell = 4;
+          for (let t = 0; t < treesInCell && nT < MAX_TREES; t++) {
+            const tx = x0 + 3 + cr() * (CHUNK - 6);
+            const tz = z0 + 3 + cr() * (CHUNK - 6);
+            if (Math.hypot(tx, tz) < GARDEN_RADIUS + 3 || inWater(tx, tz)) continue;
+            if (pond && Math.hypot(tx - pond.x, tz - pond.z) < pond.r + 2.2) continue;
+            const sc = 0.85 + cr() * 0.55;
+            dummy.position.set(tx, 0, tz);
+            dummy.rotation.set(0, cr() * Math.PI * 2, 0);
+            dummy.scale.setScalar(sc);
+            dummy.updateMatrix();
+            openTrunks.setMatrixAt(nT++, dummy.matrix);
+            colliders.openCircles.push({ x: tx, z: tz, r: 0.48 * sc });
+            const blossomKind = cr() < 0.38 ? (cr() < 0.5 ? 3 : 5) : 0;
+            for (let c = 0; c < 3 && nC < MAX_CROWNS; c++) {
+              dummy.position.set(tx + (cr() - 0.5) * 1.6 * sc, (2.65 + c * 0.45 + cr() * 0.35) * sc, tz + (cr() - 0.5) * 1.6 * sc);
+              dummy.rotation.set(0, cr() * 6, 0);
+              dummy.scale.set((0.95 + cr() * 0.45) * sc, (0.75 + cr() * 0.25) * sc, (0.95 + cr() * 0.45) * sc);
+              dummy.updateMatrix();
+              openCrowns.setMatrixAt(nC, dummy.matrix);
+              const cIdx = blossomKind ? blossomKind + (c % 2) : (c % 3);
+              openCrowns.setColorAt(nC, crownCols[cIdx]);
+              nC++;
+            }
+          }
+
+          // Matitas de pasto en la celda.
+          const grassPerCell = Math.floor(MAX_GRASS / 22);
+          for (let g = 0; g < grassPerCell && nG < MAX_GRASS; g++) {
+            const gx = x0 + cr() * CHUNK;
+            const gz = z0 + cr() * CHUNK;
+            if (Math.hypot(gx, gz) < GARDEN_RADIUS + 0.5 || inWater(gx, gz)) continue;
+            dummy.position.set(gx, 0, gz);
+            dummy.rotation.set((cr() - 0.5) * 0.2, cr() * Math.PI * 2, (cr() - 0.5) * 0.2);
+            dummy.scale.set(1 + cr() * 0.8, 0.25 + cr() * 0.42, 1);
+            dummy.updateMatrix();
+            openGrass.setMatrixAt(nG, dummy.matrix);
+            colTmp.setHSL(0.23 + cr() * 0.08, 0.38 + cr() * 0.2, 0.46 + cr() * 0.18);
+            openGrass.setColorAt(nG, colTmp);
+            nG++;
+          }
+
+          // Manchones de cempasúchil silvestre.
+          const fxCenter = x0 + CHUNK * (0.25 + cr() * 0.5);
+          const fzCenter = z0 + CHUNK * (0.25 + cr() * 0.5);
+          for (let f = 0; f < 26 && nF < MAX_FLOWERS; f++) {
+            const a = cr() * Math.PI * 2;
+            const d = Math.sqrt(cr()) * 5.5;
+            const fx = fxCenter + Math.cos(a) * d;
+            const fz = fzCenter + Math.sin(a) * d;
+            if (Math.hypot(fx, fz) < GARDEN_RADIUS + 1 || inWater(fx, fz)) continue;
+            dummy.position.set(fx, 0.18 + cr() * 0.18, fz);
+            dummy.rotation.set((cr() - 0.5) * 0.4, cr() * 6, (cr() - 0.5) * 0.4);
+            dummy.scale.setScalar(0.75 + cr() * 0.75);
+            dummy.updateMatrix();
+            openFlowers.setMatrixAt(nF, dummy.matrix);
+            openFlowers.setColorAt(nF, flowerCols[(f + Math.abs(cx + cz)) % flowerCols.length]);
+            nF++;
+          }
+        }
+      }
+
+      openTrunks.count = nT;
+      openCrowns.count = nC;
+      openGrass.count = nG;
+      openFlowers.count = nF;
+      openWater.count = nW;
+      openStones.count = nS;
+      openLamps.count = nL;
+      openLampHeads.count = nL;
+      openTrunks.instanceMatrix.needsUpdate = true;
+      openCrowns.instanceMatrix.needsUpdate = true;
+      if (openCrowns.instanceColor) openCrowns.instanceColor.needsUpdate = true;
+      openGrass.instanceMatrix.needsUpdate = true;
+      if (openGrass.instanceColor) openGrass.instanceColor.needsUpdate = true;
+      openFlowers.instanceMatrix.needsUpdate = true;
+      if (openFlowers.instanceColor) openFlowers.instanceColor.needsUpdate = true;
+      openWater.instanceMatrix.needsUpdate = true;
+      openStones.instanceMatrix.needsUpdate = true;
+      openLamps.instanceMatrix.needsUpdate = true;
+      openLampHeads.instanceMatrix.needsUpdate = true;
+    }
+
+    updateOpen = (px, pz) => {
+      // El piso, el horizonte, el cielo y las luciérnagas acompañan tu caminata hasta el infinito.
+      ground.position.set(Math.round(px / 8) * 8, 0, Math.round(pz / 8) * 8);
+      horizon.position.set(px, 0, pz);
+      sky.position.set(px, 0, pz);
+      if (sky.userData.flies) sky.userData.flies.position.set(px, 0, pz);
+      const cx = Math.floor(px / CHUNK);
+      const cz = Math.floor(pz / CHUNK);
+      if (cx !== curCx || cz !== curCz) {
+        curCx = cx;
+        curCz = cz;
+        rebuildOpenChunks(cx, cz);
+      }
+    };
+    updateOpen(SPAWN.x, SPAWN.z);
+  }
+
+  return { colliders, animated, walkable, ground: groundRoot, deck, sky, stars: sky.userData.stars, moon, hemi, moonLight, warmFill, fog, flies: sky.userData.flies, updateOpen };
 }
