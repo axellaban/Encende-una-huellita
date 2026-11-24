@@ -284,8 +284,8 @@ body.intro .top, body.intro .bottom { opacity: 0; pointer-events: none; }
 .bar { height: 8px; border-radius: 4px; background: rgba(240,130,28,.15); overflow: hidden; margin-top: 6px; }
 .bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #f2b25c, #e27d55); box-shadow: 0 0 10px rgba(255,170,80,.7); transition: width .8s var(--ease); }
 .gifts-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
-.gifts-row span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px 5px 6px; border-radius: 999px; background: var(--field); font-weight: 700; font-size: 12.5px; color: var(--ink-soft); box-shadow: 0 1px 0 rgba(60,40,20,.06); }
-.gifts-row span i { font-style: normal; font-size: 19px; }
+.gifts-row :is(span, button) { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px 5px 6px; border-radius: 999px; background: var(--field); font-weight: 700; font-size: 12.5px; color: var(--ink-soft); box-shadow: 0 1px 0 rgba(60,40,20,.06); }
+.gifts-row :is(span, button) i { font-style: normal; font-size: 19px; }
 
 /* ---------- hoy ---------- */
 .today-chip { background: rgba(123,44,191,.8); }
@@ -373,7 +373,7 @@ body.sheet-open .emote-btn, body.intro .emote-btn, body.sheet-open .act-btn, bod
 .gathering .btn { min-height: 38px; font-size: 13px; }
 .family { margin-top: 20px; }
 .family h3, .diary h3 { font-family: var(--fiesta); color: var(--title); font-weight: 400; font-size: 22px; margin: 0 0 8px; }
-.tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .tools button { display: grid; justify-items: center; gap: 2px; padding: 10px 2px 8px; border-radius: 16px; background: var(--field); color: var(--ink); font-weight: 800; font-size: 11.5px; }
 .tools button i { font-style: normal; font-size: 22px; }
 .diary { margin-top: 20px; }
@@ -446,10 +446,10 @@ dialog.modal .btn.primary, .sheet .btn.primary { background: linear-gradient(135
 .form-foot { background: linear-gradient(rgba(74, 15, 27, 0), #4c101c 32%); }
 .list-head { background: #561420; }
 /* Papeles claros (notas, libro de visitas, diario, estampita): tinta oscura. */
-#gb-list li, #diary-list li, .jar-notes p, .comfort-note, .gifts-row span, .estampita { color: #3a1f2b; }
+#gb-list li, #diary-list li, .jar-notes p, .comfort-note, .gifts-row :is(span, button), .estampita { color: #3a1f2b; }
 #gb-list li { background-color: #fbf1e2; }
 #diary-list li { background-color: #fff6e6; }
-.gifts-row span { background: #fbf1e2; }
+.gifts-row :is(span, button) { background: #fbf1e2; }
 .glow-card, .pet-glow, .jar-cta, .eternal { color: #3a1f2b; }
 .glow-card small, .pet-glow small, .jar-cta small { color: #7d5a62; }
 .toggle, .menu-item, .floor-list button, .quality, .streak, .missions li, .act, .tools button, .card, .species span, .photo-drop { border: 1px solid rgba(255, 220, 200, .1); }
@@ -569,7 +569,7 @@ body.photo-mode::after { content: ''; position: fixed; inset: 0; pointer-events:
 .splash.has-pet { gap: 16px; }
 .splash.has-pet .candle-css { display: none; }
 .splash.has-pet h1 { font-size: clamp(18px, 4.4vw, 22px); opacity: .8; order: 3; }
-.splash.has-pet .splash-quote { display: none; }
+.splash.has-pet .splash-quote, .splash.has-pet .splash-night { display: none; }
 .splash.has-pet #enter { order: 4; }
 .splash.has-pet .splash-sub { order: 5; }
 .walk-btn .paw { display: inline-block; animation: pawHop 1.8s var(--ease) infinite; }
@@ -832,7 +832,8 @@ body.riding dialog#floors::backdrop { background: transparent; backdrop-filter: 
 @media (min-width: 761px) and (pointer: fine) { body.riding dialog#floors { width: min(420px, 92vw); margin: auto 24px 24px auto; border-radius: 28px; max-height: 70dvh; } }
 
 /* Nicho de la ficha con repisas a los costados, lista de velas, moderación y contador nocturno */
-.sheet-photo { position: relative; border-radius: 42px 42px 14px 14px !important; box-shadow: 0 0 0 3px #c9973f, 0 8px 20px rgba(0,0,0,.38); overflow: visible !important; margin: 0 10px 0 6px; }
+.sheet-photo { position: relative; border-radius: 42px 42px 14px 14px !important; box-shadow: 0 0 0 3px #c9973f, 0 8px 20px rgba(0,0,0,.38); overflow: visible !important; margin: 0 auto; }
+@media (max-width: 760px), (pointer: coarse) and (max-height: 540px) { .sheet-photo { margin: 0 8px 0 6px; } }
 .sheet-photo img { border-radius: 39px 39px 11px 11px; width: 100%; height: 100%; object-fit: cover; display: block; }
 .sheet-photo::before, .sheet-photo::after {
   position: absolute; bottom: 10px; width: 22px; height: 22px; display: grid; place-items: center;

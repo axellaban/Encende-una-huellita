@@ -337,7 +337,7 @@ async function buildScene() {
   controls.onTap((e) => {
     if (document.body.classList.contains('intro')) return skipIntro();
     if (!sheetEl.hidden) { closeSheet(); return; }
-    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...cozy.pickables, ...spirits.pickables, elevator.hit, ...world.walkable]);
+    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, elevator.hit, ...world.walkable]);
     if (!hit) return;
     // Un muro: caminar hacia él (no abrir lo que haya del otro lado).
     if (hit.object.userData.kind === 'wall') { controls.walkTo(hit.point.clone().setY(0)); hideHint(); return; }
@@ -365,7 +365,7 @@ async function buildScene() {
     hideHint();
   });
   controls.onHover((e) => {
-    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...cozy.pickables, ...spirits.pickables, elevator.hit]);
+    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, elevator.hit]);
     const key = hit && hit.distance < 16 ? slotKeyFromHit(hit.object) : null;
     hall.setHover(key);
     canvas.style.cursor = hit && hit.distance < 16 && (key !== null || (hit.object.userData.kind && hit.object.userData.kind !== 'wall')) ? 'pointer' : '';
@@ -989,10 +989,7 @@ function inspectShelfGift(m, emo, single = null) {
   haptic(8);
   if (hall && offerFx) {
     const key = hall.memorialKey(m);
-    if (key !== null) {
-      const at = hall.offerPos(key, 'gift');
-      if (at) offerFx.playGrace(emo, at, hall.giftScale(key));
-    }
+    if (key !== null) hall.bounceGift(key, emo, offerFx);
   }
   if (single) {
     const rest = single.gift.split(' ').slice(1).join(' ');
@@ -2207,13 +2204,13 @@ async function leaveGift(gft) {
     const r = await api.gift(current.id, who(), gft);
     markToday('g', r.memorial.id);
     if (r.already) return toast(`🎁 Ya le dejaste un regalito a ${r.memorial.name} hoy. Volvé mañana 🤍`);
-    updateMemorial(r.memorial);
-    const full = await api.get(r.memorial.id).catch(() => null);
-    if (full && current?.id === full.id) { current = { ...current, ...full }; fillSheet(current); }
     const emo = gft.split(' ')[0];
     const gm = r.memorial;
     const gkey = hall?.memorialKey(gm) ?? null;
     if (gkey !== null) hall.holdGift(gkey, true);
+    updateMemorial(r.memorial);
+    const full = await api.get(r.memorial.id).catch(() => null);
+    if (full && current?.id === full.id) { current = { ...current, ...full }; fillSheet(current); }
     const flew = offerGesture(gm, 'gift', (from, to, done) => offerFx.gift(emo, from, to, hall.giftScale(gkey), () => { hall.holdGift(gkey, false); done(); }));
     if (!flew) { if (gkey !== null) hall.holdGift(gkey, false); floatFromCurrent(emo); }
     tick();
@@ -3192,7 +3189,7 @@ async function photoMode() {
     const caption = comp ? `Paseando con ${comp.name} 🐾` : 'En el jardín de las huellitas 🌼';
     const when = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
     lastPhoto = { canvas: await polaroid(url, { caption, sub: `${when} · Encendé una huellita` }), name: comp?.name || 'jardin', id: comp?.memorialId || null };
-    $('#photo-preview').src = lastPhoto.canvas.toDataURL('image/jpeg', 0.9);
+    $('#polaroid-preview').src = lastPhoto.canvas.toDataURL('image/jpeg', 0.9);
     $('#photo-dialog-sub').textContent = comp ? `Un recuerdo de tu paseo con ${comp.name}.` : 'Un recuerdo de tu visita al jardín.';
     $('#photo-dialog').showModal();
   }, { duration: reduced ? 0.3 : 1.1 });

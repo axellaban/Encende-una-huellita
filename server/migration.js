@@ -30,7 +30,7 @@ function prepare(r) {
       hue: Number.isFinite(v.hue) ? Math.abs(Math.round(v.hue)) % 360 : 30, createdAt: at(v.createdAt), hasPhoto: !!v.hasPhoto,
       bg: BACKGROUND_IDS.has(v.bg) ? v.bg : 'crema', gathering: Number.isFinite(v.gathering) ? v.gathering : 0,
       giftCounts: Object.fromEntries(Object.entries(v.giftCounts || {}).filter(([k]) => emojis.has(k)).map(([k, n]) => [k, count(n)])),
-      lastGifts: Array.isArray(v.lastGifts) ? v.lastGifts.filter((g) => emojis.has(g)).slice(0, 3) : [],
+      lastGifts: Array.isArray(v.lastGifts) ? v.lastGifts.filter((g) => emojis.has(g)).slice(0, 5) : [],
       eternal: v.eternal ? { by: cleanText(v.eternal.by, 40) || 'Alguien', at: at(v.eternal.at) } : null } };
   }
   if (r.kind === 'photo' || r.kind === 'voice') {
@@ -55,7 +55,7 @@ function prepare(r) {
     if (!FEATURED_IDS.has(r.localId)) bad();
     return { ...base, value: { candles: count(v.candles), flowers: count(v.flowers), gifts: count(v.gifts),
       giftCounts: Object.fromEntries(Object.entries(v.giftCounts || {}).filter(([k]) => emojis.has(k)).map(([k, n]) => [k, count(n)])),
-      lastGifts: Array.isArray(v.lastGifts) ? v.lastGifts.filter((g) => emojis.has(g)).slice(0, 3) : [],
+      lastGifts: Array.isArray(v.lastGifts) ? v.lastGifts.filter((g) => emojis.has(g)).slice(0, 5) : [],
       eternal: v.eternal ? { by: cleanText(v.eternal.by, 40) || 'Alguien', at: at(v.eternal.at) } : null } };
   }
   if (r.kind === 'event') {

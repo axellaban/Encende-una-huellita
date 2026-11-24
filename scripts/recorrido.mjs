@@ -127,6 +127,9 @@ async function full(b, tag, dev) {
   await p.evaluate(() => document.querySelector('#gift-grid button')?.click());
   await wait(p, 2500);
   check(tag, 'regalito dejado', (await toastIs(p, /regalito|ya tiene tu/)) && !(await isOpen(p, '#gifts')), await toastText(p));
+  await p.evaluate(() => document.querySelector('#s-shelf .shelf-item')?.click());
+  await wait(p, 600);
+  check(tag, 'repisa: tocar regalito muestra quién lo dejó', await toastIs(p, /le dej/), await toastText(p));
   await p.fill('#gb-form textarea', 'Qué lindo eras, Luca 🤍');
   await p.evaluate(() => document.querySelector('#gb-form').requestSubmit());
   await wait(p, 1500);
@@ -137,7 +140,9 @@ async function full(b, tag, dev) {
   await closeTop(p);
   await p.evaluate(() => document.querySelector('#s-keep').click());
   await wait(p, 3000);
-  check(tag, 'recuerdo (estampita)', await isOpen(p, '#keepsake'));
+  await p.evaluate(() => document.querySelector('#keep-qr')?.click());
+  await wait(p, 1200);
+  check(tag, 'recuerdo (estampita con QR)', (await isOpen(p, '#keepsake')) && (await p.evaluate(() => document.querySelector('#keep-qr')?.getAttribute('aria-pressed') === 'true')));
   await closeTop(p);
   await p.evaluate(() => document.querySelector('#sheet-x').click());
   await wait(p, 2500);
@@ -154,13 +159,22 @@ async function full(b, tag, dev) {
   await wait(p, 8000);
   check(tag, 'sumar mascota con foto', (await visible(p, '#sheet')) && (await text(p, '#s-name')) === 'Nieve', await text(p, '#s-name'));
 
-  // Editar y diario (herramientas de la familia).
+  // Editar, agradecer velas, cerrar/abrir libro y diario (herramientas de la familia).
   await p.evaluate(() => document.querySelector('[data-tool="edit"]').click());
   await wait(p, 800);
   await p.fill('#edit-form input[name="name"]', 'Nievecita');
   await p.evaluate(() => document.querySelector('#edit-form').requestSubmit());
   await wait(p, 2500);
   check(tag, 'editar', (await text(p, '#s-name')) === 'Nievecita');
+  await p.evaluate(() => document.querySelector('#s-thanks-btn')?.click());
+  await wait(p, 1500);
+  check(tag, 'agradecer las velas', await toastIs(p, /agradecimiento/));
+  await p.evaluate(() => document.querySelector('#tool-gb-toggle')?.click());
+  await wait(p, 1500);
+  const closedOk = await p.evaluate(() => !document.querySelector('#gb-closed-msg').hidden && document.querySelector('#gb-form').hidden);
+  await p.evaluate(() => document.querySelector('#tool-gb-toggle')?.click());
+  await wait(p, 1500);
+  check(tag, 'cerrar y reabrir libro de visitas', closedOk && (await p.evaluate(() => !document.querySelector('#gb-form').hidden)));
   await p.evaluate(() => document.querySelector('[data-tool="diary"]').click());
   await wait(p, 800);
   await p.fill('#diary-form textarea', 'Dormía al sol todas las tardes.');
@@ -249,7 +263,13 @@ async function full(b, tag, dev) {
   await closeTop(p);
   await hub(p, tag, '#me-chip', 'Así te ven los demás');
   await wait(p, 700);
-  check(tag, '"Así te ven los demás"', await isOpen(p, '#me-dialog'));
+  await p.evaluate(() => document.querySelector('input[name="me-outfit"][value="2"]')?.click());
+  await wait(p, 300);
+  check(tag, '"Así te ven los demás" y cambio de ropa', (await isOpen(p, '#me-dialog')) && (await p.evaluate(() => Math.floor(Number(localStorage.getItem('huellita.hue')) / 360) === 2)));
+  await closeTop(p);
+  await hub(p, tag, '[data-then="photo"]', 'Foto');
+  await p.waitForFunction(() => document.querySelector('#photo-dialog')?.open, null, { timeout: 25000 }).catch(() => {});
+  check(tag, 'modo foto (polaroid)', (await isOpen(p, '#photo-dialog')) && (await p.evaluate(() => (document.querySelector('#polaroid-preview')?.getAttribute('src') || '').startsWith('data:image/jpeg'))));
   await closeTop(p);
 
   // Pisos: el ascensor (caminás hasta la puerta, entrás, la botonera; al cerrarla salís caminando).

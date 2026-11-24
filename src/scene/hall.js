@@ -1467,6 +1467,26 @@ export function buildHall(scene, colliders, tier) {
       h.userData.held = on;
       h.visible = !on && !!h.userData.ch;
     },
+    // Hacer que un regalito de la repisa haga su gracia en 3D (escondiendo el fijo mientras salta/gira).
+    bounceGift(key, emo, offerFx) {
+      const holders = holdersFor(key);
+      if (!holders?.length || !offerFx) return;
+      const h = holders.find((x) => x.visible && x.userData.ch === emo) || holders.find((x) => x.visible) || holders[0];
+      if (!h) return;
+      const pos = h.getWorldPosition(new THREE.Vector3());
+      const scale = h.getWorldScale(new THREE.Vector3()).x || 0.15;
+      const hadFixed = h.visible && h.userData.ch === emo;
+      if (hadFixed) {
+        h.userData.held = true;
+        h.visible = false;
+      }
+      offerFx.playGrace(emo, pos, scale, () => {
+        if (hadFixed) {
+          h.userData.held = false;
+          h.visible = !!h.userData.ch;
+        }
+      });
+    },
     animate(t) {
       updateDoors(t);
       for (const f of flames) {

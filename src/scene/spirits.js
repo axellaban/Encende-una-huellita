@@ -299,7 +299,7 @@ export function createSpirits(scene, { blocked, tier }) {
       let vz = Math.cos(dHead);
       // Esquivar a los otros espíritus.
       for (const b of [...pack, companion, ...remotes.values()]) {
-        if (!b || b === a || b === a.d.partner) continue;
+        if (!b || b === a || b === a.d.partner || (up && b.role === 'pack')) continue;
         const ox = a.pos.x - b.pos.x;
         const oz = a.pos.z - b.pos.z;
         const od = Math.hypot(ox, oz);
@@ -330,11 +330,12 @@ export function createSpirits(scene, { blocked, tier }) {
       const nx = a.pos.x + Math.sin(a.heading) * st;
       const nz = a.pos.z + Math.cos(a.heading) * st;
       const body = 0.18 * a.s;
-      if (!blocked(nx, nz, body)) a.pos.set(nx, groundY(nx, nz), nz);
+      if (!blocked(nx, nz, body)) { a.pos.x = nx; a.pos.z = nz; }
       else if (!blocked(nx, a.pos.z, body)) a.pos.x = nx;
       else if (!blocked(a.pos.x, nz, body)) a.pos.z = nz;
       else a.speed *= 0.3;
     }
+    a.pos.y = up ? 0 : groundY(a.pos.x, a.pos.z);
   }
 
   function animate(a, dt) {
@@ -440,7 +441,7 @@ export function createSpirits(scene, { blocked, tier }) {
         const r = 1.8 + Math.sin(a.t * 2.1) * 0.9;
         const bx = a.d.c.x + Math.sin(a.d.ang) * r;
         const bz = a.d.c.z + Math.cos(a.d.ang * 1.5) * r;
-        const by = groundY(bx, bz) + 0.55 + Math.sin(a.t * 4.5) * 0.22;
+        const by = (up ? 0 : groundY(bx, bz)) + 0.55 + Math.sin(a.t * 4.5) * 0.22;
         bFly.position.set(bx, by, bz);
         bFly.rotation.y = a.d.ang + (a.d.dir > 0 ? 0 : Math.PI);
         const flap = Math.sin(a.t * 22) * 0.65;
@@ -780,7 +781,7 @@ export function createSpirits(scene, { blocked, tier }) {
           a.want = { sit: still > 1.4 && still < 16, lie: still >= 16, tilt: still > 3 && still < 5 };
           a.excite = still < 8 ? 0.7 : 0.3;
           // Si estás quieto cerca del Prado (vos o un visitante remoto), se va a jugar un rato con la manada.
-          if ((a.role === 'companion' || a.role === 'remote') && still > 5 && dist2(o.pos, MEADOW) < MEADOW_R + 7 && pack.length && (a.cool.join || 0) <= 0) {
+          if (!up && (a.role === 'companion' || a.role === 'remote') && still > 5 && dist2(o.pos, MEADOW) < MEADOW_R + 7 && pack.length && (a.cool.join || 0) <= 0) {
             const wasRemote = a.role === 'remote';
             a.role = wasRemote ? 'remote-joined' : 'joined';
             a.cool.join = 40;
@@ -1037,13 +1038,14 @@ export function createSpirits(scene, { blocked, tier }) {
       ball.held = null;
       if (h.state === 'carry') go(h, h.role === 'pack' ? 'idle' : 'follow');
     }
+    ball.mesh.visible = true;
     ball.pos.copy(from);
     ball.vel.set(Math.sin(heading) * 6.5 * power, 4.3 * power, Math.cos(heading) * 6.5 * power);
     ball.thrower = 'player';
     ball.idle = 0;
     fx.emit(from, new THREE.Color(1.3, 1.6, 0.5), 6, { up: 0.4 });
     if (companion && companion.fade > 0.5) { companion.role = 'companion'; go(companion, 'ball'); }
-    for (const a of pack) if (a.kind === 'perro' && dist2(a.pos, from) < 16 && !a.pet.anim.busy && R() < 0.65) go(a, 'ball');
+    if (!up) for (const a of pack) if (a.kind === 'perro' && dist2(a.pos, from) < 16 && !a.pet.anim.busy && R() < 0.65) go(a, 'ball');
   }
 
   function setRemote(list) {
@@ -1123,12 +1125,24 @@ export function createSpirits(scene, { blocked, tier }) {
   function setUp(v) {
     up = v;
     for (const a of pack) a.pet.group.visible = !up;
-    ball.mesh.visible = !up;
-    if (up) { bFly.visible = false; tugRope.visible = false; }
+    if (up && ball.held?.role === 'pack') dropBall(ball.held, 0);
+    ball.mesh.visible = !up || !!companion;
+    if (up) {
+      bFly.visible = false;
+      tugRope.visible = false;
+      if (companion?.role === 'joined') { companion.role = 'companion'; go(companion, 'follow'); }
+    }
   }
 
   return {
-    pickables,
+    get pickables() {
+      if (!up) return pickables;
+      return [
+        ...(ball.mesh.visible ? [ball.hit] : []),
+        ...(companion ? [companion.pet.hit] : []),
+        ...[...remotes.values()].map((a) => a.pet.hit),
+      ];
+    },
     ball,
     get companion() { return companion; },
     get pack() { return pack; },
@@ -1179,6 +1193,7 @@ export function createSpirits(scene, { blocked, tier }) {
         o.last.copy(o.pos);
       }
       for (const a of allAgents()) {
+        if (up && a.role === 'pack') continue;
         if (a.d.orb) {
           // Lucecita en arco desde el marco; al llegar, se materializa.
           const ob = a.d.orb;

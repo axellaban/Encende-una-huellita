@@ -238,6 +238,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     const ux = o.x / len;
     const uz = o.z / len;
     for (const c of circles ? colliders.circles : []) {
+      if ((c.ground && colliders.up) || c.r <= 0) continue;
       const cx = c.x - from.x;
       const cz = c.z - from.z;
       const along = cx * ux + cz * uz;
