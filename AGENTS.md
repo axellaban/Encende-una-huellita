@@ -3,6 +3,8 @@
 > **Empezá por acá.** Después leé [`PENDIENTES.md`](PENDIENTES.md) (arriba de todo, "🧭 Plan": qué falta, en orden),
 > [`README.md`](README.md) (qué hace la app), [`MONETIZACION.md`](MONETIZACION.md) (qué será pago)
 > y [`docs/investigacion-rea.md`](docs/investigacion-rea.md) (relevamiento del sitio de referencia).
+> Lo que sólo se puede hacer en los paneles web (Vercel, Upstash) o en teléfonos reales:
+> [`docs/tareas-con-computadora.md`](docs/tareas-con-computadora.md).
 
 ## Qué es
 

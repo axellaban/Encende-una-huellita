@@ -36,6 +36,30 @@ compu, modo demo y sin WebGL pasaron antes del ascensor, y SE también con el as
    la pose de brazos abiertos en `character.js` (pasarle `gliding` en `me.update`), estela de viento,
    un "puf" al aterrizar y probarlo.
 
+**Pedidos nuevos del dueño (24/11), sin empezar — hacer primero:**
+4. **Luca sólo en el piso 1.** Hoy su ofrenda (el `easel` de `hall.js`, con el retrato, la estampita, las
+   velas, el arco y el marco "hoy en la ofrenda") se ve en los 99 pisos. Plan:
+   - `hall.js` → en `render()`: `easel.visible = floor === 0` y `easelLight.visible = floor === 0`.
+   - El obstáculo invisible de la ofrenda (`colliders.circles.push({ x: EASEL_POS.x, ... })`, línea ~562):
+     guardarlo en una variable y ponerle `r = -100` fuera del piso 1 (si no, choca en el aire).
+   - `pickables()`: fuera del piso 1, no devolver los que están dentro del `easel` (`fPhoto`, `spotPhoto`,
+     `cardPhoto`); el raycaster no mira `visible`.
+   - `main.js` → `visit(m)`: si `m.slot < 0`, `goFloor(0, true)` antes de volar a la ofrenda; en
+     `computeAction()` ofrecer "Luca" sólo si `hall.floor === 0`.
+   - Revisar si los espíritus del Prado (Luca entre ellos) se ven en los pisos de arriba: `spirits.js` los
+     agrega sueltos a la escena (`scene.add(a.pet.group)`); si se ven, esconderlos con `heaven` (`hideUp`).
+5. **Efecto del video del dueño** (bioluminiscencia: olas que brillan azul eléctrico donde el agua se mueve,
+   chispitas en la orilla mojada, cielo muy cargado de Vía Láctea y árboles como siluetas negras). Plan:
+   - **Río** (`river.js`, shader del agua): brillo azul-cian HDR (colores > 1 para que el bloom lo haga
+     brillar) en la orilla, en las ondas y alrededor de lo que se mueve (pies en el puente, velitas que
+     flotan); puntitos que titilan en el agua y en el barro de la orilla. Nada de `pow()` con base negativa.
+   - **Cielo** (shader del cielo en `world.js`): Vía Láctea más densa y brillante, más estrellas, polvo.
+   - **Árboles** (`world.js`): de noche, más oscuros (siluetas) con un borde de luz azul suave.
+   - Sacar capturas en celular desde el puente y la orilla antes de mergear.
+
+**Tareas que requieren usar la computadora** (Vercel, Upstash, teléfonos reales, vistas previas): paso a
+paso en [`docs/tareas-con-computadora.md`](docs/tareas-con-computadora.md).
+
 **Lo que sigue del plan** (abajo, en orden): verificar en teléfonos reales; Upstash y rama de producción
 (sólo el dueño, en Vercel); moderación; el resto de P1/P2/P3.
 
