@@ -182,6 +182,19 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 - [ ] **Deploy real en Vercel + Upstash.** Todo se probó con un Upstash simulado (`server/api.test.js`).
       Confirmar: rewrite `/api/:path*` → `api/handler.js`, lectura de `KV_REST_API_URL`/`TOKEN`,
       fotos servidas con caché de CDN, y que sin Upstash la app caiga bien al **modo demo**.
+- [x] **Conservar los recuerdos al crecer el jardín**: se quitaron los recortes que borraban las
+      páginas del diario después de 200, las firmas después de 500, los regalitos después de 50,
+      las notas del frasco/consuelo después de 300 y los gestos después de 200. Las lecturas siguen
+      acotadas. `server/history.test.js` supera esos límites y vuelve a abrir la base desde disco
+      para verificar que los primeros recuerdos, los corazones y el acceso familiar siguen ahí.
+- [ ] **Rescatar los datos del modo demo antes de pasar a la base compartida**: conectar Upstash no
+      importa `huellita.local.v2`; queda guardado en cada navegador, pero la app deja de mostrarlo
+      al pasar a modo servidor. Falta exportar/importar con reintentos sin duplicados (huellitas,
+      fotos, voz, diario, libros, regalitos y notas), conservando el permiso de edición. No borrar
+      el almacenamiento del navegador para probar la conexión.
+- [ ] **Verificación con dos visitantes reales** después de conectar: ambos deben verse en el mismo
+      piso, y una vela/flor/mensaje creado en uno debe aparecer en el otro. Cerrar y volver a abrir
+      para comprobar el guardado. El movimiento hoy se actualiza cada 5–12 s (no hay WebSockets).
 - [ ] **Teléfonos reales** (iPhone Safari y Android Chrome): rendimiento del 3D, calidad automática
       (`src/quality.js`), palanca, hoja deslizable, teclado sobre formularios, áreas seguras del notch.
       Con la tercera persona: que la cámara no se meta en los muros, que la palanca se sienta natural
@@ -253,6 +266,10 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       juego, guía, ascensor, presencia.
 - [ ] **Archivos fuera de Redis**: fotos (≈100–150 KB) y voces (hasta 600 KB) se guardan en base64 en
       Upstash; pasar a Vercel Blob/S3 y dejar sólo la URL.
+- [ ] **Historial completo y respaldo**: Redis ya conserva las listas sin recortes; la ficha sigue
+      mostrando los últimos 100 mensajes, 50 páginas y 30 regalitos (tableros: 60 notas; actividad:
+      20 gestos). Agregar paginación para consultar los anteriores y configurar respaldos de la base.
+      Medir almacenamiento: ahora aumenta con los recuerdos, además de las fotos y voces.
 - [ ] **Presencia**: un solo latido (`POST /api/now` con `since`) cada 12 s (solo) o 5 s (con gente),
       3 comandos de Redis cada uno; nada con la pestaña oculta. Una visita de 10 min gasta ≈150–400
       comandos (el plan gratis de Upstash da 500.000/mes). Con mucho más tráfico: WebSockets/SSE
