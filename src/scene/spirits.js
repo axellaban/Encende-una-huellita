@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { createPet, lookFor } from './petRig.js';
 import { glowTexture, bubbleTexture } from './textures.js';
-import { HALL_CENTER, HALL_RADIUS, ROOM_R, GARDEN_RADIUS, MEADOW, MEADOW_R, BRIDGE, onBridge, groundY } from './world.js';
+import { HALL_CENTER, HALL_RADIUS, ROOM_R, GARDEN_RADIUS, MEADOW, MEADOW_R, BRIDGE, onBridge, inWater, groundY } from './world.js';
 import { SLOTS_PER_FLOOR } from './hall.js';
 
 export { MEADOW, MEADOW_R };
@@ -93,7 +93,57 @@ function createFx(scene) {
   addEventListener('resize', () => { pts.material.uniforms.uScale.value = innerHeight; });
   let pnext = 0;
 
+  // Anillos de agua que se abren al chapotear en el río o el estanque.
+  const RN = 48;
+  const ripples = new THREE.InstancedMesh(
+    new THREE.RingGeometry(0.18, 0.25, 32).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide }),
+    RN,
+  );
+  ripples.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(RN * 3), 3);
+  ripples.frustumCulled = false;
+  ripples.renderOrder = 3;
+  const rAge = new Float32Array(RN).fill(9);
+  const rMax = new Float32Array(RN).fill(1);
+  const rX = new Float32Array(RN);
+  const rZ = new Float32Array(RN);
+  const rStr = new Float32Array(RN);
+  for (let i = 0; i < RN; i++) ripples.setMatrixAt(i, m.matrix);
+  scene.add(ripples);
+  let rnext = 0;
+  const splashCol = new THREE.Color(0.55, 1.85, 2.45);
+  const dropCol = new THREE.Color(1.2, 2.0, 2.5);
+
   return {
+    splash(x, z, strength = 1) {
+      for (let k = 0; k < 2; k++) {
+        const i = rnext;
+        rnext = (rnext + 1) % RN;
+        rX[i] = x + (k ? (R() - 0.5) * 0.12 : 0);
+        rZ[i] = z + (k ? (R() - 0.5) * 0.12 : 0);
+        rStr[i] = strength * (k === 0 ? 1 : 0.68);
+        rAge[i] = -k * 0.12;
+        rMax[i] = 0.95 + k * 0.25;
+      }
+      const n = Math.max(5, Math.round(11 * strength));
+      for (let k = 0; k < n; k++) {
+        const i = pnext;
+        pnext = (pnext + 1) % M;
+        const a = R() * TAU;
+        const rad = 0.04 + R() * 0.16;
+        pos[i * 3] = x + Math.cos(a) * rad;
+        pos[i * 3 + 1] = 0.06 + R() * 0.05;
+        pos[i * 3 + 2] = z + Math.sin(a) * rad;
+        const sp = (0.35 + R() * 0.75) * strength;
+        vel[i * 3] = Math.cos(a) * sp;
+        vel[i * 3 + 1] = (0.75 + R() * 0.95) * strength;
+        vel[i * 3 + 2] = Math.sin(a) * sp;
+        (k % 2 ? splashCol : dropCol).toArray(col, i * 3);
+        size[i] = 0.038 * (0.65 + R() * 0.7);
+        age[i] = 0;
+        maxAge[i] = 0.55 + R() * 0.35;
+      }
+    },
     print(x, z, heading, color, s = 1, baseY = 0) {
       const i = next;
       next = (next + 1) % N;
@@ -136,7 +186,7 @@ function createFx(scene) {
         if (age[i] >= maxAge[i]) { alpha[i] = 0; continue; }
         age[i] += dt;
         const k = age[i] / maxAge[i];
-        vel[i * 3 + 1] -= dt * 0.15;
+        vel[i * 3 + 1] -= dt * (maxAge[i] < 0.95 ? 2.6 : 0.15);
         pos[i * 3] += vel[i * 3] * dt;
         pos[i * 3 + 1] += vel[i * 3 + 1] * dt;
         pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
@@ -146,6 +196,27 @@ function createFx(scene) {
       geo.attributes.aAlpha.needsUpdate = true;
       geo.attributes.aColor.needsUpdate = true;
       geo.attributes.aSize.needsUpdate = true;
+      for (let i = 0; i < RN; i++) {
+        if (rAge[i] >= rMax[i]) continue;
+        rAge[i] += dt;
+        if (rAge[i] < 0) continue;
+        const k = Math.min(1, rAge[i] / rMax[i]);
+        const sc = (0.35 + k * 2.8) * rStr[i];
+        m.position.set(rX[i], 0.052 + i * 0.00002, rZ[i]);
+        m.rotation.set(0, 0, 0);
+        m.scale.setScalar(sc);
+        m.updateMatrix();
+        ripples.setMatrixAt(i, m.matrix);
+        const fade = (1 - k) * (1 - k);
+        ripples.instanceColor.setXYZ(i, 0.38 * fade, 1.55 * fade, 2.25 * fade);
+        if (k >= 1) {
+          m.scale.setScalar(0);
+          m.updateMatrix();
+          ripples.setMatrixAt(i, m.matrix);
+        }
+      }
+      ripples.instanceMatrix.needsUpdate = true;
+      ripples.instanceColor.needsUpdate = true;
     },
   };
 }
@@ -417,6 +488,11 @@ export function createSpirits(scene, { blocked, tier }) {
       if (a.speed < 0.35 * a.s || a.pet.anim.jumping || a.fade < 0.5) return;
       const p = a.pet.pawWorld(i, tmp2);
       if (p.y - a.pos.y > 0.12 * a.s) return;
+      if (!up && inWater(p.x, p.z)) {
+        fx.splash(p.x, p.z, clamp((a.speed / 2.1) * a.s, 0.45, 1.2));
+        if (i === 0 && a.pos.distanceTo(camPos) < 14) say('splash', a);
+        return;
+      }
       fx.print(p.x, p.z, a.heading, a.rim, a.s * (i < 2 ? 0.95 : 0.85), a.pos.y);
     });
   }
@@ -1295,6 +1371,7 @@ export function createSpirits(scene, { blocked, tier }) {
     throwBall,
     setRemote,
     on(type, fn) { listeners[type]?.push(fn); },
+    splash(x, z, strength = 1) { fx.splash(x, z, strength); },
     sparkle(p, color = new THREE.Color(1.6, 1.2, 0.8), n = 18) { fx.emit(p, color, n, { spread: 0.5, up: 1, speed: 0.8, sz: 0.06 }); },
     spiritOf(obj) { return allAgents().find((a) => a.pet.hit === obj) || null; },
     poke(a) {

@@ -20,10 +20,10 @@ const WALL_COLORS = ['#178f8c', '#c2186b', '#d9901c', '#6a2aa6', '#239a62', '#d9
 
 // ---------- el plano de los nichos ----------
 export const CORRIDORS = CORRIDOR_DEG.length;
-const COLS = 6; // nichos a lo largo de cada pared (dos tramos de 3 columnas = pasillos largos)
+const COLS = 9; // nichos a lo largo de cada pared (tres tramos de 3 columnas = pasillos bien largos)
 const ROWS = 3;
 export const PER_CORRIDOR = 2 * COLS * ROWS;
-export const SLOTS_PER_FLOOR = CORRIDORS * PER_CORRIDOR; // 180 por piso (0..89 mantienen el mismo lugar de las primeras 3 columnas)
+export const SLOTS_PER_FLOOR = CORRIDORS * PER_CORRIDOR; // 270 por piso (0..89 mantienen el mismo lugar de las primeras 3 columnas)
 const PX = 1.35; // paso entre columnas de nichos
 const OW = 1.0; // hueco de cada nicho
 const OH = 0.9;
@@ -33,9 +33,9 @@ const ROWS_Y = [0.92, 2.02, 3.12]; // de abajo hacia arriba (la fila de abajo qu
 const ROW_ORDER = [1, 0, 2];
 const Z0 = 0.7; // dónde empieza la grilla de nichos, desde la boca del pasillo
 const ZB = Z0 + COLS * PX;
-const PW = 0.48; // foto (384x480)
-const PH = 0.6;
-const PHOTO_Y = 0.08;
+const PW = 0.55; // foto más grande y clara dentro del nicho (768x960)
+const PH = 0.66;
+const PHOTO_Y = 0.085;
 const { hw: HW, wall: WALL, len: LEN, h: WALL_H } = CORRIDOR;
 
 export const POST_H = 7.4;
@@ -242,18 +242,15 @@ function doorTextures() {
   return doorTex;
 }
 
-// El vidrio de la ventanita: casi invisible, con dos reflejos en diagonal.
+// El vidrio de la ventanita: bien cristalino (sólo un bisel suave en el borde para que no tape ni lave la foto).
 function glassTexture() {
   return canvasTex(128, 128, (g) => {
-    g.fillStyle = 'rgba(210,230,255,0.05)';
-    g.fillRect(0, 0, 128, 128);
-    for (const [x, w, a] of [[18, 22, 0.08], [52, 7, 0.06], [96, 12, 0.04]]) {
-      g.fillStyle = `rgba(255,255,255,${a})`;
-      g.beginPath();
-      g.moveTo(x, 128); g.lineTo(x + w, 128); g.lineTo(x + w + 40, 0); g.lineTo(x + 40, 0);
-      g.fill();
-    }
-    g.strokeStyle = 'rgba(255,255,255,0.12)';
+    g.clearRect(0, 0, 128, 128);
+    g.fillStyle = 'rgba(255,255,255,0.025)';
+    g.beginPath();
+    g.moveTo(8, 128); g.lineTo(18, 128); g.lineTo(44, 0); g.lineTo(34, 0);
+    g.fill();
+    g.strokeStyle = 'rgba(255,245,225,0.14)';
     g.lineWidth = 3;
     g.strokeRect(1.5, 1.5, 125, 125);
   });
@@ -314,6 +311,158 @@ function runnerTexture() {
       for (const dx of [-34, 34]) { g.beginPath(); g.moveTo(64 + dx, y - 10); g.lineTo(64 + dx + 7, y); g.lineTo(64 + dx, y + 10); g.lineTo(64 + dx - 7, y); g.fill(); }
     }
   }, { repeat: true });
+}
+
+// Cuadros decorativos para las paredes vacías del salón y los pasillos (arte popular mexicano y memorial).
+const paintingCache = new Map();
+function folkPaintingTexture(kind = 0) {
+  const k = kind % 6;
+  if (paintingCache.has(k)) return paintingCache.get(k);
+  const t = canvasTex(384, 300, (g, W, H) => {
+    const bg = g.createLinearGradient(0, 0, 0, H);
+    const skies = [
+      ['#140b2c', '#3d1c68', '#a83672', '#f7951f'],
+      ['#0e1738', '#1e3068', '#3c629e', '#d6a456'],
+      ['#240d2e', '#52194e', '#9e2a5b', '#e87a2e'],
+      ['#0c1228', '#222854', '#583878', '#c86446'],
+      ['#182e38', '#1f5462', '#2b8a88', '#e6a845'],
+      ['#1a0e36', '#3b1d64', '#753288', '#e88b3a'],
+    ][k];
+    bg.addColorStop(0, skies[0]);
+    bg.addColorStop(0.45, skies[1]);
+    bg.addColorStop(0.78, skies[2]);
+    bg.addColorStop(1, skies[3]);
+    g.fillStyle = bg;
+    g.fillRect(0, 0, W, H);
+    // Marco interno pintado con guarda dorada.
+    g.strokeStyle = 'rgba(255,220,145,0.45)';
+    g.lineWidth = 4;
+    g.strokeRect(12, 12, W - 24, H - 24);
+    // Estrellitas y luna.
+    g.fillStyle = '#fff6d8';
+    for (let i = 0; i < 38; i++) {
+      const sx = 22 + ((i * 89 + k * 37) % (W - 44));
+      const sy = 20 + ((i * 53 + k * 19) % Math.round(H * 0.58));
+      const sr = (i % 5 === 0 ? 2.4 : 1.3);
+      g.beginPath(); g.arc(sx, sy, sr, 0, Math.PI * 2); g.fill();
+    }
+    const drawFlower = (cx, cy, r0, col1 = '#ff9a1f', col2 = '#ffd645') => {
+      g.fillStyle = col1;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        g.beginPath(); g.arc(cx + Math.cos(a) * r0 * 0.65, cy + Math.sin(a) * r0 * 0.65, r0 * 0.46, 0, Math.PI * 2); g.fill();
+      }
+      g.fillStyle = col2;
+      g.beginPath(); g.arc(cx, cy, r0 * 0.36, 0, Math.PI * 2); g.fill();
+    };
+    const drawPaw = (cx, cy, r0, col = '#ffe7a8') => {
+      g.fillStyle = col;
+      g.beginPath(); g.ellipse(cx, cy + r0 * 0.18, r0 * 0.46, r0 * 0.38, 0, 0, Math.PI * 2); g.fill();
+      for (const [dx, dy] of [[-0.48, -0.26], [-0.17, -0.52], [0.17, -0.52], [0.48, -0.26]]) {
+        g.beginPath(); g.ellipse(cx + dx * r0, cy + dy * r0, r0 * 0.18, r0 * 0.24, dx * 0.3, 0, Math.PI * 2); g.fill();
+      }
+    };
+    if (k === 0) {
+      // El Puente del Arcoíris sobre el río luminoso.
+      const cols = ['#ff5e6c', '#ff9a3c', '#ffe052', '#52d68a', '#48b8ff', '#9b6bff'];
+      cols.forEach((c, i) => {
+        g.strokeStyle = c;
+        g.lineWidth = 7;
+        g.beginPath(); g.arc(W / 2, H * 0.82, 128 - i * 7, Math.PI * 1.08, Math.PI * 1.92); g.stroke();
+      });
+      g.fillStyle = '#123852';
+      g.fillRect(14, H * 0.76, W - 28, H * 0.24 - 14);
+      g.strokeStyle = '#6ce8ff';
+      g.lineWidth = 2;
+      for (let i = 0; i < 6; i++) {
+        g.beginPath(); g.moveTo(45 + i * 52, H * 0.84 + (i % 2) * 10); g.lineTo(78 + i * 52, H * 0.84 + (i % 2) * 10); g.stroke();
+      }
+      drawPaw(W / 2, H * 0.32, 26, '#fff3cf');
+    } else if (k === 1) {
+      // El Principito, el zorro y la rosa bajo una luna grande.
+      g.fillStyle = '#fff2c2';
+      g.beginPath(); g.arc(W * 0.76, H * 0.26, 30, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#2d4a32';
+      g.beginPath(); g.arc(W * 0.5, H * 1.18, 175, Math.PI * 1.15, Math.PI * 1.85); g.fill();
+      // Principito (silueta dorada y verde) y zorrito naranja.
+      g.fillStyle = '#7bc47f';
+      g.beginPath(); g.moveTo(W * 0.46, H * 0.52); g.lineTo(W * 0.53, H * 0.74); g.lineTo(W * 0.39, H * 0.74); g.closePath(); g.fill();
+      g.fillStyle = '#ffd86b';
+      g.beginPath(); g.arc(W * 0.46, H * 0.47, 14, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#e85d2a';
+      g.beginPath(); g.ellipse(W * 0.58, H * 0.67, 16, 12, -0.2, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(W * 0.61, H * 0.56, 10, 0, Math.PI * 2); g.fill();
+      drawFlower(W * 0.33, H * 0.66, 12, '#e62e5c', '#ffd24c');
+    } else if (k === 2) {
+      // Árbol de la vida con flores de cempasúchil y huellitas.
+      g.fillStyle = '#1f1210';
+      g.fillRect(14, H * 0.82, W - 28, H * 0.18 - 14);
+      g.strokeStyle = '#d99b42';
+      g.lineWidth = 10;
+      g.beginPath(); g.moveTo(W / 2, H * 0.84); g.lineTo(W / 2, H * 0.46); g.stroke();
+      for (const [ang, len] of [[-0.9, 68], [-0.45, 78], [0, 82], [0.45, 78], [0.9, 68]]) {
+        const ex = W / 2 + Math.sin(ang) * len;
+        const ey = H * 0.48 - Math.cos(ang) * len * 0.72;
+        g.lineWidth = 5;
+        g.beginPath(); g.moveTo(W / 2, H * 0.52); g.quadraticCurveTo(W / 2 + Math.sin(ang) * 35, H * 0.38, ex, ey); g.stroke();
+        drawFlower(ex, ey, 16, '#ff9a1f', '#ffe066');
+      }
+      drawPaw(W / 2, H * 0.52, 18, '#fff4d6');
+    } else if (k === 3) {
+      // Pueblito iluminado con farolitos flotando al cielo.
+      g.fillStyle = '#fff0be';
+      g.beginPath(); g.arc(W * 0.24, H * 0.25, 26, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#23132c';
+      for (let i = 0; i < 6; i++) {
+        const bx = 28 + i * 56;
+        const bh = 52 + (i % 3) * 18;
+        g.fillRect(bx, H * 0.86 - bh, 46, bh);
+        g.fillStyle = '#ffb84d';
+        g.fillRect(bx + 12, H * 0.86 - bh + 14, 10, 14);
+        g.fillRect(bx + 26, H * 0.86 - bh + 14, 10, 14);
+        g.fillStyle = '#23132c';
+      }
+      for (const [lx, ly] of [[110, 74], [175, 52], [240, 82], [295, 58], [145, 112], [220, 118]]) {
+        g.fillStyle = '#ff9e2c';
+        g.beginPath(); g.roundRect(lx - 7, ly - 10, 14, 20, 4); g.fill();
+        g.fillStyle = '#fff6c8';
+        g.beginPath(); g.arc(lx, ly, 4, 0, Math.PI * 2); g.fill();
+      }
+    } else if (k === 4) {
+      // Corazón alado de hojalata (milagrito) rodeado de flores.
+      g.fillStyle = '#f2d9a6';
+      for (const sd of [-1, 1]) {
+        g.beginPath();
+        g.ellipse(W / 2 + sd * 66, H * 0.52, 46, 22, sd * -0.28, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = '#d92356';
+      g.beginPath();
+      g.moveTo(W / 2, H * 0.74);
+      g.bezierCurveTo(W / 2 - 58, H * 0.56, W / 2 - 54, H * 0.3, W / 2, H * 0.44);
+      g.bezierCurveTo(W / 2 + 54, H * 0.3, W / 2 + 58, H * 0.56, W / 2, H * 0.74);
+      g.fill();
+      drawFlower(W / 2, H * 0.27, 16, '#ff9a1f', '#ffe35c');
+      drawPaw(W / 2, H * 0.54, 18, '#fff2cf');
+    } else {
+      // Perrito y gatito de luz en un campo de cempasúchil.
+      g.fillStyle = '#243b24';
+      g.fillRect(14, H * 0.7, W - 28, H * 0.3 - 14);
+      for (let i = 0; i < 9; i++) drawFlower(36 + i * 39, H * 0.78 + (i % 2) * 14, 12);
+      // Siluetas luminosas mirando la luna.
+      g.fillStyle = '#9cf5ff';
+      g.beginPath(); g.ellipse(W * 0.42, H * 0.64, 22, 15, -0.1, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(W * 0.46, H * 0.51, 13, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#ffe394';
+      g.beginPath(); g.ellipse(W * 0.59, H * 0.66, 16, 12, 0.1, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(W * 0.58, H * 0.55, 10, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#fff5c8';
+      g.beginPath(); g.arc(W * 0.5, H * 0.24, 24, 0, Math.PI * 2); g.fill();
+    }
+    for (const [fx, fy] of [[24, 24], [W - 24, 24], [24, H - 24], [W - 24, H - 24]]) drawFlower(fx, fy, 11);
+  });
+  paintingCache.set(k, t);
+  return t;
 }
 
 // Una caja con las UV escaladas a metros (para texturas que se repiten, como la madera o la talavera).
@@ -405,25 +554,61 @@ export function buildHall(scene, colliders, tier) {
       }
       const paint = new THREE.Mesh(mergeGeometries(inner), new THREE.MeshLambertMaterial({ map: paintedWallTexture(WALL_COLORS[ai % WALL_COLORS.length]), emissive: '#1a0c08' }));
       scene.add(paint);
-      // Papel picado a lo largo de los tramos largos y coronas de cempasúchil en la pared.
+      // Cuadros iluminados, coronas de cempasúchil y papel picado en las paredes vacías del salón.
+      const makeWallPainting = (deg, w = 1.45, h = 1.15, kind = 0, withConsole = false) => {
+        const g = new THREE.Group();
+        const pos = onRing(deg, ROOM_R - 0.24, 2.38);
+        g.position.copy(pos);
+        g.lookAt(HALL_CENTER.x, 2.38, HALL_CENTER.z);
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.14, h + 0.14, 0.06), goldMat);
+        const innerB = new THREE.Mesh(new THREE.BoxGeometry(w + 0.05, h + 0.05, 0.07), nicheMat);
+        const art = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: folkPaintingTexture(kind), color: new THREE.Color(0.95, 0.92, 0.88) }));
+        art.position.z = 0.038;
+        // Lámpara de bronce arriba del cuadro.
+        const sconce = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, w * 0.42, 8).rotateZ(Math.PI / 2), goldMat);
+        sconce.position.set(0, h / 2 + 0.14, 0.12);
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.38, color: new THREE.Color(1.2, 0.9, 0.55) }));
+        glow.scale.set(w * 1.35, h * 1.25, 1);
+        glow.position.set(0, 0.05, 0.12);
+        g.add(frame, innerB, art, sconce, glow);
+        if (withConsole) {
+          const table = new THREE.Mesh(new THREE.BoxGeometry(w * 1.05, 0.08, 0.36), trimMat);
+          table.position.set(0, -1.25, 0.16);
+          g.add(table);
+          for (const sx of [-w * 0.34, 0, w * 0.34]) {
+            const c = makeCandle(waxMat, 0.11 + Math.abs(sx) * 0.05, flames, tier.bloom);
+            c.scale.setScalar(1.15);
+            c.position.set(sx, -1.21, 0.18);
+            c.visible = true;
+            g.add(c);
+          }
+        }
+        scene.add(g);
+      };
       if (a1 - a0 > 30) {
         for (let k = 0; k < 2; k++) {
           const ta = a0 + 4 + k * ((a1 - a0 - 8) / 2);
           const tb = ta + (a1 - a0 - 8) / 2;
+          const midDeg = (ta + tb) / 2;
           const b = picadoBanner(onRing(ta, ROOM_R - 0.35, ROOM_WALL_H - 0.35), onRing(tb, ROOM_R - 0.35, ROOM_WALL_H - 0.35), { sag: 0.4, flags: 9, size: 0.34, seed: ai * 3 + k });
           scene.add(b);
           animators.push(b.userData.flutter);
-          const wreathAt = onRing((ta + tb) / 2, ROOM_R - 0.32, 2.75);
+          makeWallPainting(midDeg, 1.5, 1.18, ai * 2 + k, true);
+          const wreathAt = onRing(midDeg, ROOM_R - 0.32, 3.45);
           const pts = [];
-          for (let i = 0; i < 46; i++) {
-            const a = (i / 46) * Math.PI * 2;
-            pts.push([Math.cos(a) * 0.55, Math.sin(a) * 0.55, 0, 0.9 + r() * 0.5]);
+          for (let i = 0; i < 36; i++) {
+            const a = (i / 36) * Math.PI * 2;
+            pts.push([Math.cos(a) * 0.42, Math.sin(a) * 0.42, 0, 0.85 + r() * 0.45]);
           }
-          const wreath = marigoldCluster(pts, { r: 0.1, rnd: r });
+          const wreath = marigoldCluster(pts, { r: 0.09, rnd: r });
           wreath.position.copy(wreathAt);
-          wreath.lookAt(HALL_CENTER.x, 2.75, HALL_CENTER.z);
+          wreath.lookAt(HALL_CENTER.x, 3.45, HALL_CENTER.z);
           scene.add(wreath);
         }
+        // Un tercer cuadro en el centro del tramo largo.
+        makeWallPainting((a0 + a1) / 2, 1.15, 1.32, ai + 4, false);
+      } else if (a1 - a0 > 14) {
+        makeWallPainting((a0 + a1) / 2, 1.32, 1.08, ai + 2, true);
       }
     });
     const walls = new THREE.Mesh(mergeGeometries(outer), outerMat);
@@ -457,7 +642,7 @@ export function buildHall(scene, colliders, tier) {
     const potParts = [];
     const leafParts = [];
     const flowerPts = [];
-    const coneMat = new THREE.MeshBasicMaterial({ map: lightConeTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: tier.bloom ? 0.12 : 0.2 });
+    const coneMat = new THREE.MeshBasicMaterial({ map: lightConeTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: tier.bloom ? 0.035 : 0.06 });
     const runnerMat = new THREE.MeshLambertMaterial({ map: runnerTexture(), emissive: '#3a0a12', polygonOffset: true, polygonOffsetFactor: -2 });
     const vitralGlow = new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.1, color: new THREE.Color(1.0, 0.7, 0.45) });
     const leafMat2 = new THREE.MeshLambertMaterial({ color: '#3f7a35', emissive: '#0c1c08', side: THREE.DoubleSide });
@@ -556,6 +741,27 @@ export function buildHall(scene, colliders, tier) {
         gl.scale.setScalar(2.2);
         gl.position.set(0, 2.3, LEN - 0.3);
         cg.add(vit, ring, gl);
+        // Cuadros decorativos a los lados del vitral del fondo y en los tramos libres al final del pasillo.
+        for (const [si, sx] of [[-1, -1.52], [1, 1.52]]) {
+          const pw = 0.78;
+          const ph = 0.98;
+          const pf = new THREE.Mesh(new THREE.BoxGeometry(pw + 0.1, ph + 0.1, 0.045), goldMat);
+          pf.position.set(sx, 2.25, LEN - 0.025);
+          const pa = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ map: folkPaintingTexture(c * 2 + (si > 0 ? 1 : 0)), color: new THREE.Color(0.95, 0.92, 0.88) }));
+          pa.position.set(sx, 2.25, LEN - 0.052);
+          pa.rotation.y = Math.PI;
+          cg.add(pf, pa);
+        }
+        for (const sd of [-1, 1]) {
+          const pw = 0.74;
+          const ph = 0.9;
+          const pf = new THREE.Mesh(new THREE.BoxGeometry(0.045, ph + 0.1, pw + 0.1), goldMat);
+          pf.position.set(sd * (HW - 0.02), 2.15, ZB + 0.58);
+          const pa = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ map: folkPaintingTexture(c + (sd > 0 ? 3 : 5)), color: new THREE.Color(0.95, 0.92, 0.88) }));
+          pa.position.set(sd * (HW - 0.048), 2.15, ZB + 0.58);
+          pa.rotation.y = -sd * Math.PI / 2;
+          cg.add(pf, pa);
+        }
         // Banco de madera bajo el vitral.
         beamParts.push(
           toWorld(box(1.7, 0.08, 0.42, 0, 0.46, LEN - 0.42)),
@@ -565,7 +771,7 @@ export function buildHall(scene, colliders, tier) {
         for (const x of [-0.5, 0.5]) { const p = P(x, LEN - 0.4); colliders.circles.push({ x: p.x, z: p.z, r: 0.35 }); }
       }
       // Vigas cruzadas arriba, alfombra y una guirnalda de lucecitas en zigzag de viga a viga.
-      const beamZ = [0.0, 1.8, 3.6, 5.4, 7.2, 9.0, LEN - 0.2];
+      const beamZ = [0.0, 1.8, 3.6, 5.4, 7.2, 9.0, 10.8, 12.6, LEN - 0.2];
       for (const z of beamZ) beamParts.push(toWorld(box(2 * (HW + WALL) + 0.3, 0.16, 0.2, 0, WALL_H + 0.24, z)));
       for (let k = 0; k < beamZ.length - 1; k++) {
         const sd = k % 2 ? 1 : -1;
@@ -583,8 +789,8 @@ export function buildHall(scene, colliders, tier) {
       runner.material.map.repeat.set(1, (LEN - 0.9) / 1.6);
       runner.position.set(0, 0.168, (LEN - 0.9) / 2 + 0.05);
       cg.add(runner);
-      // Dos farolitos de papel colgando a lo largo del pasillo.
-      for (const [li, lz] of [[0, 3.0], [1, 7.2]]) {
+      // Tres farolitos de papel colgando a lo largo del pasillo largo.
+      for (const [li, lz] of [[0, 3.0], [1, 7.4], [2, 11.8]]) {
         const hang = new THREE.Group();
         hang.position.set(0, WALL_H + 0.24, lz);
         const string = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.36, 4), new THREE.MeshBasicMaterial({ color: '#2a1d16' }));
@@ -650,9 +856,9 @@ export function buildHall(scene, colliders, tier) {
     const mat = new THREE.Mesh(new THREE.PlaneGeometry(OW - 0.02, OH - 0.02), new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#3a2a20', emissiveIntensity: 0.35 }));
     mat.position.z = -DEPTH + 0.01;
     const border = new THREE.Mesh(frameGeo, frameMat);
-    border.position.set(0, PHOTO_Y, -DEPTH + 0.035);
-    const photo = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-    photo.position.set(0, PHOTO_Y, -DEPTH + 0.04);
+    border.position.set(0, PHOTO_Y, -DEPTH * 0.65 - 0.006);
+    const photo = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.93, 0.93, 0.93) }));
+    photo.position.set(0, PHOTO_Y, -DEPTH * 0.65);
     const cloth = new THREE.Mesh(new THREE.PlaneGeometry(OW - 0.04, DEPTH - 0.04).rotateX(-Math.PI / 2), clothMat);
     cloth.position.set(0, -OH / 2 + 0.003, -DEPTH / 2);
     const glass = new THREE.Mesh(new THREE.PlaneGeometry(OW, OH), glassMat);
@@ -1326,13 +1532,70 @@ export function buildHall(scene, colliders, tier) {
     fPhoto.userData.id = null;
     if (!welcomeReady) {
       welcomeReady = true;
-      new THREE.TextureLoader().load('/huellitas/luca-estampita.jpg', (t) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const W = 1024;
+        const H = 1440;
+        const c = document.createElement('canvas');
+        c.width = W;
+        c.height = H;
+        const g = c.getContext('2d');
+        g.imageSmoothingEnabled = true;
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(img, 0, 0, W, H);
+        // Redibujar la frase completa y la firma en alta definición para que en celular se lea súper nítida.
+        const sky = g.createLinearGradient(0, 40, 0, 560);
+        sky.addColorStop(0, 'rgba(130, 178, 204, 0.92)');
+        sky.addColorStop(0.75, 'rgba(138, 185, 210, 0.94)');
+        sky.addColorStop(1, 'rgba(146, 190, 214, 0)');
+        g.fillStyle = sky;
+        g.fillRect(40, 40, W - 80, 520);
+        // Gotitas de colores suaves arriba a la derecha como en la lámina original.
+        const dropCols = ['rgba(235,205,70,0.48)', 'rgba(218,95,72,0.48)', 'rgba(86,158,196,0.48)', 'rgba(232,145,68,0.48)'];
+        for (let i = 0; i < 32; i++) {
+          g.fillStyle = dropCols[i % dropCols.length];
+          const dx = 220 + (i * 25) % 740;
+          const dy = 28 + Math.floor(i / 9) * 58 + (i % 3) * 14;
+          g.beginPath();
+          g.ellipse(dx, dy, 10, 26, 0.38, 0, Math.PI * 2);
+          g.fill();
+        }
+        g.fillStyle = '#121820';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.font = '700 72px Caveat, cursive';
+        const lines = [
+          '“No era más que un zorro',
+          'semejante a cien mil otros.',
+          'Pero yo le hice mi amigo',
+          'y ahora es único en el mundo.”',
+        ];
+        lines.forEach((ln, idx) => {
+          g.strokeStyle = 'rgba(235, 246, 255, 0.65)';
+          g.lineWidth = 5;
+          g.strokeText(ln, W / 2, 138 + idx * 96, W - 96);
+          g.fillText(ln, W / 2, 138 + idx * 96, W - 96);
+        });
+        // Banda inferior tipo papel madera con la firma bien nítida.
+        const kraft = g.createLinearGradient(0, 1270, 0, H);
+        kraft.addColorStop(0, 'rgba(164, 132, 94, 0.94)');
+        kraft.addColorStop(1, 'rgba(138, 108, 74, 0.98)');
+        g.fillStyle = kraft;
+        g.fillRect(0, 1274, W, H - 1274);
+        g.fillStyle = '#1c130c';
+        g.font = '700 66px Caveat, cursive';
+        g.fillText('Antoine de Saint-Exupéry.', W / 2, 1358);
+        const t = new THREE.CanvasTexture(c);
         t.colorSpace = THREE.SRGBColorSpace;
-        t.anisotropy = 4;
+        t.minFilter = THREE.LinearFilter;
+        t.magFilter = THREE.LinearFilter;
+        t.generateMipmaps = false;
         fPhoto.material.map = t;
-        fPhoto.material.color.set('#ffffff');
+        fPhoto.material.color.setRGB(0.9, 0.9, 0.9);
         fPhoto.material.needsUpdate = true;
-      });
+      };
+      img.src = '/huellitas/luca-estampita.jpg';
       const lt = labelTexture('Bienvenidos al jardín 🐾', { w: 680, h: 112, font: '700 60px Caveat, cursive', bg: 'rgba(74,48,34,0.95)', fg: '#f6e3c4' });
       plaque.material.map = lt;
       plaque.material.needsUpdate = true;
@@ -1344,7 +1607,7 @@ export function buildHall(scene, colliders, tier) {
     const lit = Math.min(clusterCandles.length, 8 + Math.ceil(totalCandles * 0.5));
     clusterCandles.forEach((c, i) => { c.visible = i < lit; });
     showGifts(featuredGifts, ['🌹', '👑', '⭐']);
-    setStage(featuredFx, 3, true);
+    setStage(featuredFx, 2, true);
   }
 
   function render(memorials) {
@@ -1409,8 +1672,8 @@ export function buildHall(scene, colliders, tier) {
       if (key === 'featured') {
         const k = ALTAR_SCALE;
         const frame = new THREE.Vector3(EASEL_POS.x, 1.75 * k, EASEL_POS.z - 0.5 * k);
-        const target = new THREE.Vector3(EASEL_POS.x + shift * k, 1.55 * k, EASEL_POS.z - 0.5 * k);
-        return { stand: new THREE.Vector3(EASEL_POS.x + shift * k, 2.1, EASEL_POS.z + 3.4 * k * distMul), target, frame };
+        const target = new THREE.Vector3(EASEL_POS.x + shift * k, 1.66 * k, EASEL_POS.z - 0.5 * k);
+        return { stand: new THREE.Vector3(EASEL_POS.x + shift * k, 1.85 * k, EASEL_POS.z + 2.45 * k * distMul), target, frame };
       }
       const s = slots[key];
       const frame = new THREE.Vector3();

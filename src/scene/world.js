@@ -9,13 +9,13 @@ import { paperLantern, flickerLantern } from './lanterns.js';
 // Plano del jardín (en metros). Todo lo demás se ubica a partir de estos números.
 export const HALL_CENTER = new THREE.Vector3(0, 0, -14);
 // Todo lo que ocupa el salón con sus pasillos entra en este radio (el jardín empieza afuera).
-export const HALL_RADIUS = 25;
+export const HALL_RADIUS = 28;
 // El salón central: redondo, con la ofrenda y la pérgola de luces. De él salen los pasillos.
 export const ROOM_R = 12; // radio del muro del salón
 export const ROOM_WALL_H = 4.6;
-// Los pasillos: anchos (4,6 m libres) y largos (10,8 m), con nichos en las dos paredes y un vitral al fondo.
+// Los pasillos: anchos (4,6 m libres) y bien largos (14,85 m), con nichos en las dos paredes y un vitral al fondo.
 // `hw` medio ancho libre, `wall` espesor de la pared de nichos, `len` largo desde la boca, `h` alto.
-export const CORRIDOR = { hw: 2.3, wall: 0.55, len: 10.8, h: 3.8 };
+export const CORRIDOR = { hw: 2.3, wall: 0.55, len: 14.85, h: 3.8 };
 // Hacia dónde sale cada pasillo (grados: 0 = hacia la entrada, 90 = a la derecha de quien entra,
 // 180 = al fondo). El orden es el de los lugares: el pasillo 0 es el del fondo, de frente a la entrada.
 export const CORRIDOR_DEG = [180, 135, 225, 90, 270];
@@ -84,15 +84,17 @@ export const BRIDGE = { x: 0, z: CREEK_Z + Math.sin(1) * 0.9, halfW: 1.05, halfL
 export const onBridge = (x, z, pad = 0) => Math.abs(x - BRIDGE.x) < BRIDGE.halfW + pad && Math.abs(z - BRIDGE.z) < BRIDGE.halfL + pad;
 // ¿Está del lado de afuera (antes de cruzar el río)?
 export const outside = (x, z) => z > creekZ(x) + CREEK_HALF * 0.5;
-// En el agua (no se puede caminar, salvo por el puente).
-export const inWater = (x, z) => Math.abs(z - creekZ(x)) < CREEK_HALF + 0.15 && !onBridge(x, z, -0.12);
-// Altura del piso donde se camina: el arco del puente y el piso de madera del salón.
+// En el agua (arroyo o estanque): al caminar por ahí el agua chapotea y brilla.
+export const inWater = (x, z) => (Math.abs(z - creekZ(x)) < CREEK_HALF + 0.08 && !onBridge(x, z, -0.05))
+  || Math.hypot(x - -14.2, z - 28) < 2.55;
+// Altura del piso donde se camina: el arco del puente, el piso de madera del salón y el cauce bajo del agua.
 export function groundY(x, z, up = false) {
   if (!up && onBridge(x, z, 0.15)) {
     const k = (z - (BRIDGE.z - BRIDGE.halfL)) / (BRIDGE.halfL * 2);
     return Math.sin(Math.min(1, Math.max(0, k)) * Math.PI) * BRIDGE.arch + 0.13;
   }
   if (insideHall(x, z)) return 0.16;
+  if (!up && inWater(x, z)) return -0.06;
   return 0;
 }
 export const nearCreek = (x, z, pad = 0) => Math.abs(z - creekZ(x)) < CREEK_HALF + 0.6 + pad;
@@ -948,7 +950,6 @@ export function buildWorld(scene, tier) {
       }
       groundRoot.add(new THREE.Mesh(mergeGeometries(blades), new THREE.MeshLambertMaterial({ color: '#46613a', emissive: '#14200e' })));
     }
-    colliders.circles.push({ x: POND.x, z: POND.z, r: POND.r + 0.1, ground: true });
   }
 
   return { colliders, animated, walkable, ground: groundRoot, deck, sky, stars: sky.userData.stars, moon, hemi, moonLight, warmFill, fog, flies: sky.userData.flies };

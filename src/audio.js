@@ -199,10 +199,42 @@ function scheduleChime() {
   }, 300);
 }
 
-// Un paso: tierra/pasto (roce suave), piedra (golpecito), madera (hueco) o nube (casi nada).
+// Un paso: tierra/pasto (roce suave), piedra (golpecito), madera (hueco), nube (casi nada) o agua (chapoteo alegre).
 export function step(surface = 'grass') {
   if (!ctx || !soundsOn || nature.gain.value < 0.01) return;
   const t = ctx.currentTime;
+  if (surface === 'water') {
+    const len = 0.14;
+    const b = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * len), ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length) ** 1.5;
+    const src = ctx.createBufferSource();
+    src.buffer = b;
+    src.playbackRate.value = 0.9 + Math.random() * 0.35;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.setValueAtTime(620, t);
+    f.frequency.exponentialRampToValueAtTime(1750, t + 0.11);
+    f.Q.value = 1.6;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.085, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    src.connect(f).connect(g).connect(sfx);
+    src.start(t);
+    for (const [f0, f1, dt2] of [[860 + Math.random() * 180, 1340, 0.01], [1120 + Math.random() * 220, 1680, 0.055]]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f0, t + dt2);
+      o.frequency.exponentialRampToValueAtTime(f1, t + dt2 + 0.05);
+      const og = ctx.createGain();
+      og.gain.setValueAtTime(0.028, t + dt2);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + dt2 + 0.06);
+      o.connect(og).connect(sfx);
+      o.start(t + dt2);
+      o.stop(t + dt2 + 0.065);
+    }
+    return;
+  }
   const len = surface === 'grass' ? 0.08 : 0.05;
   const b = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * len), ctx.sampleRate);
   const d = b.getChannelData(0);

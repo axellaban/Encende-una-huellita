@@ -50,14 +50,20 @@ export function portraitTexture(m) {
   return toTexture(portraitCanvas(m));
 }
 
-// Foto real: la recortamos a 4:5 en un canvas para que no se deforme en el marco.
+// Foto real: la recortamos a 4:5 en un canvas de alta definición para que se vea bien nítida en el marco.
 export function photoTexture(url, onReady) {
   const tex = new THREE.Texture();
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = () => {
-    const [c, g] = canvas(384, 480);
+    const [c, g] = canvas(768, 960);
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
     const r = Math.max(c.width / img.width, c.height / img.height);
     const w = img.width * r;
     const h = img.height * r;

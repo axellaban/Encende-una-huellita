@@ -21,7 +21,7 @@ import { BACKGROUND_IDS } from './plans.js';
 import { createImporter } from './migration.js';
 
 const P = 'hu:';
-export const SLOTS_PER_FLOOR = 180;
+export const SLOTS_PER_FLOOR = 270;
 const MAX_SLOT = SLOTS_PER_FLOOR * 200;
 const PRESENCE_MS = 25_000;
 const MAX_PRESENT = 150;

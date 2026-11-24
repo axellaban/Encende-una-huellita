@@ -9,7 +9,7 @@ import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
 import { downloadDemoBackup } from './migrate.js';
-import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF, onPath, insideHall, inCorridor, onBridge } from './scene/world.js';
+import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF, onPath, insideHall, inCorridor, onBridge, inWater } from './scene/world.js';
 import { buildHall, SLOTS_PER_FLOOR, EASEL_POS } from './scene/hall.js';
 import { createControls } from './scene/controls.js';
 import { createLanterns } from './scene/lanterns.js';
@@ -444,7 +444,9 @@ async function buildScene() {
         stepT = 1;
         const x = P.pos.x;
         const z = P.pos.z;
-        step(world.colliders.up ? 'cloud' : onBridge(x, z, 0.1) ? 'wood' : insideHall(x, z) ? 'wood' : onPath(x, z, 0.1) ? 'stone' : 'grass');
+        const wet = !world.colliders.up && inWater(x, z);
+        if (wet) spirits?.splash(x, z, Math.min(1.25, Math.max(0.6, P.speed / 2.2)));
+        step(world.colliders.up ? 'cloud' : onBridge(x, z, 0.1) ? 'wood' : wet ? 'water' : insideHall(x, z) ? 'wood' : onPath(x, z, 0.1) ? 'stone' : 'grass');
       }
     }
     // Si otro visitante pasa cerca, se saludan.
@@ -842,13 +844,13 @@ function visitWelcome() {
   closeSheet();
   if (hall && controls) {
     goFloor(0, true);
-    const distMul = camera.aspect < 0.8 ? 1.55 : camera.aspect < 1.2 ? 1.25 : 1;
+    const distMul = camera.aspect < 0.8 ? 1.08 : camera.aspect < 1.2 ? 1.02 : 0.95;
     const { stand, target, frame } = hall.viewpoint('featured', 0, distMul);
     hideHint();
     placeNear(stand, frame, 1.6, 5.4);
     controls.flyTo(stand, target, () => hall.pulse('featured'));
   }
-  toast('🌹 “Pero yo le hice mi amigo y ahora es único en el mundo.” · Bienvenidos al jardín 🤍');
+  toast('🌹 “No era más que un zorro semejante a cien mil otros. Pero yo le hice mi amigo y ahora es único en el mundo.” — El Principito 🤍');
 }
 
 function visit(m) {
@@ -3431,6 +3433,7 @@ function wireSpirits() {
   const once = (k, fn) => { if (!told.has(k)) { told.add(k); fn(); } };
   spirits.on('event', (type, a) => {
     if (type === 'bounce') return tick();
+    if (type === 'splash') return step('water');
     if (!a) return;
     if (type === 'arrived' && a.role === 'companion') {
       sparkle();

@@ -95,8 +95,8 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   const defaultDist = () => (portrait() ? 5.6 : 4.8);
   distTarget = dist = camDist = defaultDist();
 
-  // Al río no se entra: se cruza por el puente (en los pisos de arriba no hay río).
-  const stop = (x, z) => blocked(x, z) || (!colliders.up && inWater(x, z));
+  // Se puede vadear el arroyo y el estanque (chapoteando en el agua luminosa).
+  const stop = (x, z) => blocked(x, z);
   function tryMove(dx, dz) {
     const p = player.pos;
     if (!stop(p.x + dx, p.z + dz)) { p.x += dx; p.z += dz; return true; }
