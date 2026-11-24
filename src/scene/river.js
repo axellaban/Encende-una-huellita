@@ -359,6 +359,54 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
     });
   }
 
+  // ---------- pececitos de luz que nadan bajo el agua ----------
+  {
+    const N = Math.round(32 * density);
+    const body = new THREE.SphereGeometry(0.042, 8, 6).scale(0.65, 0.45, 2.3);
+    const tail = new THREE.ConeGeometry(0.038, 0.08, 3).rotateX(Math.PI / 2).scale(0.35, 1, 1).translate(0, 0, -0.11);
+    const fishGeo = mergeGeometries([body.toNonIndexed(), tail.toNonIndexed()]);
+    const fishMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.88, depthWrite: false, blending: THREE.AdditiveBlending });
+    const fishes = new THREE.InstancedMesh(fishGeo, fishMat, N);
+    const fishCols = [new THREE.Color(1.9, 1.35, 0.55), new THREE.Color(0.45, 1.65, 2.1), new THREE.Color(1.8, 0.9, 1.4)];
+    const school = [];
+    for (let i = 0; i < N; i++) {
+      // Más pececitos cerca del puente para que se vean al cruzar.
+      const near = i < N * 0.45;
+      const t0 = near ? 0.46 + (r() - 0.5) * 0.12 : r();
+      school.push({
+        t: t0,
+        near,
+        v: (r() - 0.5) * 1.15,
+        sp: (0.0022 + r() * 0.0025) * (r() < 0.25 ? -1 : 1),
+        ph: r() * 10,
+        s: 0.75 + r() * 0.65,
+      });
+      fishes.setColorAt(i, fishCols[i % fishCols.length]);
+    }
+    fishes.frustumCulled = false;
+    fishes.renderOrder = 2;
+    ground.add(fishes);
+    const fm = new THREE.Object3D();
+    animated.push((t, dt) => {
+      for (let i = 0; i < N; i++) {
+        const f = school[i];
+        f.t = (f.t + (dt || 0.016) * f.sp + 1) % 1;
+        if (f.near && (f.t < 0.38 || f.t > 0.62)) f.sp = -f.sp;
+        const sway = Math.sin(t * 1.8 + f.ph) * 0.28;
+        const side = (f.v + sway) * widthAt(f.t) * 0.68;
+        const p = along(f.t, side);
+        const pNext = along((f.t + Math.sign(f.sp) * 0.003 + 1) % 1, side);
+        const yaw = Math.atan2(pNext.x - p.x, pNext.z - p.z) + Math.sin(t * 11 + f.ph) * 0.16;
+        fm.position.set(p.x, 0.032 + Math.sin(t * 2.5 + f.ph) * 0.006, p.z);
+        fm.rotation.set(0, yaw, 0);
+        fm.scale.setScalar(f.s);
+        fm.updateMatrix();
+        fishes.setMatrixAt(i, fm.matrix);
+      }
+      fishes.instanceMatrix.needsUpdate = true;
+    });
+  }
+
   // ---------- bruma baja ----------
   {
     const mist = new THREE.Group();

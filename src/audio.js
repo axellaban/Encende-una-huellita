@@ -251,6 +251,64 @@ export function boop() {
   }
 }
 
+// Ladrido o maullido suave de un espíritu contento.
+export function petVoice(kind = 'perro') {
+  if (!ctx || !soundsOn) return;
+  const t = ctx.currentTime;
+  if (kind === 'gato') {
+    const o = ctx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(510, t);
+    o.frequency.exponentialRampToValueAtTime(760, t + 0.12);
+    o.frequency.exponentialRampToValueAtTime(460, t + 0.34);
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 920;
+    f.Q.value = 1.4;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.055, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.36);
+    o.connect(f).connect(g).connect(sfx);
+    o.start(t);
+    o.stop(t + 0.38);
+    return;
+  }
+  if (kind === 'otro') {
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(680, t);
+    o.frequency.exponentialRampToValueAtTime(980, t + 0.11);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.045, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    o.connect(g).connect(sfx);
+    o.start(t);
+    o.stop(t + 0.14);
+    return;
+  }
+  // Perro: dos "guau" cortitos y amables.
+  for (const [dt, f0, f1] of [[0, 270, 420], [0.13, 310, 480]]) {
+    const o = ctx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(f0, t + dt);
+    o.frequency.exponentialRampToValueAtTime(f1, t + dt + 0.035);
+    o.frequency.exponentialRampToValueAtTime(f0 * 0.85, t + dt + 0.095);
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 650;
+    f.Q.value = 1.1;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t + dt);
+    g.gain.exponentialRampToValueAtTime(0.06, t + dt + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.105);
+    o.connect(f).connect(g).connect(sfx);
+    o.start(t + dt);
+    o.stop(t + dt + 0.115);
+  }
+}
+
 // Vidrio (el frasco de gracias).
 export function clink() {
   if (!ctx || !soundsOn) return;

@@ -341,6 +341,43 @@ for (const name of ['local', 'vercel']) {
     assert.equal((await post('/api/import', { source: 'corto', records: [] })).status, 400);
   });
 
+  test(`[${name}] moderación, denuncias, libro de visitas, lista de velas y agradecimiento`, async () => {
+    // Moderación al crear, firmar y dejar notas.
+    assert.equal((await post('/api/memorials', { name: 'Perro', message: 'Visita https://spam.com ahora' })).status, 400);
+    assert.equal((await post('/api/memorials', { name: 'Pelotudo', species: 'perro' })).status, 400);
+    const { memorial, editToken } = await (await post('/api/memorials', { name: 'Nala', species: 'perro', visitor: 'Clara' })).json();
+    const id = memorial.id;
+    const own = { 'X-Edit-Token': editToken };
+    assert.equal((await post(`/api/memorials/${id}/guestbook`, { name: 'Troll', text: 'Qué mierda todo' })).status, 400);
+    assert.equal((await post('/api/jar', { text: 'entrá a www.casino.com', visitor: 'Troll' })).status, 400);
+
+    // Firmar, borrar una firma y cerrar/abrir el libro.
+    const signed = await (await post(`/api/memorials/${id}/guestbook`, { name: 'Sol', text: 'Un abrazo enorme' })).json();
+    assert.ok(signed.entry.id);
+    await post(`/api/memorials/${id}/del-gb`, { entryId: signed.entry.id }, own);
+    let full = await (await call(`/api/memorials/${id}`)).json();
+    assert.equal(full.guestbook.length, 0);
+    assert.equal(full.guestbookCount, 0);
+    await post(`/api/memorials/${id}/edit`, { gbClosed: true }, own);
+    assert.equal((await post(`/api/memorials/${id}/guestbook`, { name: 'Sol', text: 'Otra firma' })).status, 403);
+    await post(`/api/memorials/${id}/edit`, { gbClosed: false }, own);
+    assert.equal((await post(`/api/memorials/${id}/guestbook`, { name: 'Sol', text: 'Ahora sí' })).status, 201);
+
+    // Quiénes encendieron una vela, racha y agradecimiento de la familia.
+    await post(`/api/memorials/${id}/candle`, { sid: 'v1', visitor: 'Lucía' });
+    full = await (await call(`/api/memorials/${id}`)).json();
+    assert.ok(full.candleList.some((c) => c.who === 'Lucía'));
+    assert.equal(full.streak, 1);
+    const th = await (await post(`/api/memorials/${id}/thanks`, {}, own)).json();
+    assert.ok(th.memorial.thankedAt > 0);
+    const th2 = await (await post(`/api/memorials/${id}/thanks`, {}, own)).json();
+    assert.equal(th2.already, true);
+
+    // Denuncia.
+    const rep = await post('/api/report', { kind: 'memorial', targetId: id, reason: 'spam', sid: 'v1' });
+    assert.equal(rep.status, 201);
+  });
+
   test(`[${name}] errores`, async () => {
     assert.equal((await post('/api/memorials', { name: '' })).status, 400);
     assert.equal((await post('/api/memorials', { name: 'x', photo: 'data:text/html;base64,AAAA' })).status, 400);

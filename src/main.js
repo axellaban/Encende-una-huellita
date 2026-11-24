@@ -87,7 +87,7 @@ import { GUIDE_STEPS, renderGuide } from './guide.js';
   void PICADO_COLORS;
 }
 import { portraitCanvas } from './scene/textures.js';
-import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver, setMood, step, boop, clink, liftDoors, liftHum } from './audio.js';
+import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver, setMood, step, boop, clink, liftDoors, liftHum, petVoice } from './audio.js';
 import { TIERS, pickTier, savedQuality, saveQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
 import { FEATURED } from '../server/seed.js';
 
@@ -496,10 +496,29 @@ let api;
 let memorials = [];
 let seq = 0;
 
+function hiddenSet(kind) {
+  try {
+    const raw = JSON.parse(store.get('huellita.hidden') || '{}');
+    return new Set(Array.isArray(raw[kind]) ? raw[kind] : []);
+  } catch {
+    return new Set();
+  }
+}
+function hideItem(kind, id) {
+  try {
+    const raw = JSON.parse(store.get('huellita.hidden') || '{}');
+    const set = new Set(Array.isArray(raw[kind]) ? raw[kind] : []);
+    set.add(id);
+    raw[kind] = [...set];
+    store.set('huellita.hidden', JSON.stringify(raw));
+  } catch { /* sin storage */ }
+}
+
 async function refresh() {
   const r = await api.list();
   lastFull = Date.now();
-  memorials = r.memorials;
+  const hid = hiddenSet('m');
+  memorials = r.memorials.filter((m) => m.featured || !hid.has(m.id));
   if (walking) {
     const w = memorials.find((m) => m.id === walking.id);
     if (!w) stopWalk();
@@ -722,8 +741,8 @@ async function callElevator() {
   controls.flyTo(camPos, camLook, null, { duration: 1.0, path: [elevator.doorPoint(0.9).setY(1.95), elevator.doorPoint(-0.3).setY(2.0)] });
   await later(1050);
   // La botonera tapa la mitad de abajo: la puerta y el indicador, arriba en la pantalla.
-  await tween(0.5, (k) => liftCam(easeIO(k) * 0.8));
-  liftDrop = 0.8;
+  await tween(0.5, (k) => liftCam(easeIO(k) * 0.38));
+  liftDrop = 0.38;
   insideLift = true;
   renderFloors();
   $('#floors').showModal();
@@ -965,10 +984,41 @@ function closeSheet() {
 }
 $('#sheet-x').onclick = closeSheet;
 
+function inspectShelfGift(m, emo, single = null) {
+  tick();
+  haptic(8);
+  if (hall && offerFx) {
+    const key = hall.memorialKey(m);
+    if (key !== null) {
+      const at = hall.offerPos(key, 'gift');
+      if (at) offerFx.playGrace(emo, at, hall.giftScale(key));
+    }
+  }
+  if (single) {
+    const rest = single.gift.split(' ').slice(1).join(' ');
+    return toast(`🎁 ${single.who} le dejó ${(rest || single.gift).toLowerCase()} · ${timeAgo(single.at)}`);
+  }
+  const matching = (m.giftList || []).filter((x) => x.gift.startsWith(emo));
+  if (matching.length === 1) {
+    const g = matching[0];
+    const rest = g.gift.split(' ').slice(1).join(' ');
+    return toast(`🎁 ${g.who} le dejó ${(rest || g.gift).toLowerCase()} · ${timeAgo(g.at)}`);
+  }
+  if (matching.length > 1) {
+    const names = [...new Set(matching.map((x) => x.who))].slice(0, 3).join(', ');
+    const rest = matching[0].gift.split(' ').slice(1).join(' ');
+    return toast(`🎁 ${names} le dejaron ${(rest || emo).toLowerCase()}`);
+  }
+  toast(`🎁 Regalito en la repisa de ${m.name}`);
+}
+
 function fillSheet(m) {
   $('#s-photo').src = photoSrc(m);
   $('#s-photo').alt = `Foto de ${m.name}`;
   $('.sheet-photo').classList.toggle('gold', !!m.featured || m.candles >= 20);
+  const topGifts = (m.lastGifts && m.lastGifts.length ? m.lastGifts : Object.keys(m.giftCounts || {})).slice(0, 4);
+  $('.sheet-photo').dataset.leftGift = topGifts[0] || '🕯️';
+  $('.sheet-photo').dataset.rightGift = topGifts[1] || '🌼';
   $('#s-name').textContent = m.name;
   const kind = { perro: 'Perro', gato: 'Gato', otro: 'Compañero' }[m.species] || '';
   const bits = [kind];
@@ -985,7 +1035,13 @@ function fillSheet(m) {
   setCount('#s-flowers', m.flowers, same);
   setCount('#s-gb', m.guestbookCount ?? 0, same);
   sheetEl.dataset.id = m.id;
+  const mine = !!myTokens()[m.id] && !m.featured;
   $('#s-delete').hidden = !myTokens()[m.id];
+  $('#s-report').hidden = !!m.featured || mine;
+  $('#gb-closed-msg').hidden = !m.gbClosed;
+  $('#gb-form').hidden = !!m.gbClosed;
+  const gbLbl = $('#tool-gb-label');
+  if (gbLbl) gbLbl.textContent = m.gbClosed ? 'Abrir libro' : 'Cerrar libro';
   $('#s-walk').hidden = !canWalk(m);
   $('#s-walk-act').hidden = !canWalk(m);
   $('#s-walk-act').classList.toggle('on', walking?.id === m.id);
@@ -1000,34 +1056,87 @@ function fillSheet(m) {
   $('#s-flower').classList.toggle('done', didToday('f', m.id));
   $('#s-gift').classList.toggle('done', didToday('g', m.id));
   $('#s-hug').classList.toggle('done', didToday('h', m.id));
+  // Quiénes encendieron una vela, racha de luz y agradecimiento de la familia.
+  const cw = $('#s-candles-who');
+  const cl = m.candleList || [];
+  const hasStreak = (m.streak || 0) > 1;
+  const recentThanks = m.thankedAt && Date.now() - m.thankedAt < 36 * 3600_000;
+  cw.hidden = !cl.length && !hasStreak && !recentThanks && !(mine && m.candles > 0);
+  cw.innerHTML = '';
+  if (!cw.hidden) {
+    if (hasStreak) {
+      const st = document.createElement('span');
+      st.className = 'candle-streak';
+      st.textContent = `🔥 ${m.streak} días seguidos con una vela encendida`;
+      cw.append(st);
+    }
+    if (cl.length) {
+      const names = [...new Set(cl.map((c) => `${c.who}${c.country ? ` ${flag(c.country)}` : ''}`))].slice(0, 6);
+      const whoSpan = document.createElement('span');
+      whoSpan.className = 'candle-names';
+      whoSpan.textContent = `🕯️ Encendieron una vela: ${names.join(', ')}${cl.length > names.length ? ' y más' : ''}`;
+      cw.append(whoSpan);
+    }
+    if (recentThanks) {
+      const th = document.createElement('span');
+      th.className = 'candle-thanked';
+      th.textContent = `🤍 La familia de ${m.name} agradece cada vela encendida`;
+      cw.append(th);
+    }
+    if (mine && m.candles > 0) {
+      const thankedToday = didToday('th', m.id);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn soft small thanks-btn';
+      btn.id = 's-thanks-btn';
+      btn.disabled = thankedToday;
+      btn.textContent = thankedToday ? '🤍 Ya diste las gracias hoy' : '🤍 Dar las gracias a todos';
+      btn.onclick = async () => {
+        btn.disabled = true;
+        const r = await ownAction('thanks', {}, '🤍 Tu agradecimiento llegó al jardín');
+        if (r) {
+          markToday('th', m.id);
+          confetti(['🤍', '🕯️', '✨']);
+          sparkle();
+          fillSheet(current);
+        } else btn.disabled = false;
+      };
+      cw.append(btn);
+    }
+  }
   // Glow: sólo en mis mascotas.
-  const mine = !!myTokens()[m.id] && !m.featured;
   const pet = myPet();
   $('#s-glow').hidden = !mine;
   if (mine) $('#s-glow').innerHTML = glowCardHTML(m);
   $('#s-mine').hidden = !(mine && pet && pet.id !== m.id);
-  // La repisa: cada regalito con cuántos le dejaron (como en una ofrenda de verdad).
+  // La repisa: cada regalito con cuántos le dejaron (como en una ofrenda de verdad). Tocarlo lo anima en 3D y muestra quién lo dejó.
   const gc = Object.entries(m.giftCounts || {}).sort((a, b) => b[1] - a[1]);
   $('#s-shelf').hidden = !gc.length;
   $('#s-shelf').innerHTML = '';
   for (const [emo, n] of gc.slice(0, 12)) {
-    const sp = document.createElement('span');
+    const sp = document.createElement('button');
+    sp.type = 'button';
     sp.className = 'shelf-item';
     sp.innerHTML = '<i></i><b></b>';
     sp.querySelector('i').textContent = emo;
     sp.querySelector('b').textContent = `×${n}`;
+    sp.title = 'Tocar para ver quién lo dejó';
+    sp.onclick = () => inspectShelfGift(m, emo);
     $('#s-shelf').append(sp);
   }
   const gl = m.giftList || [];
   $('#s-gifts').hidden = !gl.length;
   $('#s-gifts').innerHTML = '';
   for (const g of gl.slice(0, 8)) {
-    const sp = document.createElement('span');
+    const sp = document.createElement('button');
+    sp.type = 'button';
+    sp.className = 'gift-chip';
     const [emo, ...rest] = g.gift.split(' ');
     sp.innerHTML = '<i></i>';
     sp.querySelector('i').textContent = emo;
     sp.append(`${rest.join(' ')} · ${g.who}`);
     sp.title = timeAgo(g.at);
+    sp.onclick = () => inspectShelfGift(m, emo, g);
     $('#s-gifts').append(sp);
   }
   fillExtras(m);
@@ -1059,18 +1168,54 @@ function setCount(sel, n, animate) {
 function renderGuestbook(list) {
   const ul = $('#gb-list');
   ul.innerHTML = '';
-  if (list && !list.length) {
+  if (!list) return;
+  const hid = hiddenSet('gb');
+  const visible = list.filter((e) => !hid.has(e.id));
+  if (!visible.length) {
     const li = document.createElement('li');
     li.className = 'gb-empty';
     li.textContent = 'Todavía nadie firmó. ¿Querés ser la primera persona?';
     ul.append(li);
     return;
   }
-  for (const e of list || []) {
+  const mine = current && isMine(current);
+  for (const e of visible) {
     const li = document.createElement('li');
     li.textContent = e.text;
     const s = document.createElement('small');
     s.textContent = `— ${e.name} · ${timeAgo(e.at)}`;
+    const acts = document.createElement('span');
+    acts.className = 'gb-acts';
+    if (mine) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'gb-act';
+      del.title = 'Borrar esta firma';
+      del.setAttribute('aria-label', 'Borrar esta firma');
+      del.textContent = '✕';
+      del.onclick = async () => {
+        await ownAction('del-gb', { entryId: e.id }, 'Firma borrada');
+        if (current) {
+          const full = await api.get(current.id).catch(() => null);
+          if (full) renderGuestbook(full.guestbook || []);
+        }
+      };
+      acts.append(del);
+    }
+    const rep = document.createElement('button');
+    rep.type = 'button';
+    rep.className = 'gb-act';
+    rep.title = 'Ocultar o denunciar este mensaje';
+    rep.setAttribute('aria-label', 'Ocultar o denunciar este mensaje');
+    rep.textContent = '⚑';
+    rep.onclick = () => {
+      hideItem('gb', e.id);
+      if (current) api.report({ kind: 'guestbook', targetId: current.id, subId: e.id, sid: visitor.sid }).catch(() => {});
+      renderGuestbook(list);
+      toast('Mensaje ocultado 🤍');
+    };
+    acts.append(rep);
+    s.append(acts);
     li.append(s);
     ul.append(li);
   }
@@ -1144,20 +1289,26 @@ $('#s-share').onclick = () => openShare();
 
 // ---------- recuerdo: la estampita para guardar o compartir ----------
 let keepBlob = null;
+let keepQr = false;
 async function openKeepsake() {
   if (!current) return;
   const m = current;
   $('#keep-img').hidden = true;
   $('#keep-wait').hidden = false;
   $('#keep-save').removeAttribute('href');
-  $('#keepsake').showModal();
+  const qrBtn = $('#keep-qr');
+  if (qrBtn) {
+    qrBtn.setAttribute('aria-pressed', String(keepQr));
+    qrBtn.textContent = keepQr ? '📱 Con QR ✓' : '📱 Con QR';
+  }
+  if (!$('#keepsake').open) $('#keepsake').showModal();
   const dates = [
     m.birthday ? `${fmtDay(m.birthday)}${m.birthYear ? ` de ${m.birthYear}` : ''}` : m.birthYear || '',
     m.passedDay ? `${fmtDay(m.passedDay)}${m.passedYear ? ` de ${m.passedYear}` : ''}` : m.passedYear || '',
   ].filter(Boolean).join('  –  ');
   const years = m.birthYear && m.passedYear ? `${m.passedYear - m.birthYear} años de amor` : '';
   try {
-    const c = await drawKeepsake(m, photoSrc(m), { dates, years, link: `${location.host}/h/${m.id}` });
+    const c = await drawKeepsake(m, photoSrc(m), { dates, years, link: `${location.host}/h/${m.id}`, qrUrl: keepQr ? shareUrl(m.id) : '' });
     keepBlob = await new Promise((res) => c.toBlob(res, 'image/png'));
     const url = URL.createObjectURL(keepBlob);
     $('#keep-img').src = url;
@@ -1168,6 +1319,10 @@ async function openKeepsake() {
   } catch { $('#keep-wait').textContent = 'No se pudo pintar la estampita. Probá de nuevo.'; }
 }
 $('#s-keep').onclick = openKeepsake;
+$('#keep-qr').onclick = () => {
+  keepQr = !keepQr;
+  openKeepsake();
+};
 $('#keep-share').onclick = async () => {
   if (!keepBlob || !current) return;
   const file = new File([keepBlob], 'recuerdo.png', { type: 'image/png' });
@@ -1200,6 +1355,16 @@ $('#s-delete').onclick = async () => {
     await refresh();
     toast('La huellita fue quitada del muro.');
   } catch (err) { toast(err.message); }
+};
+
+$('#s-report').onclick = async () => {
+  if (!current || current.featured) return;
+  const m = current;
+  hideItem('m', m.id);
+  api.report({ kind: 'memorial', targetId: m.id, sid: visitor.sid }).catch(() => {});
+  closeSheet();
+  await refresh().catch(() => {});
+  toast('Ocultamos esta huellita en tu equipo y avisamos para revisarla 🤍');
 };
 
 const IDEAS = ['Corré libre 🤍', 'Siempre en nuestro corazón', 'Gracias por tanto amor', 'Te mando un abrazo enorme', 'Que brille tu estrella 🌟', 'Nunca te vamos a olvidar', 'Fuiste el mejor compañero'];
@@ -1553,16 +1718,18 @@ function timeAgo(at) {
   return `hace ${Math.round(s / 86400)} días`;
 }
 
-// Así te ven los demás: color del sarape y sombrero o corona.
+// Así te ven los demás: ropa, color, sombrero o corona y peinado.
 {
   const HUES = [8, 32, 50, 140, 176, 210, 262, 318];
   const HUE_NAMES = ['Rojo', 'Naranja', 'Amarillo', 'Verde', 'Turquesa', 'Azul', 'Violeta', 'Rosa'];
   const box = $('#me-hues');
-  const hatOf = (h) => Math.round(h) % 2 === 1;
-  // hue % 8: el bit 0 es el sombrero y los bits 1-2 el peinado (ver character.js).
-  const styleOf = (h) => Math.round(h) % 8;
+  const outfitOf = (h) => Math.floor(Math.max(0, Math.round(h)) / 360) % 4;
+  const baseOf = (h) => ((Math.round(h) % 360) + 360) % 360;
+  const hatOf = (h) => baseOf(h) % 2 === 1;
+  // baseHue % 8: el bit 0 es el sombrero y los bits 1-2 el peinado; floor(hue / 360) % 4 es la ropa.
+  const styleOf = (h) => baseOf(h) % 8;
   const hairOf = (h) => Math.floor(styleOf(h) / 2);
-  const withStyle = (h, st) => (((Math.round(h) - styleOf(h) + st) % 360) + 360) % 360;
+  const withStyle = (h, st, out = outfitOf(h)) => out * 360 + (((baseOf(h) - styleOf(h) + st) % 360) + 360) % 360;
   const swapCharacter = (h) => {
     const old = me;
     me = createCharacter({ hue: h, light: tierName !== 'low' });
@@ -1574,7 +1741,7 @@ function timeAgo(at) {
     spirits?.sparkle(me.group.position.clone().setY(1));
     me.wave();
   };
-  const paintChip = () => { $('#me-initial').style.background = `hsl(${visitorHue} 55% 46%)`; };
+  const paintChip = () => { $('#me-initial').style.background = `hsl(${baseOf(visitorHue)} 55% 46%)`; };
   paintChip();
   const setHue = (h) => {
     visitorHue = h;
@@ -1595,9 +1762,12 @@ function timeAgo(at) {
     sp.setAttribute('aria-label', HUE_NAMES[HUES.indexOf(h)]);
     sp.title = HUE_NAMES[HUES.indexOf(h)];
     l.append(i, sp);
-    i.onchange = () => setHue(withStyle(h, styleOf(visitorHue)));
+    i.onchange = () => setHue(withStyle(h, styleOf(visitorHue), outfitOf(visitorHue)));
     box.append(l);
   }
+  $$('input[name="me-outfit"]').forEach((i) => {
+    i.onchange = () => setHue(withStyle(visitorHue, styleOf(visitorHue), Number(i.value)));
+  });
   $$('input[name="me-head"]').forEach((i) => {
     i.onchange = () => setHue(withStyle(visitorHue, hairOf(visitorHue) * 2 + (i.value === 'hat' ? 1 : 0)));
   });
@@ -1606,7 +1776,8 @@ function timeAgo(at) {
   });
   $('#me-chip').onclick = () => {
     $('#me-dialog-name').textContent = visitor.name;
-    $$('input[name="me-hue"]').forEach((i) => { i.checked = Math.abs(Number(i.value) - (visitorHue - styleOf(visitorHue))) <= 8; });
+    $$('input[name="me-hue"]').forEach((i) => { i.checked = Math.abs(Number(i.value) - (baseOf(visitorHue) - styleOf(visitorHue))) <= 8; });
+    $$('input[name="me-outfit"]').forEach((i) => { i.checked = Number(i.value) === outfitOf(visitorHue); });
     $$('input[name="me-head"]').forEach((i) => { i.checked = (i.value === 'hat') === hatOf(visitorHue); });
     $$('input[name="me-hair"]').forEach((i) => { i.checked = Number(i.value) === hairOf(visitorHue); });
     $('#me-dialog').showModal();
@@ -1634,6 +1805,7 @@ const VERBS = {
   eternal: (e) => `✨ ${e.visitor} encendió la luz eterna de ${e.petName}`,
   altar: (e) => `🌼 ${e.visitor} puso a ${e.petName} en la ofrenda`,
   diary: (e) => `📖 La familia de ${e.petName} escribió una página en su diario`,
+  thanks: (e) => `🤍 La familia de ${e.petName} agradece las velas encendidas`,
   gift: (e) => `🎁 ${e.visitor} le dejó ${e.gift?.split(' ')[0] || 'un regalito'} a ${e.petName}`,
   hug: (e) => `🫂 ${e.visitor} le mandó un abrazo a la familia de ${e.petName}`,
 };
@@ -2332,9 +2504,21 @@ function fillExtras(m) {
   ga.hidden = !m.gathering;
   if (m.gathering) {
     const when = new Date(m.gathering);
-    const now = Date.now() >= m.gathering && Date.now() < m.gathering + 3 * 3600_000;
-    ga.innerHTML = `<span>🕯️ ${now ? `El encuentro de ${escapeHtml(m.name)} es ahora` : `Encuentro de ${escapeHtml(m.name)} · ${when.toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`}</span><button class="btn soft small" id="s-ics">📅 Añadir al calendario</button>`;
-    $('#s-ics').onclick = () => downloadIcs(m);
+    const now = Date.now() >= m.gathering - 15 * 60_000 && Date.now() < m.gathering + 3 * 3600_000;
+    const hereCount = Number($('#here')?.textContent) || 1;
+    if (now) {
+      ga.innerHTML = `<span>🕯️ <b>El encuentro de ${escapeHtml(m.name)} es ahora</b> · ${hereCount} ${hereCount === 1 ? 'persona acompañando' : 'personas acompañando'}</span><button class="btn primary small" id="s-gather-now">🕯️ Encender vela juntos</button>`;
+      $('#s-gather-now').onclick = () => {
+        if (!didToday('c', m.id)) return $('#s-candle').click();
+        releaseLantern(m, { burst: true });
+        sparkle();
+        haptic([10, 40, 16]);
+        toast(`🕯️ Tu vela brilla junto a quienes recuerdan hoy a ${m.name}`);
+      };
+    } else {
+      ga.innerHTML = `<span>🕯️ Encuentro de ${escapeHtml(m.name)} · ${when.toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</span><button class="btn soft small" id="s-ics">📅 Añadir al calendario</button>`;
+      $('#s-ics').onclick = () => downloadIcs(m);
+    }
   }
   $('#s-family').hidden = !isMine(m);
   const card = $('#s-card');
@@ -2438,6 +2622,11 @@ const TOOLS = {
   diary: () => openDiary(),
   gathering: () => { $('#gathering').showModal(); },
   invite: () => inviteFamily(),
+  'gb-toggle': async () => {
+    if (!current) return;
+    const next = !current.gbClosed;
+    await ownAction('edit', { gbClosed: next }, next ? '🔒 Libro de visitas cerrado' : '📖 Libro de visitas abierto');
+  },
   altar: async () => {
     try {
       const r = await api.toAltar(current.id, who());
@@ -3144,6 +3333,7 @@ const SPIRIT_LINES = ['mueve la cola de felicidad', 'te mira con ojitos brillant
 function tapSpirit(a) {
   boop();
   if (!a) return;
+  petVoice(a.kind);
   const P0 = controls.player;
   const petting = a.role === 'companion' && P0.pos.distanceTo(a.pos) < 2.2 && !P0.moving;
   if (petting) spirits.cuddle(a); else spirits.poke(a);
@@ -3173,14 +3363,16 @@ function wireSpirits() {
     if (!a) return;
     if (type === 'arrived' && a.role === 'companion') {
       sparkle();
+      petVoice(a.kind);
       haptic([10, 40, 16]);
       toast(`🐾 ${a.name} está con vos. Caminen juntos por el jardín.`);
       once('tip-ball', () => setTimeout(() => toast('🎾 Tocá la pelota para tirársela'), 4200));
     }
+    if (type === 'bridge' && a.role === 'companion') once('bridge', () => toast(`🌈 ${a.name} se asomó a mirar los pececitos de luz`, null, true));
     if (type === 'dropped' && (a.role === 'companion' || a.role === 'joined')) once('drop', () => toast(`🎾 ${a.name} te trajo la pelota. ¡Tirala de nuevo!`));
     if (type === 'dropped' && a.role === 'pack' && a.name) toast(`🎾 ${a.name} te devolvió la pelota`, null, true);
     if (type === 'join') once('join', () => toast(`🐾 ${a.name} se fue a jugar con los del Prado. Cuando camines, vuelve con vos.`));
-    if (type === 'greet' && a.name && a.role === 'pack') once(`greet-${a.name}`, () => toast(`🐶 ${a.name} vino a saludarte`, null, true));
+    if (type === 'greet' && a.name && a.role === 'pack') once(`greet-${a.name}`, () => { petVoice(a.kind); toast(`🐶 ${a.name} vino a saludarte`, null, true); });
   });
 }
 
@@ -3351,6 +3543,18 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheetEl.hidden &
   await refresh().catch((err) => toast(err.message));
   label.textContent = 'Entrar al jardín 🕯️';
   personalizeSplash();
+  api.night().then((n) => {
+    const el = $('#splash-night');
+    if (!el) return;
+    const total = memorials.reduce((a, m) => a + (m.candles || 0), 0);
+    const count = n?.candles || total;
+    if (count > 0) {
+      el.hidden = false;
+      el.textContent = n?.candles
+        ? `🕯️ ${n.candles.toLocaleString('es-AR')} ${n.candles === 1 ? 'vela encendida' : 'velas encendidas'} esta noche${n.countries > 1 ? ` · ${n.countries} países` : ''}`
+        : `🕯️ ${total.toLocaleString('es-AR')} ${total === 1 ? 'vela encendida' : 'velas encendidas'} en el jardín`;
+    }
+  }).catch(() => {});
   $('#enter').disabled = false;
   checkReach();
   heartbeat();

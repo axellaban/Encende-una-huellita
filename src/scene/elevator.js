@@ -171,7 +171,14 @@ export function createElevator(scene, colliders, rnd) {
     }
     g.add(new THREE.Mesh(mergeGeometries(pan), panelWood));
     g.add(new THREE.Mesh(box(W + 0.1, 0.2, T + 0.3, 0, ROOM_WALL_H, 0), new THREE.MeshLambertMaterial({ color: '#b5482a', emissive: '#2a0e06' })));
-    g.add(new THREE.Mesh(box(W, ROOM_WALL_H, 0.02, 0, ROOM_WALL_H / 2, -T / 2 - 0.011), outerMat));
+    // Revoque exterior sólo donde no está la cabina (para no tapar el hueco de la puerta).
+    const outSideW = Math.max(0.05, (W - CW) / 2);
+    g.add(new THREE.Mesh(mergeGeometries([
+      box(outSideW, ROOM_WALL_H, 0.02, -(CW / 2 + outSideW / 2), ROOM_WALL_H / 2, -T / 2 - 0.011),
+      box(outSideW, ROOM_WALL_H, 0.02, CW / 2 + outSideW / 2, ROOM_WALL_H / 2, -T / 2 - 0.011),
+      box(CW, ROOM_WALL_H - CH, 0.02, 0, CH + (ROOM_WALL_H - CH) / 2, -T / 2 - 0.011),
+      box(CW + 0.24, CH, 0.02, 0, CH / 2, CZ0 - CD - 0.09),
+    ]), outerMat));
     // Marco de bronce alrededor de la puerta y el umbral.
     g.add(new THREE.Mesh(mergeGeometries([
       box(0.1, DH + 0.1, 0.06, -DW / 2 - 0.05, (DH + 0.1) / 2, T / 2 + 0.03),
@@ -323,8 +330,8 @@ export function createElevator(scene, colliders, rnd) {
     // La toma de adentro: desde el fondo de la cabina, por encima de tu personaje, mirando las puertas.
     // `drop` baja el punto de mira (con la botonera abierta, la puerta queda arriba en la pantalla).
     insideShot(outPos, outLook, drop = 0) {
-      outPos.copy(world(0.5, 2.15, CZ0 - CD + 0.16));
-      outLook.copy(world(-0.12, 1.5 - drop, CZ0 + 0.3));
+      outPos.copy(world(0.42, 2.08, CZ0 - CD + 0.18));
+      outLook.copy(world(-0.08, 1.55 - drop, CZ0 + 0.3));
     },
     setInside(v) { inside = v; },
     showFloor(n, dir = 0) { display.draw(n, dir); },
@@ -339,7 +346,7 @@ export function createElevator(scene, colliders, rnd) {
       const e = open < 0.002 ? 0 : open;
       doors[0].position.x = -leafW / 2 - e * (leafW - 0.04);
       doors[1].position.x = leafW / 2 + e * (leafW - 0.04);
-      light.intensity = inside ? 0.35 : e * 2.5;
+      light.intensity = inside ? 0.95 : e * 2.5;
       const pulse = 0.55 + Math.sin(t * 3.5) * 0.2;
       btnHalo.material.opacity = pulse;
       for (const l of lamps) l.material.opacity = 0.5 + Math.sin(t * 2.3 + l.position.x) * 0.06;

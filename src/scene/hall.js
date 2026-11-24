@@ -602,12 +602,12 @@ export function buildHall(scene, colliders, tier) {
         const labelMat = new THREE.MeshBasicMaterial({ transparent: true });
         const label = twoSided(new THREE.PlaneGeometry(3.1, 0.5), labelMat);
         label.userData.mat = labelMat;
-        label.position.set(0, 3.78, -0.62);
+        label.position.set(0, 4.06, -0.62);
         label.rotation.y = Math.PI; // mira al salón
         cg.add(label);
         for (const sx of [-1.25, 1.25]) {
-          const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.5, 4), new THREE.MeshLambertMaterial({ color: '#c9973f' }));
-          chain.position.set(sx, 4.25, -0.62);
+          const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.32, 4), new THREE.MeshLambertMaterial({ color: '#c9973f' }));
+          chain.position.set(sx, 4.38, -0.62);
           cg.add(chain);
         }
         corridorLabels.push(label);
@@ -689,17 +689,29 @@ export function buildHall(scene, colliders, tier) {
       jar.add(f);
       return f;
     });
-    const gifts = [0, 1, 2].map((i) => {
-      const h = giftHolder(0.16);
-      h.position.set(-0.13 + i * 0.15, 0.0, 0.06);
-      h.rotation.y = (i - 1) * 0.3;
-      shelf.add(h);
+    // Repisas laterales de madera dentro del nicho (a los costados del marco).
+    const inside = new THREE.Group();
+    const sideShelves = new THREE.Mesh(mergeGeometries([
+      box(0.18, 0.022, DEPTH * 0.58, -0.38, -0.02, -DEPTH * 0.48),
+      box(0.18, 0.022, DEPTH * 0.58, 0.38, -0.02, -DEPTH * 0.48),
+    ]), trimMat);
+    const gifts = [0, 1, 2, 3, 4].map((i) => {
+      const h = giftHolder(i < 3 ? 0.16 : 0.14);
+      if (i < 3) {
+        h.position.set(-0.13 + i * 0.15, 0.0, 0.06);
+        h.rotation.y = (i - 1) * 0.3;
+        shelf.add(h);
+      } else {
+        const sd = i === 3 ? -1 : 1;
+        h.position.set(sd * 0.38, -0.008, -DEPTH * 0.46);
+        h.rotation.y = -sd * 0.35;
+        inside.add(h);
+      }
       return h;
     });
     const fx = makeGlowFx(glowFx, 0.72);
     fx.group.position.set(0, 0.04, 0.02);
-    const inside = new THREE.Group();
-    inside.add(mat, border, photo, cloth, glass, name, shelf, fx.group);
+    inside.add(mat, border, photo, cloth, sideShelves, glass, name, shelf, fx.group);
     inside.visible = false;
     g.add(inside, pick);
     return { group: g, inside, border, mat, photo, name, shelf, candles, jar, flowers, gifts, fx, memorial: null, textures: [], open: 0, openTarget: 0, openDelay: 0, local };
@@ -971,6 +983,8 @@ export function buildHall(scene, colliders, tier) {
   scene.add(hallLight);
 
   // ---------- cantero alrededor del poste ----------
+  let bedFlowersMesh = null;
+  const bedBaseCols = [];
   {
     const bed = new THREE.Mesh(new THREE.CylinderGeometry(BED_R, BED_R + 0.15, 0.45, 40), new THREE.MeshLambertMaterial({ color: '#8b7d72' }));
     bed.position.copy(HALL_CENTER).setY(0.3);
@@ -990,8 +1004,11 @@ export function buildHall(scene, colliders, tier) {
       m.scale.setScalar(0.8 + r() * 0.8);
       m.updateMatrix();
       fl.setMatrixAt(i, m.matrix);
-      fl.setColorAt(i, pal[i % pal.length]);
+      const bc = pal[i % pal.length].clone();
+      bedBaseCols.push(bc);
+      fl.setColorAt(i, bc);
     }
+    bedFlowersMesh = fl;
     scene.add(fl);
   }
 
@@ -1003,6 +1020,10 @@ export function buildHall(scene, colliders, tier) {
   const fountainCol = { x: EASEL_POS.x, z: EASEL_POS.z, r: -100 };
   colliders.circles.push(fountainCol);
   const floaters = [];
+  // En el piso 99 ("El cielo de las huellitas"): un arco dorado con una huellita de luz y estrellas que giran sobre la fuente.
+  const crown99 = new THREE.Group();
+  crown99.visible = false;
+  fountain.add(crown99);
   {
     const rim = new THREE.Mesh(new THREE.TorusGeometry(2.0, 0.16, 10, 48).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ map: talavera }));
     rim.position.y = 0.42;
@@ -1026,6 +1047,27 @@ export function buildHall(scene, colliders, tier) {
     const pts = [];
     for (let i = 0; i < 70; i++) { const a = (i / 70) * Math.PI * 2; pts.push([Math.cos(a) * 2.0, 0.6 + r() * 0.06, Math.sin(a) * 2.0, 0.9 + r() * 0.4]); }
     fountain.add(marigoldCluster(pts, { r: 0.09, rnd: r }));
+
+    // Arco celestial y constelación de huellita del piso 99.
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(1.75, 0.045, 10, 48, Math.PI), goldMat);
+    arch.position.y = 0.45;
+    crown99.add(arch);
+    const pawGroup = new THREE.Group();
+    pawGroup.position.y = 1.95;
+    const starMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.0, 1.1) });
+    const padMain = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 12).scale(1.15, 0.9, 0.45), starMat);
+    pawGroup.add(padMain);
+    for (const [dx, dy, rot] of [[-0.28, 0.22, 0.35], [-0.1, 0.38, 0.12], [0.1, 0.38, -0.12], [0.28, 0.22, -0.35]]) {
+      const toe = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10).scale(0.85, 1.15, 0.45), starMat);
+      toe.position.set(dx, dy, 0);
+      toe.rotation.z = rot;
+      pawGroup.add(toe);
+    }
+    const pawHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(1.4, 1.15, 0.65), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.7 }));
+    pawHalo.scale.setScalar(2.4);
+    pawGroup.add(pawHalo);
+    crown99.add(pawGroup);
+    crown99.userData.paw = pawGroup;
   }
 
   // ---------- la ofrenda de la huellita destacada (sólo en el piso 1) ----------
@@ -1309,6 +1351,19 @@ export function buildHall(scene, colliders, tier) {
     setFloor(n, memorials) {
       floor = n;
       showAltar(n === 0);
+      crown99.visible = n === 98;
+      // Cuanto más alto el piso, más flores blancas y doradas en el cantero central.
+      if (bedFlowersMesh) {
+        const hk = Math.min(1, Math.max(0, n / 98));
+        const white = new THREE.Color('#fff9ef');
+        const c = new THREE.Color();
+        for (let i = 0; i < bedBaseCols.length; i++) {
+          const blend = (i % 3 === 0 ? hk * 0.88 : i % 3 === 1 ? hk * 0.55 : hk * 0.25);
+          c.copy(bedBaseCols[i]).lerp(white, blend);
+          bedFlowersMesh.setColorAt(i, c);
+        }
+        if (bedFlowersMesh.instanceColor) bedFlowersMesh.instanceColor.needsUpdate = true;
+      }
       render(memorials);
     },
     render,
@@ -1331,8 +1386,8 @@ export function buildHall(scene, colliders, tier) {
       const normal = new THREE.Vector3(0, 0, 1).transformDirection(s.group.matrixWorld);
       const right = new THREE.Vector3(1, 0, 0).transformDirection(s.group.matrixWorld);
       const target = frame.clone().addScaledVector(right, shift * 0.55);
-      // El pasillo tiene 4,6 m: la cámara no puede irse más lejos que la pared de enfrente.
-      const dist = Math.min(2 * HW - 0.5, (2.6 + Math.max(0, frame.y - 1.7) * 0.5) * distMul);
+      // Vista cercana del nicho en 3D con sus repisas, lucecitas y foto detrás del vidrio.
+      const dist = Math.min(2 * HW - 0.5, (1.85 + Math.max(0, frame.y - 1.7) * 0.42) * distMul);
       const stand = target.clone().addScaledVector(normal, dist);
       stand.y = 1.6 + Math.max(0, frame.y - 2.4) * 0.35;
       target.y = (target.y + 1.6) / 2 + 0.2;
@@ -1442,7 +1497,13 @@ export function buildHall(scene, colliders, tier) {
         }
       }
       animators.forEach((fn) => fn(t));
-      if (fountain.visible) for (const f of floaters) { const a = f.a + t * f.s; f.c.position.x = Math.cos(a) * f.d; f.c.position.z = Math.sin(a) * f.d; f.c.position.y = 0.35 + Math.sin(t * 1.3 + f.a) * 0.01; }
+      if (fountain.visible) {
+        for (const f of floaters) { const a = f.a + t * f.s; f.c.position.x = Math.cos(a) * f.d; f.c.position.z = Math.sin(a) * f.d; f.c.position.y = 0.35 + Math.sin(t * 1.3 + f.a) * 0.01; }
+        if (crown99.visible && crown99.userData.paw) {
+          crown99.userData.paw.rotation.y = Math.sin(t * 0.7) * 0.35;
+          crown99.userData.paw.position.y = 1.95 + Math.sin(t * 1.4) * 0.08;
+        }
+      }
       // Ofrenda: cambiar de huellita cada 6 s.
       if (spotList.length && t - spotT > 6) {
         spotT = t;

@@ -837,6 +837,13 @@ export function createOfferFx(scene) {
         },
       });
     },
+    // Al tocar un regalito en la repisa: hace su gracia en el lugar con un destello.
+    playGrace(ch, to, scale, land) {
+      if (!to) return;
+      ring(to.clone().setY(to.y + 0.02), [1.8, 1.5, 0.7], scale * 2.1);
+      burst(to.clone().setY(to.y + scale * 0.4), [1.8, 1.4, 0.8], 14, 0.9);
+      grace(giftMesh(ch), ch, to, scale, land);
+    },
     // Corazones que salen de tu pecho y suben hacia el marco.
     hug(from, to) {
       ring(from, [2.0, 0.7, 1.2], 0.9, to);

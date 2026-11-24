@@ -221,6 +221,18 @@ export function createMemoryKv({ file } = {}) {
       }
       case 'LLEN':
         return of(a[0], 'l')?.v.length ?? 0;
+      case 'LREM': {
+        const e = of(a[0], 'l');
+        if (!e) return 0;
+        const max = Math.abs(Number(a[1])) || Infinity;
+        const val = String(a[2]);
+        let removed = 0;
+        e.v = e.v.filter((x) => {
+          if (removed < max && x === val) { removed++; return false; }
+          return true;
+        });
+        return removed;
+      }
       default:
         throw new Error(`Comando no soportado: ${op}`);
     }

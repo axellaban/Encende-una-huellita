@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { glowTexture, lightConeTexture } from './textures.js';
-import { HALL_CENTER, HALL_RADIUS, uTime } from './world.js';
+import { HALL_CENTER, HALL_RADIUS, ROOM_R, uTime } from './world.js';
 import { createSkyMagic } from './skymagic.js';
 import { createValley } from './valley.js';
 
@@ -41,7 +41,7 @@ function cloudSea() {
     transparent: true,
     depthWrite: false,
     fog: false,
-    uniforms: { uTime, uK: { value: 0 }, uTint: { value: new THREE.Color('#ffffff') }, uShade: { value: new THREE.Color('#b9a9d8') }, uHole: { value: HALL_RADIUS + 1.6 } },
+    uniforms: { uTime, uK: { value: 0 }, uTint: { value: new THREE.Color('#edf4fc') }, uShade: { value: new THREE.Color('#b9a9d8') }, uHole: { value: ROOM_R - 0.4 } },
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: `uniform float uTime; uniform float uK; uniform vec3 uTint; uniform vec3 uShade; uniform float uHole; varying vec3 vW;
       float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -52,13 +52,13 @@ function cloudSea() {
         vec2 p = vW.xz * 0.035 + vec2(uTime * 0.012, uTime * 0.006);
         float c = fbm(p);
         float c2 = fbm(p * 2.3 - uTime * 0.01);
-        float puff = smoothstep(0.42, 0.78, c * 0.7 + c2 * 0.45);
+        float puff = smoothstep(0.4, 0.78, c * 0.7 + c2 * 0.45);
         vec3 col = mix(uShade, uTint, puff);
         // Sombras suaves entre nubes y brillo arriba.
-        col += vec3(0.08) * smoothstep(0.7, 0.95, c2);
+        col += vec3(0.05) * smoothstep(0.7, 0.95, c2);
         float d = length(vW.xz - vec2(${HALL_CENTER.x.toFixed(1)}, ${HALL_CENTER.z.toFixed(1)}));
-        // Debajo del piso del salón no hace falta dibujar; afuera, nubes hasta el horizonte.
-        float a = uK * smoothstep(uHole - 1.0, uHole + 2.0, d) * (0.9 + 0.1 * puff);
+        // Debajo del piso redondo del salón no hace falta dibujar; afuera, nubes hasta el horizonte.
+        float a = uK * smoothstep(uHole - 1.2, uHole + 1.0, d) * (0.94 + 0.06 * puff);
         a *= 1.0 - smoothstep(300.0, 420.0, d);
         gl_FragColor = vec4(col, a);
       }`,
@@ -72,11 +72,12 @@ function cloudSea() {
 // Nubes con volumen que flotan alrededor (bolitas blandas unidas).
 function puffyClouds(rnd) {
   const parts = [];
-  const N = 46;
+  const N = 40;
   for (let i = 0; i < N; i++) {
     const a = (i / N) * Math.PI * 2 + rnd() * 0.3;
-    const d = HALL_RADIUS + 34 + rnd() * 140;
-    const y = -6 + rnd() * 18 + (d > 90 ? rnd() * 16 : 0);
+    const d = HALL_RADIUS + 42 + rnd() * 145;
+    // Dejamos libre la franja a la altura de los ojos cerca del salón para que se luzcan los pilares y árboles del valle.
+    const y = d < 135 ? (rnd() < 0.65 ? -3.5 + rnd() * 4.5 : 27 + rnd() * 14) : -4 + rnd() * 24;
     const cx = HALL_CENTER.x + Math.sin(a) * d;
     const cz = HALL_CENTER.z + Math.cos(a) * d;
     const s = 2.5 + rnd() * 5 + d * 0.03;
@@ -139,8 +140,8 @@ export function createHeaven(scene, world, { renderer, bloom = null, hideUp = []
   // El piso del salón: madera abajo, madera blanqueada con brillo perlado arriba.
   const deckMats = world.deck ? (world.deck.userData.mats || [world.deck.material]) : [];
   const deckBases = deckMats.map((m) => m.color.clone());
-  // Un halo dorado bajo el salón, como si flotara en luz.
-  const halo = new THREE.Mesh(new THREE.CircleGeometry(HALL_RADIUS + 9, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: glowTexture(), color: new THREE.Color(1.0, 0.85, 0.55), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0, fog: false }));
+  // Un halo dorado suave bajo el salón.
+  const halo = new THREE.Mesh(new THREE.CircleGeometry(ROOM_R + 6, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: glowTexture(), color: new THREE.Color(0.95, 0.8, 0.5), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0, fog: false }));
   halo.position.set(HALL_CENTER.x, -0.3, HALL_CENTER.z);
   halo.renderOrder = 2;
   scene.add(halo);
@@ -177,20 +178,20 @@ export function createHeaven(scene, world, { renderer, bloom = null, hideUp = []
     // Nubes y luz de cielo.
     sea.visible = up;
     sea.material.uniforms.uK.value = Math.min(1, kk * 5);
-    sea.material.uniforms.uTint.value.copy(tmp.set('#fbfdff').lerp(c3('#ffe6f0'), 1 - kk));
-    sea.material.uniforms.uShade.value.copy(c3('#9f8cc8').lerp(c3('#a9c9ec'), smooth(kk)));
+    sea.material.uniforms.uTint.value.copy(tmp.set('#ebf3fc').lerp(c3('#f7dce9'), 1 - kk));
+    sea.material.uniforms.uShade.value.copy(c3('#9884c4').lerp(c3('#8eb8e6'), smooth(kk)));
     clouds.visible = up;
-    clouds.material.opacity = Math.min(1, kk * 4);
+    clouds.material.opacity = Math.min(0.92, kk * 3.5);
     clouds.material.transparent = clouds.material.opacity < 0.99;
     clouds.material.depthWrite = !clouds.material.transparent;
-    clouds.material.emissive.copy(c3('#d9a7c7').lerp(c3('#d8e6f7'), smooth(kk)));
+    clouds.material.emissive.copy(c3('#c998b8').lerp(c3('#bed4ec'), smooth(kk)));
     deckMats.forEach((deckMat, i) => {
       deckMat.color.copy(deckBases[i]).lerp(c3('#fff4e4'), smooth(kk) * 0.7);
       deckMat.emissive = deckMat.emissive || new THREE.Color();
       deckMat.emissive.copy(c3('#000000')).lerp(c3('#5a4a3a'), smooth(kk) * 0.5);
     });
     halo.visible = up;
-    halo.material.opacity = Math.min(0.5, kk * 2);
+    halo.material.opacity = Math.min(0.22, kk * 1.4) * (1 - smooth(kk) * 0.6);
     sun.visible = kk > 0.15;
     sun.material.opacity = smooth(Math.max(0, (kk - 0.15) / 0.85)) * 0.9;
     rays.visible = kk > 0.25;

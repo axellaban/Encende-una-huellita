@@ -646,9 +646,12 @@ body.sheet-open .walk-hud, body.intro .walk-hud { opacity: 0; pointer-events: no
 .shelf-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 10px; margin: 10px 4px 2px; padding: 10px 12px 14px; border-radius: 12px; position: relative;
   background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0)); }
 .shelf-row::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 4px; height: 7px; border-radius: 3px; background: linear-gradient(180deg, #a8754a, #6b4428); box-shadow: 0 3px 6px rgba(0,0,0,.35); }
-.shelf-item { position: relative; display: grid; place-items: center; width: 42px; height: 42px; }
+.shelf-item { position: relative; display: grid; place-items: center; width: 42px; height: 42px; background: none; border: 0; padding: 0; cursor: pointer; transition: transform .18s var(--ease, ease); }
+.shelf-item:hover, .shelf-item:active { transform: translateY(-3px) scale(1.12); }
 .shelf-item i { font-style: normal; font-size: 28px; filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
 .shelf-item b { position: absolute; right: -6px; top: -4px; font-size: 10.5px; padding: 1px 5px; border-radius: 999px; background: #fff3dc; color: #6b3d16; font-weight: 900; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.gifts-row button.gift-chip { background: rgba(255,240,220,.08); border: 1px solid rgba(255,240,220,.14); color: inherit; border-radius: 999px; padding: 4px 10px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: transform .15s, background .15s; }
+.gifts-row button.gift-chip:hover, .gifts-row button.gift-chip:active { background: rgba(255,240,220,.16); transform: translateY(-1px); }
 
 /* Tarjeta para agregar a la pantalla de inicio. */
 .install-card { position: fixed; left: 50%; bottom: calc(var(--safe-b, 0px) + 104px); transform: translateX(-50%); z-index: 45; width: min(92vw, 420px); display: grid; grid-template-columns: 48px 1fr; gap: 6px 12px; align-items: center;
@@ -827,3 +830,27 @@ body.riding .hint, body.riding .emote-tray, body.riding .bottom { opacity: 0 !im
 body.riding dialog#floors { margin: auto 0 0; width: 100vw; max-width: 100vw; max-height: 56dvh; border-radius: 28px 28px 0 0; padding-top: 40px; }
 body.riding dialog#floors::backdrop { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 @media (min-width: 761px) and (pointer: fine) { body.riding dialog#floors { width: min(420px, 92vw); margin: auto 24px 24px auto; border-radius: 28px; max-height: 70dvh; } }
+
+/* Nicho de la ficha con repisas a los costados, lista de velas, moderación y contador nocturno */
+.sheet-photo { position: relative; border-radius: 42px 42px 14px 14px !important; box-shadow: 0 0 0 3px #c9973f, 0 8px 20px rgba(0,0,0,.38); overflow: visible !important; margin: 0 10px 0 6px; }
+.sheet-photo img { border-radius: 39px 39px 11px 11px; width: 100%; height: 100%; object-fit: cover; display: block; }
+.sheet-photo::before, .sheet-photo::after {
+  position: absolute; bottom: 10px; width: 22px; height: 22px; display: grid; place-items: center;
+  font-size: 14px; background: linear-gradient(180deg, rgba(60,34,20,.92), rgba(42,22,12,.96));
+  border-bottom: 3px solid #a8754a; border-radius: 6px; box-shadow: 0 3px 6px rgba(0,0,0,.35); pointer-events: none;
+}
+.sheet-photo::before { content: attr(data-left-gift); left: -12px; }
+.sheet-photo::after { content: attr(data-right-gift); right: -12px; }
+
+.candles-who { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; padding: 10px 12px; border-radius: 14px; background: rgba(255, 210, 130, .08); border: 1px solid rgba(255, 210, 130, .18); font-size: 13px; line-height: 1.35; }
+.candles-who .candle-streak { font-weight: 800; color: #ffd484; }
+.candles-who .candle-names { color: rgba(255, 243, 224, .9); }
+.candles-who .candle-thanked { font-style: italic; color: #ffd9a8; }
+.candles-who .thanks-btn { align-self: flex-start; margin-top: 2px; }
+
+.gb-acts { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; }
+.gb-act { background: none; border: 0; color: inherit; opacity: .45; cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 6px; }
+.gb-act:hover { opacity: .95; background: rgba(0,0,0,.08); }
+.btn.link.subtle { opacity: .65; font-size: 12.5px; margin-top: 4px; }
+.btn.link.subtle:hover { opacity: 1; }
+.splash-night { margin: -4px 0 10px; padding: 5px 14px; border-radius: 999px; background: rgba(255, 196, 107, .14); border: 1px solid rgba(255, 210, 130, .3); color: #ffe3ad; font-size: 13.5px; font-weight: 700; }

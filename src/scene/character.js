@@ -7,30 +7,56 @@ import { calaveraTexture, marigoldGeometry, marigoldMaterial } from './muertos.j
 import { glowTexture, lanternTexture } from './textures.js';
 
 const serapeCache = new Map();
-function serapeTexture(hue) {
-  const k = Math.round(hue / 20) * 20;
-  if (serapeCache.has(k)) return serapeCache.get(k);
+function serapeTexture(hue, outfit = 0) {
+  const bh = ((Math.round(hue) % 360) + 360) % 360;
+  const k = Math.round(bh / 20) * 20;
+  const key = `${k}:${outfit}`;
+  if (serapeCache.has(key)) return serapeCache.get(key);
   const c = document.createElement('canvas');
   c.width = 64;
   c.height = 128;
   const g = c.getContext('2d');
   const base = `hsl(${k} 55% 46%)`;
-  g.fillStyle = base;
-  g.fillRect(0, 0, 64, 128);
-  const bands = [[`hsl(${(k + 180) % 360} 60% 55%)`, 6], ['#fbefd9', 3], [`hsl(${(k + 40) % 360} 80% 58%)`, 5], ['#2a1b2e', 2], [`hsl(${(k + 300) % 360} 60% 52%)`, 4]];
-  let y = 54;
-  for (const [col, h] of bands) { g.fillStyle = col; g.fillRect(0, y, 64, h); y += h + 2; }
-  // Grecas en zigzag.
-  g.strokeStyle = '#fbefd9';
-  g.lineWidth = 2;
-  g.beginPath();
-  for (let x = 0; x <= 64; x += 8) g.lineTo(x, x % 16 ? 100 : 106);
-  g.stroke();
+  if (outfit === 3) {
+    // Chaleco de fiesta sobre camisa clara y faja bordada.
+    g.fillStyle = '#fbf1e2';
+    g.fillRect(0, 0, 64, 128);
+    g.fillStyle = base;
+    g.fillRect(0, 0, 22, 102);
+    g.fillRect(42, 0, 22, 102);
+    g.fillStyle = '#e0a634';
+    g.fillRect(20, 0, 3, 102);
+    g.fillRect(41, 0, 3, 102);
+    g.fillStyle = `hsl(${(k + 160) % 360} 65% 48%)`;
+    g.fillRect(0, 96, 64, 18);
+  } else {
+    g.fillStyle = base;
+    g.fillRect(0, 0, 64, 128);
+    const bands = [[`hsl(${(k + 180) % 360} 60% 55%)`, 6], ['#fbefd9', 3], [`hsl(${(k + 40) % 360} 80% 58%)`, 5], ['#2a1b2e', 2], [`hsl(${(k + 300) % 360} 60% 52%)`, 4]];
+    let y = outfit === 2 ? 36 : 54;
+    for (const [col, h] of bands) { g.fillStyle = col; g.fillRect(0, y, 64, h); y += h + 2; }
+    if (outfit === 2) {
+      // Poncho con rombos tejidos en el pecho.
+      g.fillStyle = '#fbefd9';
+      for (let x = 8; x < 64; x += 16) {
+        g.beginPath();
+        g.moveTo(x, 76); g.lineTo(x + 6, 84); g.lineTo(x, 92); g.lineTo(x - 6, 84);
+        g.closePath();
+        g.fill();
+      }
+    }
+    // Grecas en zigzag.
+    g.strokeStyle = '#fbefd9';
+    g.lineWidth = 2;
+    g.beginPath();
+    for (let x = 0; x <= 64; x += 8) g.lineTo(x, x % 16 ? 100 : 106);
+    g.stroke();
+  }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = THREE.RepeatWrapping;
-  t.repeat.set(3, 1);
-  serapeCache.set(k, t);
+  t.repeat.set(outfit === 3 ? 1 : 3, 1);
+  serapeCache.set(key, t);
   return t;
 }
 
@@ -79,9 +105,12 @@ function sharedGeo() {
 
 export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
   const G = sharedGeo();
+  const rawHue = Math.max(0, Math.round(hue));
+  const baseHue = ((rawHue % 360) + 360) % 360;
+  const outfit = rawHue >= 360 ? Math.floor(rawHue / 360) % 4 : (Math.round(baseHue / 7) % 3 === 0 ? 1 : 0);
   const skin = new THREE.MeshLambertMaterial({ color: '#fbf1e2', emissive: '#4a3434', emissiveIntensity: 0.55 });
-  const clothes = new THREE.MeshLambertMaterial({ map: serapeTexture(hue), emissive: new THREE.Color().setHSL(hue / 360, 0.5, 0.12) });
-  const pants = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((hue + 200) % 360) / 360, 0.25, 0.22), emissive: '#140c18' });
+  const clothes = new THREE.MeshLambertMaterial({ map: serapeTexture(baseHue, outfit), emissive: new THREE.Color().setHSL(baseHue / 360, 0.5, 0.12) });
+  const pants = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((baseHue + 200) % 360) / 360, 0.25, 0.22), emissive: '#140c18' });
   const shoeMat = new THREE.MeshLambertMaterial({ color: '#5a3522', emissive: '#1a0d08' });
   const g = new THREE.Group();
   const body = new THREE.Group(); // todo lo que se mueve con el paso
@@ -118,15 +147,15 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
   head.position.y = 0.72;
   torso.add(head);
   head.add(new THREE.Mesh(G.head, skin));
-  const face = new THREE.Mesh(G.face, new THREE.MeshLambertMaterial({ map: calaveraTexture(hue), emissive: '#3a2a2a', emissiveIntensity: 0.6, transparent: false }));
+  const face = new THREE.Mesh(G.face, new THREE.MeshLambertMaterial({ map: calaveraTexture(baseHue), emissive: '#3a2a2a', emissiveIntensity: 0.6, transparent: false }));
   head.add(face);
-  const hairMat = new THREE.MeshLambertMaterial({ color: ['#2a1a14', '#3b2418', '#1c1418', '#5a3a22'][Math.round(hue) % 4], emissive: '#0e0806' });
+  const hairMat = new THREE.MeshLambertMaterial({ color: ['#2a1a14', '#3b2418', '#1c1418', '#5a3a22'][Math.round(baseHue) % 4], emissive: '#0e0806' });
   head.add(new THREE.Mesh(G.hairBack, hairMat), new THREE.Mesh(G.hairTop, hairMat));
-  const useHat = hat ?? Math.round(hue) % 2 === 1;
-  // El peinado viaja escondido en el color (hue % 8: el bit 0 es el sombrero, los bits 1-2 el
+  const useHat = hat ?? Math.round(baseHue) % 2 === 1;
+  // El peinado viaja escondido en el color (baseHue % 8: el bit 0 es el sombrero, los bits 1-2 el
   // peinado), así los demás te ven igual sin tocar el servidor.
-  const hairStyle = Math.floor((Math.round(hue) % 8) / 2);
-  const ribbon = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((hue + 150) % 360) / 360, 0.75, 0.55), emissive: '#2a0a1a' });
+  const hairStyle = Math.floor((Math.round(baseHue) % 8) / 2);
+  const ribbon = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((baseHue + 150) % 360) / 360, 0.75, 0.55), emissive: '#2a0a1a' });
   if (hairStyle === 1) {
     // Trenzas que caen detrás de los hombros, con moñitos.
     for (const sd of [-1, 1]) {
@@ -160,7 +189,7 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
   }
   if (useHat) {
     const hatMat = new THREE.MeshLambertMaterial({ color: '#2a1d2e', emissive: '#120a14' });
-    const bandMat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((hue + 150) % 360) / 360, 0.75, 0.5), emissive: '#3a0a1a' });
+    const bandMat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((baseHue + 150) % 360) / 360, 0.75, 0.5), emissive: '#3a0a1a' });
     const brim = new THREE.Mesh(G.brim, hatMat);
     brim.position.y = 0.17;
     const crown = new THREE.Mesh(G.crown, hatMat);
@@ -233,14 +262,21 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
     c.lookAt(sd * 0.13 * 3, -0.015, 0.6);
     head.add(c);
   }
-  // Flecos del sarape y, en algunos, un rebozo sobre los hombros.
-  const fringe = new THREE.Mesh(G.fringe, new THREE.MeshLambertMaterial({ color: '#fbefd9', emissive: '#3a2a20' }));
-  fringe.position.y = 0.0;
-  torso.add(fringe);
-  if (Math.round(hue / 7) % 3 === 0) {
-    const reb = new THREE.Mesh(G.rebozo, new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((hue + 160) % 360) / 360, 0.55, 0.42), emissive: '#1a0d14' }));
+  // Flecos del sarape y detalles según la ropa elegida (rebozo, cuello tejido o chaleco).
+  if (outfit !== 3) {
+    const fringe = new THREE.Mesh(G.fringe, new THREE.MeshLambertMaterial({ color: '#fbefd9', emissive: '#3a2a20' }));
+    fringe.position.y = 0.0;
+    torso.add(fringe);
+  }
+  if (outfit === 1) {
+    const reb = new THREE.Mesh(G.rebozo, new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((baseHue + 160) % 360) / 360, 0.55, 0.42), emissive: '#1a0d14' }));
     reb.position.set(0, 0.45, -0.02);
     torso.add(reb);
+  } else if (outfit === 2) {
+    const collar = new THREE.Mesh(G.rebozo, new THREE.MeshLambertMaterial({ color: '#fbefd9', emissive: '#3a2a20' }));
+    collar.scale.set(0.88, 0.85, 0.88);
+    collar.position.set(0, 0.46, 0.0);
+    torso.add(collar);
   }
   let blinkT = 1 + Math.random() * 3;
   let skyT = 8 + Math.random() * 10;

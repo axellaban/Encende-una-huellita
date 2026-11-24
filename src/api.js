@@ -63,6 +63,7 @@ const remote = {
   altar: () => req('/api/altar'),
   ref: (code) => req(`/api/ref/${encodeURIComponent(code)}`),
   heartDiary: (id, pid, sid) => req(`/api/memorials/${encodeURIComponent(id)}/diary/${pid}/heart`, { method: 'POST', body: { sid } }),
+  report: (data) => req('/api/report', { method: 'POST', body: data }),
   // Herramientas de la familia (con el token de edición).
   own: (id, what, body) => req(`/api/memorials/${encodeURIComponent(id)}/${what}`, { method: 'POST', body, headers: { 'X-Edit-Token': myTokens()[id] || '' } }),
 };
@@ -72,6 +73,7 @@ function makeLocal() {
   try { db = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch { db = null; }
   if (!db) db = { seq: 0, events: [], guestbook: {}, memorials: [], counters: {} };
   db.gifts ||= {};
+  db.candlesWho ||= {};
   db.jar ||= [];
   db.done ||= {};
   db.night ||= {};
@@ -137,9 +139,10 @@ function makeLocal() {
         id: Math.random().toString(36).slice(2, 10), slot, name: data.name.trim().slice(0, 30), species: data.species,
         message: (data.message || '').slice(0, 200), birthday: data.birthday || null, passedDay: data.passedDay || null,
         photo: data.photo || null, look: cleanLook(data.look), hue: Math.floor(Math.random() * 360), candles: 1, flowers: 0, gifts: 0, lastGifts: [],
-        glow: Math.max(0, Math.min(60, Number(data.pendingGlow) || 0)), createdAt: Date.now(),
+        streak: 1, glow: Math.max(0, Math.min(60, Number(data.pendingGlow) || 0)), createdAt: Date.now(),
       };
       db.memorials.push(m);
+      (db.candlesWho[m.id] ||= []).push({ who: data.visitor || 'Su familia', country: null, at: m.createdAt });
       ev('created', m, data.visitor);
       persist();
       setToken(m.id, `local-${m.id}`);
@@ -148,6 +151,7 @@ function makeLocal() {
     async remove(id) {
       db.memorials = db.memorials.filter((m) => m.id !== id);
       delete db.guestbook[id];
+      delete db.candlesWho[id];
       persist();
       setToken(id, null);
     },
@@ -156,12 +160,19 @@ function makeLocal() {
       if (!m) throw new Error('No encontramos esa huellita.');
       const dh = db.dh || {};
       const diary = ((db.diary || {})[id] || []).slice().reverse().map((p) => ({ ...p, hearts: dh[`${id}:${p.id}`] || 0 }));
-      return { ...pub(m), guestbook: (db.guestbook[id] || []).slice().reverse(), giftList: (db.gifts[id] || []).slice().reverse(), diary };
+      return {
+        ...pub(m),
+        guestbook: (db.guestbook[id] || []).slice().reverse(),
+        giftList: (db.gifts[id] || []).slice().reverse(),
+        candleList: (db.candlesWho[id] || []).slice().reverse(),
+        diary,
+      };
     },
     async candle(id, who) {
       if (!onceToday('c', id)) { persist(); return { memorial: pub(find(id)), already: true }; }
       const first = (find(id).candles || 0) === 0;
       bump(id, 'candles');
+      (db.candlesWho[id] ||= []).push({ who: who.visitor || 'Alguien', country: null, at: Date.now() });
       const glow = grant(id, 'candle', who, first ? GLOW.firstLight : 0);
       db.night[day()] = (db.night[day()] || 0) + 1;
       const m = find(id);
@@ -184,7 +195,7 @@ function makeLocal() {
       (db.gifts[id] ||= []).push({ gift, who: who.visitor, at: Date.now() });
       const own = db.memorials.find((m) => m.id === id);
       const holder = own || db.counters[id];
-      holder.lastGifts = [gift.split(" ")[0], ...(holder.lastGifts || [])].slice(0, 3);
+      holder.lastGifts = [gift.split(" ")[0], ...(holder.lastGifts || [])].slice(0, 5);
       holder.giftCounts = { ...(holder.giftCounts || {}), [gift.split(" ")[0]]: ((holder.giftCounts || {})[gift.split(" ")[0]] || 0) + 1 };
       const glow = grant(id, 'gift', who);
       const m = find(id);
@@ -202,6 +213,7 @@ function makeLocal() {
     },
     async sign(id, entry) {
       const m = find(id);
+      if (m?.gbClosed) throw new Error('La familia cerró el libro de visitas de esta huellita.');
       const e = { id: Math.random().toString(36).slice(2), name: entry.name || entry.visitor, text: entry.text.slice(0, 280), at: Date.now() };
       (db.guestbook[id] ||= []).push(e);
       const glow = onceToday('w', id) ? grant(id, 'words', entry) : { gained: 0, to: null };
@@ -209,6 +221,7 @@ function makeLocal() {
       persist();
       return { entry: e, glow };
     },
+    async report() { return { ok: true }; },
     async night() { return { candles: db.night[day()] || 0, countries: 1 }; },
     async comfort() { db.comfort ||= []; return { notes: db.comfort.slice().reverse().slice(0, 60), count: db.comfort.length }; },
     async comfortAdd(text, visitor) {
@@ -253,9 +266,19 @@ function makeLocal() {
       const m = db.memorials.find((x) => x.id === id);
       if (!m) throw new Error('Sólo la familia de esta huellita puede hacer esto.');
       if (what === 'edit') {
-        for (const k of ['name', 'message', 'birthday', 'passedDay', 'bg']) if (body[k] !== undefined) m[k] = body[k];
+        for (const k of ['name', 'message', 'birthday', 'passedDay', 'bg', 'gbClosed']) if (body[k] !== undefined) m[k] = body[k];
         if (body.look !== undefined) m.look = cleanLook(body.look);
         if (body.photo) m.photo = body.photo;
+      }
+      if (what === 'del-gb') {
+        db.guestbook[id] = (db.guestbook[id] || []).filter((e) => e.id !== body.entryId);
+      }
+      if (what === 'thanks') {
+        if (!onceToday('th', id)) return { memorial: pub(m), already: true };
+        m.thankedAt = Date.now();
+        ev('thanks', m, 'La familia');
+        persist();
+        return { memorial: pub(m) };
       }
       if (what === 'photos') {
         m.extraPhotos ||= [];

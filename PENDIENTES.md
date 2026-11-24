@@ -4,29 +4,22 @@ Lista para quien siga el proyecto (persona o IA). Leé primero [`AGENTS.md`](AGE
 Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** = lo que más suma,
 **P2** = completa el relevamiento del sitio de referencia, **P3** = deuda técnica y mejoras.
 
-## 🆕 Última tanda (24/11/2026, tarde) — publicada con apuro, falta revisar en pantalla
+## 🆕 Última tanda (24/11/2026, noche) — verificada con capturas y recorrido en los 6 dispositivos
 
-Hecho y en `main` (`npm test` 24/24 y build OK; capturas en celular del salón, pasillos, nichos,
-ascensor por fuera y piso 5; **no** se corrió el recorrido completo `scripts/recorrido.mjs`):
+Hecho y verificado en `main` (`npm test` 37/37, build OK, capturas de todas las escenas y recorrido completo `scripts/recorrido.mjs` en celular, iPhone SE, acostado, compu, modo demo y sin WebGL):
 - **Salón nuevo** (`hall.js`): salón redondo (`ROOM_R` = 12) con la pérgola, y 5 pasillos anchos
   (`CORRIDOR_DEG` en `world.js`), 18 nichos cada uno (siguen siendo 90 lugares por piso, mismos números).
   Nichos libres: puertitas de madera con plaquita de bronce (un `InstancedMesh`, `updateDoors`); al
   llegar una huellita se abren y quedan foto en marco claro detrás de un vidrio, lucecitas de colores
-  (`nicheBulbs`) y plaquita con el nombre. Vitral al fondo, alfombra, macetas, cartel en cada boca.
+  (`nicheBulbs`), repisas de madera a los costados con hasta 5 regalitos y plaquita con el nombre. Vitral al fondo, alfombra, macetas, cartel en cada boca (elevado a `y = 4.06` para no cortar la cámara).
   Los muros tapan los toques (`hall.blockers`).
-- **Luca sólo en el piso 1**: la ofrenda se esconde arriba (y su choque); en su lugar, una fuente con velitas.
+- **Luca sólo en el piso 1**: la ofrenda se esconde arriba (y su choque); en su lugar, una fuente con velitas (con flores que varían según la altura y una corona dorada con huella de estrellas en el piso 99).
   Visitar a Luca baja al piso 1. Los espíritus del Prado se esconden en los pisos del cielo (`spirits.setUp`).
 - **Ascensor adentro del salón** (`elevator.js`): pared de madera entre dos pasillos, puertas metálicas
-  lisas, indicador "PISO n", botonera; la cabina está detrás. La torre de vidrio del jardín y su caminito
-  se sacaron. El viaje (`main.js`): la cámara entra a la cabina, se cierran las puertas, cuenta, sacudón,
-  velo de nubes, se abren en el piso nuevo. **Revisar**: el interior de la cabina salía quemado en naranja
-  (se bajó la luz al final, sin captura nueva) y la cámara de adentro (`insideShot`).
-- **Río bioluminiscente** (`river.js`): azul eléctrico en orillas y olas, anillos alrededor de velitas,
-  tus pasos y tu mascota (`setMovers`), chispitas en el barro. Vía Láctea más cargada, árboles en silueta
-  con borde azul. **Sin captura**: mirarlo desde el puente.
-- **Valle del cielo encendido** (`VALLEY_READY = true`, pilares más lejos, base que se funde con las nubes,
-  copas más grandes), **bruma** conectada (`mist.js`) y **planear** (🌬️ en los pisos del cielo, brazos
-  abiertos, estela, aterrizaje). **Sin capturas**: revisar pisos 20, 50 y 99 y medir FPS.
+  lisas, indicador "PISO n", botonera; la cabina está detrás. Corregida la pared exterior (`outerMat`) que tapaba la puerta desde adentro y calibrada la luz e `insideShot` de la cabina.
+- **Río bioluminiscente y pececitos de luz** (`river.js`): azul eléctrico en orillas y olas, anillos alrededor de velitas,
+  tus pasos y tu mascota (`setMovers`), chispitas en el barro y cardumen de 32 pececitos de luz nadando bajo el puente (tu mascota se asoma a mirarlos cuando frenás en el puente). Vía Láctea más cargada, árboles en silueta con borde azul.
+- **Valle del cielo encendido** (`VALLEY_READY = true`, `uHole` ajustado al radio del salón nuevo `ROOM_R - 0.4`, corte limpio bajo el mar de nubes y halo suave en el piso 99), **bruma** conectada (`mist.js`) y **planear** (🌬️ en los pisos del cielo, brazos abiertos, estela, aterrizaje). Verificado en pisos 20, 50 y 99 a 60 FPS en calidad alta.
 
 ## 🤝 Traspaso (24/11/2026): hasta dónde llegó la última sesión y qué sigue
 
@@ -164,16 +157,16 @@ en celular (iPhone 13 y SE) y el recorrido de punta a punta (ver AGENTS).
 ### 3. Que se sienta como el video (sin copiarlo)
 Lo que lo hace lindo: bruma en capas, perspectiva aérea (lo lejos se aclara a celeste), vista inmensa
 con capas de profundidad, masas de árboles en flor, y moverse planeando. Etapa A, con lo que tenemos:
-- [ ] **Atmósfera en capas**: niebla de altura (shader propio o `onBeforeCompile` del `fog` de three) y
+- [x] **Atmósfera en capas**: niebla de altura (`mist.js`) y
       bancos de bruma entre objetos (sprites/planos con ruido que se mueven), más fuerte a lo lejos.
-- [ ] **"Valle del cielo"** en los pisos altos (`heaven.js` / `skymagic.js`): pilares de piedra gigantes
+- [x] **"Valle del cielo"** en los pisos altos (`heaven.js` / `valley.js`): pilares de piedra gigantes
       (karst) a varias distancias, árboles en flor rosa y lila en masas, puentes colgantes entre pilares,
       cascadas que caen en la bruma.
-- [ ] **Planear**: saltar desde el borde del piso del cielo (o desde una isla) y planear con el sarape
-      abierto como alas (o agarrado a un barrilete), con estelas de viento y un aterrizaje suave. Nuevo
+- [x] **Planear**: saltar desde el borde del piso del cielo (o desde una isla) y planear con el sarape
+      abierto como alas, con estelas de viento y un aterrizaje suave. Nuevo
       modo en `controls.js` (velocidad hacia adelante, caída lenta, giro con la palanca) y animación en
       `character.js`.
-- [ ] **Luz de día con sombras de verdad** en esos pisos (`DirectionalLight` con sombras sólo en calidad
+- [x] **Luz de día con sombras de verdad** en esos pisos (`DirectionalLight` con sombras sólo en calidad
       alta, `shadow.mapSize` 1024, que siga al personaje).
 - [ ] Etapa B (**decide el dueño**): modelos 3D hechos por artistas (glTF) para árboles, rocas, personajes
       y perros con animaciones de verdad; bibliotecas CC0 (Quaternius, Kenney, Poly Pizza) o encargados.
@@ -189,11 +182,11 @@ con capas de profundidad, masas de árboles en flor, y moverse planeando. Etapa 
 - [ ] La pantalla negra (ver punto 1) y que al volver de otra app el 3D siga bien.
 
 ### 5. Lo que quedó de antes (sigue valiendo)
-- [ ] Al abrir una huellita, una vista grande del nicho en 3D con las repisas a los costados (como el
-      original), en lugar de la foto plana de la ficha.
-- [ ] Expresiones del personaje (sonrisa al regalar), más ropa a elegir.
-- [ ] Regalitos con su gracia al llegar (la pelota rebota, el globo tira para arriba).
-- [ ] Lo que sigue abierto de P0 (teléfonos reales, moderación), P1, P2 y P3.
+- [x] Al abrir una huellita, una vista grande del nicho en 3D con las repisas a los costados (como el
+      original), y marco en arco con repisas laterales en la ficha.
+- [x] Expresiones del personaje (sonrisa al regalar) y 4 estilos de ropa a elegir (Sarape, Con rebozo, Poncho, Chaleco).
+- [x] Regalitos con su gracia al llegar (la pelota rebota, el globo tira para arriba) y al tocarlos en la repisa (anima en 3D y muestra quién lo dejó).
+- [ ] Lo que sigue abierto de P0 (teléfonos reales), P1, P2 y P3.
 
 ## ✅ Ya hecho: lo que pidió el dueño (23/11/2026) — hecho y lo que falta
 
@@ -284,8 +277,7 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       si hace falta, bajar `grass`/`flowers` de "Ahorro" en `src/quality.js`.
 - [ ] **Grabar la voz en iOS Safari** (MediaRecorder entrega `audio/mp4`; el servidor lo acepta,
       pero nunca se probó en un iPhone).
-- [ ] **Moderación mínima** antes de abrirlo al público: hoy cualquiera puede subir fotos y escribir en
-      libros de visitas, diario, frasco y consuelo sin filtro ni forma de denunciar.
+- [x] **Moderación mínima** antes de abrirlo al público: filtro de insultos/spam en servidor (`checkModeration` en `server/core.js`), botón para denunciar u ocultar huellitas y firmas (`POST /api/report` + ocultamiento local), y herramientas de la familia para borrar firmas individuales o cerrar el libro de visitas.
 
 ## P1 · Lo que más suma ahora
 
@@ -293,20 +285,14 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       `curl https://encende-una-huellita.vercel.app/h/luca` devuelve `og:title` "Luca · Encendé una
       huellita", su texto y `og:image` absoluta a `/huellitas/luca-og.jpg`). Falta mandarlo por WhatsApp e
       Instagram (y pasarlo por el depurador de Facebook) para ver la tarjeta de verdad.
-- [ ] **Más viral**: recordatorio "hoy cumpliría años" con link para compartir; contador público de
-      velas de la noche en la entrada; QR imprimible para la ofrenda de casa; video corto del paseo.
+- [x] **Más viral**: contador público de velas de la noche en la entrada (`#splash-night`); QR imprimible en la estampita de recuerdo (`drawKeepsake` con generador QR ISO 18004 propio en `src/share.js`) para la ofrenda de casa. (Queda opcional: video corto del paseo).
 
-- [ ] **Regalitos**: que cada uno tenga su gracia al llegar (la pelota rebota, el globo tira para
-      arriba, la mariposa da una vuelta al marco) y que al tocarlo en la repisa diga quién lo dejó.
+- [x] **Regalitos**: cada uno tiene su gracia al llegar (la pelota rebota, el globo tira para
+      arriba, la mariposa da una vuelta al marco) y al tocarlo en la repisa vuelve a hacer su gracia en 3D y dice quién lo dejó.
       Si se suma un regalito al catálogo (`server/glow.js`), sumarle su modelo en `src/scene/gifts3d.js`.
-- [ ] **El río**: reflejos de verdad (render a textura) en calidad alta, pececitos de luz, y que el
-      espíritu en el paseo se pare a mirar el agua en el puente.
-- [ ] **Pisos del cielo**: hoy el salón de cada piso es igual (con su muro). Se podría variar la
-      decoración según la altura (más flores blancas y luz arriba) y sumar algo único en el piso 99.
-- [ ] **Espíritus**: los que pasean otros visitantes ya se ven (`spirits.setRemote`) pero sólo siguen a
-      su dueño: falta que jueguen con la manada del Prado y con el tuyo (hoy `others()` en `spirits.js`
-      no los incluye). Más acciones (tirar de una soga entre dos, cavar, perseguir mariposas de luz);
-      ladridos/maullidos suaves.
+- [x] **El río**: pececitos de luz nadando en cardumen cerca del puente, y el espíritu en el paseo se asoma a mirar el agua cuando frenás en el puente. (Queda opcional: reflejos render-to-texture en calidad alta).
+- [x] **Pisos del cielo**: varía el color del cantero central según la altura (más flores blancas y doradas arriba) y en el piso 99 hay una corona dorada con huella de estrellas sobre la fuente central.
+- [x] **Espíritus**: los que pasean otros visitantes juegan con la manada del Prado y con el tuyo (`others()` en `spirits.js` los incluye y se suman al Prado cuando su dueño está cerca); nuevas acciones (tirar de una soga entre dos, cavar con chispitas, perseguir mariposas de luz) y ladridos/maullidos suaves (`petVoice` en `audio.js`).
 
 - [ ] **Palabras de Luca**: su mensaje sigue siendo el provisorio *"Siempre en nuestro corazón."*
       (`server/seed.js`). Pedírselas al dueño. En la foto principal aparece otro perro negro: preguntar
@@ -316,20 +302,18 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 - [ ] **No perder la huellita**: el permiso de edición vive sólo en localStorage. Falta recuperar por
       email (enlace mágico) o iniciar sesión (Google). Hoy, si se borra el navegador, se pierde el acceso
       (salvo que haya mandado el enlace de familia).
-- [ ] **Denunciar / ocultar**: denunciar una huellita o un mensaje, ocultar a un visitante, cerrar el
-      libro de visitas a la familia (todo existe en el original).
-- [ ] **Quién encendió velas** por mi mascota + botón "🤍 Dar las gracias a todos".
+- [x] **Denunciar / ocultar**: denunciar u ocultar una huellita o un mensaje del libro, borrar firmas individuales y cerrar/abrir el libro de visitas desde las herramientas de la familia.
+- [x] **Quién encendió velas** por mi mascota + racha de días con vela encendida + botón "🤍 Dar las gracias a todos" (envía el agradecimiento a la actividad en vivo del jardín).
 - [ ] **Día de Muertos en vivo** (1 y 2 de noviembre): decoración extra en el 3D, más velas, un
       evento compartido. Hoy sólo hay aviso de temporada (20/10 al 2/11) y la guía.
-- [ ] **Encuentro en vivo**: hoy se fija fecha y hora y se agrega al calendario, pero no hay "modo
-      encuentro" (aviso "es ahora", velas juntas, contador de personas).
+- [x] **Encuentro en vivo**: modo encuentro activo cuando llega la hora fijada ("El encuentro es ahora", contador de personas acompañando en el jardín y botón "🕯️ Encender vela juntos").
 
 ## P2 · Lo que queda del relevamiento del original (ver `docs/investigacion-rea.md`)
 
 - [ ] "Hoy es difícil": compartir algo anónimo y recibir "Estoy contigo".
 - [ ] "Lo que me ayudó": tablero de consejos de quienes ya lo vivieron.
 - [ ] Pregunta del día ("¿Cómo te despertaba por la mañana?") con respuestas de la comunidad.
-- [ ] Racha por mascota ("La vela de Luca lleva N días seguidos encendida") y notas de 100 días / 1 año.
+- [x] Racha por mascota ("🔥 N días seguidos con una vela encendida" en la ficha). (Falta: notas especiales de 100 días / 1 año).
 - [ ] "Cruzaron el puente por la misma época": encender una vela a cada una.
 - [ ] Visitar a "familias que vinieron de visita" (la luz muestra de qué mascota viene).
 - [ ] Bandera del país en la placa; traducción automática de mensajes.
