@@ -92,7 +92,12 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
   - `src/floors.js`: nombres propios de los 99 pisos y de los 10 pasillos (no usar los del original).
   - Muro: cada lugar ocupado es una ventanita con postigos (un solo `InstancedMesh`, `updateShutters`).
   - `heaven.js`: los pisos hacia el cielo (mar de nubes, nubes de algodón, sol, rayos). `elevator.js`:
-    la torre con la cabina que sube (`setFloor(n)` mueve la cabina y el indicador).
+    la torre: planta baja con el hueco de la puerta y la cabina con interior (descansa en la planta baja
+    de cada piso; `setFloor(n)` sólo cambia el indicador). La escena del viaje está en `main.js`
+    (`callElevator` → camina a la puerta y entra; `rideTo(f)` → sube o baja de verdad por la torre con
+    la toma `elevator.shot()`, el velo de nubes `#lift-veil` tapa el cambio de piso; `leaveLift` → sale
+    caminando). Durante la escena `controls.held` deja que la escena mueva al personaje y
+    `body.riding` esconde la interfaz. `H.goFloor(n)` sigue cambiando de piso al instante.
   - `character.js`: el personaje de cada visitante (vos y `avatars.js`): caminar, `wave()`, `throw()`, `pet()`.
   - **Espíritus**: `petRig.js` arma un `SkinnedMesh` por mascota (una sola malla, colores por vértice,
     brillo fresnel) y un animador que mezcla marchas (paso/trote/galope/saltitos) con acciones

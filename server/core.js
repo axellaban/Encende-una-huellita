@@ -250,12 +250,6 @@ export async function handleApi(req, store) {
     }
   }
 
-  m = path.match(/^\/api\/activity\/(\d{1,12})$/);
-  if (m && method === 'GET') {
-    const [ev, here] = await Promise.all([store.events(Number(m[1])), store.here()]);
-    return ok({ ...ev, here });
-  }
-
   if (path === '/api/now' && method === 'POST') {
     const body = await req.json();
     const info = {

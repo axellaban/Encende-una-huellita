@@ -4,6 +4,41 @@ Lista para quien siga el proyecto (persona o IA). Leé primero [`AGENTS.md`](AGE
 Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** = lo que más suma,
 **P2** = completa el relevamiento del sitio de referencia, **P3** = deuda técnica y mejoras.
 
+## 🤝 Traspaso (24/11/2026): hasta dónde llegó la última sesión y qué sigue
+
+Todo lo de abajo ya está en `main` (y en la rama que publica Vercel, ver AGENTS).
+
+**Hecho y probado** (recorrido `scripts/recorrido.mjs`: celular 33/33 con ascensor; iPhone SE, acostado,
+compu, modo demo y sin WebGL pasaron antes del ascensor, y SE también con el ascensor):
+- Interfaz "modo juego" (palanca invisible, un botón de acción, hoja de menú, se desvanece al caminar).
+- Arreglo del parpadeo en negro (el lienzo cambia de tamaño sólo al empezar el cuadro). Publicado.
+- Arreglo del 3D congelado al saltar lejos paseando a tu mascota (NaN en `spirits.js`).
+- Ascensor de verdad: caminás, entrás, botonera, la cabina sube por la torre de vidrio, salís caminando.
+- Quitado `GET /api/activity` (el test ahora usa `POST /api/now`).
+
+**Hecho, sin probar en pantalla** (no dan errores de JS; mirarlos con capturas):
+- Sonido de puertas y motor del ascensor (`liftDoors`, `liftHum` en `audio.js`).
+- Sonrisa del personaje al regalar, abrazar o saludar (`character.js`: ojitos ∩, sonrisa, cachetes).
+- Gracia de cada regalito al llegar a la repisa (`grace()` en `gifts3d.js`: rebota, flota, da una vuelta…).
+- Sombras de día en los pisos del cielo, sólo calidad alta (`sunShadows` en `main.js`). Medir FPS.
+
+**Empezado, falta terminar** (en el código pero apagado o sin conectar):
+1. **Valle del cielo** (`src/scene/valley.js`, conectado en `heaven.js`, apagado con `VALLEY_READY = false`).
+   Pilares, árboles en flor, puentes y cascadas ya se generan. Problemas vistos: el pilar cercano se ve
+   como un bloque gris lavado con corte duro sobre el mar de nubes y los árboles no se ven. Falta: más
+   contraste y color en la piedra (menos bruma de cerca), que la base se funda con las nubes (no corte),
+   pilares más lejos del salón (> 90 m), copas más grandes, y capturas en pisos 20, 50 y 99.
+2. **Bruma en capas** (`src/scene/mist.js`, sin conectar). Se conecta con
+   `mist = createMist(world.ground, { tier, reduced })` y `mist?.update(world.fog)` en el ciclo. La primera
+   versión lavaba de violeta la entrada; ya está más sutil (sobre todo sobre el río) pero sin probar.
+3. **Planear con el sarape** (`controls.glide()`, `gliding`, `onLand` en `controls.js`; ya mueve al personaje
+   por el aire). Falta: ofrecerlo en `computeAction()` de `main.js` en los pisos del cielo (🌬️ "Planear"),
+   la pose de brazos abiertos en `character.js` (pasarle `gliding` en `me.update`), estela de viento,
+   un "puf" al aterrizar y probarlo.
+
+**Lo que sigue del plan** (abajo, en orden): verificar en teléfonos reales; Upstash y rama de producción
+(sólo el dueño, en Vercel); moderación; el resto de P1/P2/P3.
+
 ## 🧭 Plan: lo que falta para mejorarlo todo (en orden)
 
 Escrito el 23/11/2026 a la noche, después de las capturas del dueño en su iPhone y del video de
@@ -113,8 +148,13 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       abren (`updateShutters` en `hall.js`); la repisa de la ficha muestra cada regalito con su
       cantidad (`giftCounts`). Falta: al abrir la ficha, una vista grande del nicho en 3D con las
       repisas a los costados (como la captura del original) en lugar de la foto plana.
-- [x] **Botonera y cabina del ascensor**: botones de bronce con nombre del piso; al viajar, ojo de
-      buey con el cielo que pasa y la plaquita del piso.
+- [x] **Botonera y cabina del ascensor**: botones de bronce con nombre del piso.
+- [x] **Entrar y salir del ascensor como uno de verdad** (pedido del dueño, 24/11): caminás hasta la
+      puerta, campanita, se abren las puertas, entrás a la cabina (con interior), te das vuelta y elegís el
+      piso (la botonera es una hoja baja para que te veas adentro). La cabina sube por la torre de vidrio
+      con vos adentro (o baja hacia el piso nuevo), velo de nubes, frena, campanita y salís caminando.
+      Con sonido propio de las puertas y del motor (`liftDoors`, `liftHum` en `audio.js`). Falta: verlo
+      en un teléfono real (los tiempos: ~9 s de punta a punta).
 - [x] **Farolitos** (`paperLantern` en `lanterns.js`): papel calado, aros, llama que titila,
       guirnaldas sobre el camino, colgando de la pérgola del salón (uno cada dos postes, `hall.js`),
       en el ahuehuete y más en el cielo.
@@ -221,8 +261,7 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       versiones) y la app en otro, que creció a ≈118 KB comprimido (326 KB sin comprimir, 23/11/2026 a la noche;
       antes ≈76 KB). Falta cargar diferido lo que no hace falta al entrar: guía, compartir, voz, y del 3D
       lo que está lejos de la entrada (pisos del cielo, `skymagic.js`, ascensor, regalitos).
-- [ ] `GET /api/activity/:since` ya no lo usa la app (todo va por `POST /api/now` con `since`); queda por
-      compatibilidad y tiene test. Se puede quitar junto con `api.activity` en `src/api.js`.
+- [x] `GET /api/activity/:since` quitado (la app usa `POST /api/now` con `since`; el test ahora prueba eso).
 - [x] **Tests de frontend**: `scripts/recorrido.mjs` recorre todo en 6 dispositivos (ver AGENTS). Falta
       correrlo en CI (necesita Chromium; con swiftshader tarda unos 25 minutos en total).
 - [x] Encabezados de seguridad (CSP, Permissions-Policy) en `vercel.json` y en el servidor local

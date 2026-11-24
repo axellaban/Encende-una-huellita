@@ -67,8 +67,11 @@ ofrenda, encendé una vela, dejá flores y firmá su libro de visitas.
 - Pueblito de colores con las ventanas encendidas en las colinas, cielo violeta con aurora de fiesta,
   pétalos que flotan, alebrijes de colores neón y visitantes con cara de calaverita, corona de flores o sombrero.
 - Música: guitarra de cuerdas punteadas en vals (composición propia generada en el navegador).
-- **Ascensor al cielo** junto al camino: una torre de vidrio y bronce con cúpula de talavera y una cabina
-  dorada que se ve subir; botonera con los **99 pisos**, todos abiertos. Cuanto más alto, más luz: el
+- **Ascensor al cielo** junto al camino: una torre de vidrio y bronce con cúpula de talavera. Como uno de
+  verdad: tu personaje camina hasta la puerta, suena la campanita, se abren las puertas y entra a la
+  cabina (madera, pasamanos de bronce, espejo, lámpara); se da vuelta y aparece la botonera con los
+  **99 pisos**, todos abiertos. Se cierran las puertas y la cabina sube por la torre de vidrio con vos
+  adentro (o baja hacia el piso nuevo), se cruzan unas nubes, frena, campanita y salís caminando. Cuanto más alto, más luz: el
   jardín desaparece, el salón flota sobre un mar de nubes, el cielo pasa del atardecer violeta al
   amanecer rosado y, arriba de todo, al celeste con sol, nubes de algodón y rayos de luz. En los pisos de
   arriba se camina sobre las nubes y sólo se ve a quienes están en tu mismo piso.
@@ -256,7 +259,6 @@ lab/gifts.html          Los 36 regalitos en 3D juntos (sólo en desarrollo)
 | `POST /api/memorials/:id/flower` | Deja una flor (una por día, igual que el regalito y el abrazo) |
 | `POST /api/memorials/:id/guestbook` | Firma el libro (`text`, `name`) |
 | `GET /api/photos/:id` | La foto (cacheada en el CDN) |
-| `GET /api/activity/:since` | Eventos nuevos + cuántos hay ahora (la app ya usa `POST /api/now`; queda por compatibilidad) |
 | `POST /api/memorials/:id/gift` | Deja un regalito (`gift` del catálogo) |
 | `POST /api/memorials/:id/hug` | Abrazo en silencio |
 | `GET /h/:id` | La app con la vista previa de esa huellita (`?de=` quién invita) |

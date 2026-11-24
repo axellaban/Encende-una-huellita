@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { glowTexture, lightConeTexture } from './textures.js';
 import { HALL_CENTER, HALL_RADIUS, uTime } from './world.js';
 import { createSkyMagic } from './skymagic.js';
+import { createValley } from './valley.js';
 
 export const FLOORS = 99;
 
@@ -104,12 +105,14 @@ function puffyClouds(rnd) {
   return mesh;
 }
 
-export function createHeaven(scene, world, { renderer, bloom = null, hideUp = [] } = {}) {
+export function createHeaven(scene, world, { renderer, bloom = null, hideUp = [], tier = null } = {}) {
   let seed = 31;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const sea = cloudSea();
   // Cometas, estrellas fugaces, nubes gigantes, islas y pájaros de luz (en todos los pisos).
   const magic = createSkyMagic(scene, { uTime, rnd });
+  // El valle del cielo: pilares de piedra con árboles en flor, puentes y cascadas (valley.js).
+  const valley = createValley(scene, { tier });
   const clouds = puffyClouds(rnd);
   scene.add(sea, clouds);
 
@@ -193,6 +196,7 @@ export function createHeaven(scene, world, { renderer, bloom = null, hideUp = []
     rays.visible = kk > 0.25;
     rayMat.opacity = smooth(Math.max(0, (kk - 0.25) / 0.75)) * 0.16;
     magic.setK(kk);
+    valley.setK(kk, world.fog.color);
   }
   apply();
 
@@ -210,6 +214,7 @@ export function createHeaven(scene, world, { renderer, bloom = null, hideUp = []
         apply();
       }
       magic.update(dt, t);
+      valley.update(t);
       if (clouds.visible) clouds.position.x = Math.sin(t * 0.03) * 4;
       if (rays.visible) rays.rotation.y = t * 0.02;
     },

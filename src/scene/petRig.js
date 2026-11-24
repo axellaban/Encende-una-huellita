@@ -259,6 +259,7 @@ export function createPet(look) {
   const geo = mergeGeometries(parts);
   const mat = spiritMaterial(look.rim);
   const mesh = new THREE.SkinnedMesh(geo, mat);
+  mesh.castShadow = true; // sólo cuenta en los pisos del cielo con calidad alta
   mesh.add(root);
   mesh.bind(new THREE.Skeleton(bones));
   mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.3 * s, 0), 1.1 * s);

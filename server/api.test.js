@@ -114,9 +114,10 @@ for (const name of ['local', 'vercel']) {
     r = await post('/api/memorials', { name: 'Otro', species: 'perro', slot: 0 });
     assert.equal((await r.json()).memorial.slot, 1);
 
-    const act = await (await call('/api/activity/0')).json();
+    // Las novedades llegan con el latido (POST /api/now con `since`).
+    const act = await (await post('/api/now', { sid: 'actividad', since: 0 })).json();
     assert.deepEqual(act.events.map((e) => e.type).slice(0, 4), ['created', 'candle', 'flower', 'guestbook']);
-    const later = await (await call(`/api/activity/${act.seq}`)).json();
+    const later = await (await post('/api/now', { sid: 'actividad', since: act.seq })).json();
     assert.equal(later.events.length, 0);
 
     r = await call(`/api/memorials/${memorial.id}`, { method: 'DELETE', headers: { 'X-Edit-Token': 'nope' } });

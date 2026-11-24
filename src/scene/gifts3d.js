@@ -709,6 +709,54 @@ export function createOfferFx(scene) {
     });
   }
 
+  // La gracia de cada regalito al llegar: la pelota rebota, el globo tira para arriba, la mariposa da
+  // una vuelta, la lucecita gira; los demás dan un saltito con meneo. Después se queda en la repisa.
+  const BOUNCY = new Set(['🎾', '⚽', '🧶', '🥏', '🪀', '🦆']);
+  function grace(obj, ch, at, scale, land) {
+    const e = [...ch][0];
+    const kind = BOUNCY.has(e) ? 'bounce' : e === '🎈' || e === '🪁' ? 'float' : e === '🦋' || e === '🪶' ? 'loop' : e === '🌙' || e === '⭐' || e === '👑' ? 'spin' : 'hop';
+    obj.position.copy(at);
+    obj.rotation.set(0, Math.random() * Math.PI * 2, 0);
+    obj.scale.setScalar(scale);
+    scene.add(obj);
+    const y0 = at.y;
+    const r0 = obj.rotation.y;
+    const dur = { bounce: 1.3, float: 1.8, loop: 1.9, spin: 1.2, hop: 0.9 }[kind];
+    live.push({
+      t: 0, dur, obj,
+      step(k) {
+        if (kind === 'bounce') {
+          // Tres rebotes que se achican, con un poco de aplastarse al tocar.
+          const b = Math.abs(Math.sin(k * Math.PI * 3)) * (1 - k) * (1 - k);
+          obj.position.y = y0 + b * scale * 1.3;
+          const sq = b < 0.05 ? 0.18 * (1 - k) : 0;
+          obj.scale.set(scale * (1 + sq), scale * (1 - sq), scale * (1 + sq));
+          obj.rotation.y = r0 + k * 6;
+        } else if (kind === 'float') {
+          // Tira para arriba como queriendo volar, se mece y vuelve a su lugar.
+          const up = Math.sin(Math.min(1, k * 1.4) * Math.PI) * scale * 1.6;
+          obj.position.y = y0 + Math.max(0, up);
+          obj.rotation.z = Math.sin(k * 14) * 0.22 * (1 - k);
+        } else if (kind === 'loop') {
+          // Una vuelta en el aire alrededor del lugar, aleteando.
+          const a = k * Math.PI * 2;
+          const rr = Math.sin(k * Math.PI) * scale * 0.9;
+          obj.position.set(at.x + Math.sin(a) * rr, y0 + Math.sin(k * Math.PI) * scale * 0.9, at.z + (1 - Math.cos(a)) * rr * 0.4);
+          obj.rotation.y = r0 + a;
+        } else if (kind === 'spin') {
+          obj.position.y = y0 + Math.sin(k * Math.PI) * scale * 0.5;
+          obj.rotation.y = r0 + (1 - (1 - k) * (1 - k)) * Math.PI * 4;
+          if (Math.random() < 0.35) spark(obj.position, tmp.set(rnd(0.3), rnd(0.3) + 0.2, rnd(0.3)), [2.0, 1.6, 0.8], 0.8, 2.5, -0.2);
+        } else {
+          // Un saltito y un meneo de contento.
+          obj.position.y = y0 + Math.sin(Math.min(1, k * 1.8) * Math.PI) * scale * 0.45;
+          obj.rotation.z = Math.sin(k * 20) * 0.18 * (1 - k);
+        }
+      },
+      done() { scene.remove(obj); land?.(); },
+    });
+  }
+
   // Pétalos que caen dando vueltas (con gravedad), en un solo dibujo.
   const PET = 90;
   const petalGeo = new THREE.CircleGeometry(0.045, 5);
@@ -776,12 +824,17 @@ export function createOfferFx(scene) {
         land: () => { petalBurst(to, 45); ring(to, [1.8, 0.9, 0.25], 0.5); land?.(); },
       });
     },
-    // El regalito sale de tu mano, vuela dando vueltas y se apoya en la repisa.
+    // El regalito sale de tu mano, vuela dando vueltas, se apoya en la repisa y hace su gracia.
     gift(ch, from, to, scale, land) {
       const g = giftMesh(ch);
+      const kept = g.clone();
       fly(g, from, to, {
         dur: 1.25, height: 1.1, spin: 7, grow: [0.6, 1], scale, trail: [1.6, 1.3, 0.7],
-        land: () => { ring(to.clone().setY(to.y + 0.02), [1.8, 1.5, 0.7], scale * 2.4); burst(to.clone().setY(to.y + scale * 0.5), [1.8, 1.4, 0.8], 24, 1.2); land?.(); },
+        land: () => {
+          ring(to.clone().setY(to.y + 0.02), [1.8, 1.5, 0.7], scale * 2.4);
+          burst(to.clone().setY(to.y + scale * 0.5), [1.8, 1.4, 0.8], 24, 1.2);
+          grace(kept, ch, to, scale, land);
+        },
       });
     },
     // Corazones que salen de tu pecho y suben hacia el marco.

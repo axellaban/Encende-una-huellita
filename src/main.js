@@ -85,7 +85,7 @@ import { GUIDE_STEPS, renderGuide } from './guide.js';
   void PICADO_COLORS;
 }
 import { portraitCanvas } from './scene/textures.js';
-import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver, setMood, step, boop, clink } from './audio.js';
+import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver, setMood, step, boop, clink, liftDoors, liftHum } from './audio.js';
 import { TIERS, pickTier, savedQuality, saveQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
 import { FEATURED } from '../server/seed.js';
 
@@ -162,6 +162,8 @@ let controls;
 let lanterns;
 let offerFx; // los gestos de la ofrenda en 3D (llamita, flor, regalito, corazones)
 let sparkles; // brillitos que caen en el aire
+let sunShadows = null; // la luz del sol con sombras (pisos del cielo, calidad alta)
+const sunDir = new THREE.Vector3();
 let cozy;
 let avatars;
 let elevator;
@@ -297,7 +299,22 @@ async function buildScene() {
   me = createCharacter({ hue: visitorHue, light: tierName !== 'low' });
   scene.add(me.group);
   spirits = createSpirits(scene, { blocked: controls.blocked, tier });
-  heaven = createHeaven(scene, world, { renderer, bloom: bloomPass });
+  heaven = createHeaven(scene, world, { renderer, bloom: bloomPass, tier });
+  // Sombras de día en los pisos del cielo (sólo calidad alta): el sol proyecta tu sombra y la de los
+  // espíritus sobre el piso del salón. La luz sigue a tu personaje (así alcanza un mapa chico).
+  if (tierName === 'high') {
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const L = world.moonLight;
+    L.shadow.mapSize.set(1024, 1024);
+    Object.assign(L.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 150 });
+    L.shadow.camera.updateProjectionMatrix();
+    L.shadow.bias = -0.0008;
+    L.shadow.normalBias = 0.03;
+    scene.add(L.target);
+    world.deck.receiveShadow = true;
+    sunShadows = L;
+  }
   spirits.setHand((v) => me.leashHand(v));
   wireSpirits();
   controls.placePlayer(SPAWN, ENTRY_LOOK);
@@ -375,6 +392,16 @@ async function buildScene() {
     calmT = busy ? 0.6 : calmT - dt;
     if ((calmT > 0) !== hudAway) { hudAway = calmT > 0; document.body.classList.toggle('moving', hudAway); }
     heaven.update(dt, t);
+    if (sunShadows) {
+      // De día (arriba) hay sombras; de noche, en el jardín, no.
+      const day = heaven.k > 0.3;
+      sunShadows.castShadow = day;
+      if (day) {
+        sunDir.set(-30 + heaven.k * 60, 50 + heaven.k * 30, -40).normalize();
+        sunShadows.target.position.copy(P.pos);
+        sunShadows.position.copy(P.pos).addScaledVector(sunDir, 70);
+      }
+    }
     hall.animate(t);
     lanterns.update(dt, t);
     offerFx.update(dt);
@@ -523,60 +550,231 @@ function renderFloors() {
   elevator?.setFloor(currentFloor());
 }
 
-// Viaje en ascensor: se cierran las puertas, suena el "ding" y se abren en el piso nuevo.
-let riding = false;
-function rideTo(f) {
-  if (riding) return;
-  if (reduced) { goFloor(f); return; }
+// ---------- el ascensor, como uno de verdad ----------
+// Llamarlo: tu personaje camina hasta la puerta, suena la campanita y se abren las puertas (adentro,
+// la cabina iluminada). Entra caminando, se da vuelta y aparece la botonera. Al elegir el piso se
+// cierran las puertas y la cámara queda adentro, detrás tuyo, mirando afuera: para subir, la cabina
+// sube de verdad por la torre de vidrio y el jardín queda abajo; para bajar, se la ve descender hacia
+// el piso nuevo. En el medio se cruzan unas nubes (ahí cambia el piso), frena suave, campanita, se
+// abren las puertas y salís caminando. Si cerrás la botonera sin elegir, salís caminando.
+let riding = false; // la escena del ascensor está en curso
+let insideLift = false; // tu personaje está adentro de la cabina, con la botonera abierta
+const tween = (dur, fn) => new Promise((res) => {
+  const t0 = performance.now();
+  const step = () => {
+    const k = Math.min(1, (performance.now() - t0) / (dur * 1000));
+    fn(k);
+    if (k < 1) requestAnimationFrame(step); else res();
+  };
+  requestAnimationFrame(step);
+});
+const easeIO = (k) => (k < 0.5 ? 2 * k * k : 1 - ((-2 * k + 2) * (-2 * k + 2)) / 2);
+const easeOut = (k) => 1 - (1 - k) * (1 - k) * (1 - k);
+const angleTo = (from, to) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from));
+
+// Camina en línea recta (la escena maneja al personaje: sin choques ni palanca).
+async function scriptedWalk(to, dur, yTo = null) {
+  const P = controls.player;
+  const from = P.pos.clone();
+  const y0 = P.pos.y;
+  const y1 = yTo ?? y0;
+  P.heading = Math.atan2(to.x - from.x, to.z - from.z);
+  await tween(dur, (k) => {
+    P.pos.set(from.x + (to.x - from.x) * k, y0 + (y1 - y0) * Math.min(1, k * 1.6), from.z + (to.z - from.z) * k);
+    P.speed = k < 1 ? 1.45 : 0;
+    P.moving = k < 1;
+  });
+  P.speed = 0;
+  P.moving = false;
+}
+async function scriptedTurn(heading, dur = 0.5) {
+  const P = controls.player;
+  const h0 = P.heading;
+  const h1 = angleTo(h0, heading);
+  await tween(dur, (k) => {
+    const prev = P.heading;
+    P.heading = h0 + (h1 - h0) * easeIO(k);
+    P.turn = (P.heading - prev) * 30;
+  });
+  P.turn = 0;
+}
+// Espera a que tu personaje llegue caminando (con la cámara de siempre); si algo lo traba, lo acerca.
+function walkUntil(point, maxS = 6) {
+  return new Promise((res) => {
+    controls.walkTo(point);
+    const t0 = performance.now();
+    const check = () => {
+      const P = controls.player;
+      const d = Math.hypot(P.pos.x - point.x, P.pos.z - point.z);
+      if (d < 0.35 || performance.now() - t0 > maxS * 1000 || !controls.player) return res(d);
+      requestAnimationFrame(check);
+    };
+    requestAnimationFrame(check);
+  });
+}
+// El velo de nubes que tapa el cambio de piso.
+function cloudVeil(on, dur = 0.5) {
+  const el = $('#lift-veil');
+  el.hidden = false;
+  el.style.transitionDuration = `${dur}s`;
+  requestAnimationFrame(() => { el.classList.toggle('on', on); });
+  return later(dur * 1000 + 30).then(() => { if (!on) el.hidden = true; });
+}
+const camPos = new THREE.Vector3();
+const camLook = new THREE.Vector3();
+let shotSide = 0.95;
+function liftCam(drop = 0) {
+  elevator.shot(camPos, camLook, shotSide, drop);
+  controls.teleportCamera(camPos, camLook);
+}
+function liftBegin() {
   riding = true;
-  const lift = $('#lift');
-  const from = currentFloor();
-  const num = $('#lift-num');
-  num.textContent = from + 1;
-  $('#lift-arrow').textContent = f > from ? '▲' : '▼';
-  $('#lift-name').textContent = floorName(f);
-  lift.classList.toggle('down', f < from);
-  lift.hidden = false;
-  requestAnimationFrame(() => requestAnimationFrame(() => lift.classList.add('closed')));
-  haptic(10);
-  let n = from;
-  const step = f > from ? 1 : -1;
-  const steps = Math.abs(f - from);
-  $('#lift').style.setProperty('--sky', floorSky(f));
-  setTimeout(() => {
-    goFloor(f, true, true);
-    let last = 0;
-    const timer = setInterval(() => {
-      // Avanza de a varios pisos si son muchos (el viaje dura ~2 s).
-      n += step * Math.max(1, Math.round(steps / 24));
-      if ((step > 0 && n > f) || (step < 0 && n < f)) n = f;
-      num.textContent = n + 1;
-      if (performance.now() - last > 90) { tick(); last = performance.now(); }
-      if (n === f) {
-        clearInterval(timer);
-        setTimeout(() => {
-          ding();
-          haptic([10, 40, 10]);
-          lift.classList.remove('closed');
-          elevator?.setOpen(true);
-          setTimeout(() => { lift.hidden = true; riding = false; elevator?.setOpen(false); }, 900);
-          toast(`🛗 Piso ${f + 1} · ${floorName(f)}`);
-        }, 350);
-      }
-    }, Math.max(70, 900 / steps));
-  }, 750);
+  closeSheet();
+  closeModals();
+  hideHint();
+  $('#emote-tray').hidden = true;
+  document.body.classList.add('riding');
+  controls.held = true;
+  controls.enabled = false;
+}
+function liftEnd() {
+  controls.held = false;
+  controls.enabled = true;
+  document.body.classList.remove('riding');
+  elevator.setCab(null);
+  riding = false;
+  insideLift = false;
 }
 
-function callElevator() {
-  closeSheet();
-  hideHint();
-  const { stand, target } = elevator.standPoint();
-  placeNear(stand, target, 1.4, 4.2);
-  controls.flyTo(stand, target, () => {
-    elevator.setOpen(true);
-    ding();
-    setTimeout(() => { renderFloors(); $('#floors').showModal(); }, 500);
-  });
+async function callElevator() {
+  if (!controls || !elevator || riding) return;
+  if (reduced) { renderFloors(); $('#floors').showModal(); return; }
+  liftBegin();
+  const P = controls.player;
+  const door = elevator.doorPoint(1.25);
+  // Lejos (desde el menú): aparece cerca del ascensor, mirándolo.
+  if (Math.hypot(P.pos.x - door.x, P.pos.z - door.z) > 11) {
+    teleportPlayer(elevator.doorPoint(5.5), door);
+    controls.snapFollow();
+  }
+  controls.held = false;
+  await walkUntil(door, 6);
+  controls.held = true;
+  await scriptedWalk(door, 0.35);
+  await scriptedTurn(elevator.outHeading + Math.PI, 0.35);
+  // Campanita, se prende el botón y se abren las puertas; la cámara se pone de costado para ver entrar.
+  ding();
+  haptic(8);
+  shotSide = 0.95;
+  elevator.shot(camPos, camLook, shotSide);
+  controls.flyTo(camPos, camLook, null, { duration: 1.1 });
+  const settled = later(1150);
+  await later(350);
+  elevator.setOpen(true);
+  liftDoors();
+  await later(900);
+  // Entra (un escalón y el piso de la cabina) y se da vuelta.
+  const inCab = elevator.cabPoint(0.05);
+  await scriptedWalk(elevator.doorPoint(0.15), 0.55, inCab.y * 0.6);
+  await scriptedWalk(inCab, 0.75, inCab.y);
+  await scriptedTurn(elevator.outHeading, 0.6);
+  await settled;
+  // La botonera tapa la mitad de abajo: la cabina, arriba en la pantalla.
+  await tween(0.6, (k) => liftCam(easeIO(k) * 1.55));
+  insideLift = true;
+  renderFloors();
+  $('#floors').showModal();
+}
+
+// Salir caminando de la cabina (al llegar, o si no elegiste piso).
+async function leaveLift(fromPanel = false) {
+  const out = elevator.doorPoint(2.1);
+  // Si cerraste la botonera sin elegir, la cámara vuelve a encuadrar la cabina entera.
+  if (fromPanel) await tween(0.5, (k) => liftCam((1 - easeIO(k)) * 1.55));
+  await scriptedWalk(elevator.doorPoint(0.3), 0.7, 0.15);
+  await scriptedWalk(out, 0.65, 0);
+  // Gira hacia el jardín antes de que la cámara lo siga: detrás suyo está la torre y la cámara
+  // pasaría por adentro de la puerta.
+  await scriptedTurn(elevator.outHeading + 1.15, 0.45);
+  controls.placePlayer(controls.player.pos, null);
+  controls.follow({ duration: 1.1 });
+  await later(650);
+  elevator.setOpen(false);
+  liftDoors(true);
+  liftEnd();
+}
+
+async function rideTo(f) {
+  if (!controls || !elevator) return;
+  if (reduced || !insideLift) { goFloor(f); return; }
+  insideLift = false;
+  const from = currentFloor();
+  const up = f > from;
+  const P = controls.player;
+  const { CAB_MIN, CAB_MAX } = elevator;
+  const setCab = (y) => {
+    elevator.setCab(y);
+    P.pos.y = elevator.cabPoint(0).y;
+    liftCam();
+  };
+  const count = (k) => {
+    const n = Math.round(from + (f - from) * k);
+    if (n !== count.last) { count.last = n; elevator.showFloor(n + 1, up ? 1 : -1); tick(); }
+  };
+  // Se cierran las puertas (la cámara vuelve a encuadrar la cabina entera).
+  shotSide = 0.95;
+  tween(0.6, (k) => liftCam((1 - easeIO(k)) * 1.55));
+  elevator.setOpen(false);
+  liftDoors(true);
+  haptic(10);
+  await later(1000);
+  liftHum(up ? 5.2 : 5.0);
+  if (up) {
+    // Sube por la torre de vidrio: el jardín (o el mar de nubes) queda abajo.
+    const top = CAB_MIN + (CAB_MAX - CAB_MIN) * 0.9;
+    await tween(3.4, (k) => {
+      const e = easeIO(k);
+      shotSide = 0.95 - 1.9 * e;
+      setCab(CAB_MIN + (top - CAB_MIN) * e);
+      count(e * 0.85);
+      if (k > 0.72 && !rideTo.veil) { rideTo.veil = true; cloudVeil(true, 0.7); }
+    });
+    await later(150);
+    goFloor(f, true, true);
+    count(1);
+    // Llega desde abajo, frenando.
+    shotSide = 0.95;
+    setCab(CAB_MIN + 0.55);
+    cloudVeil(false, 0.8);
+    await tween(1.3, (k) => setCab(CAB_MIN + 0.55 * (1 - easeOut(k))));
+  } else {
+    // Baja: un sacudón al arrancar, nubes, y se ve el piso nuevo acercarse desde arriba.
+    await tween(0.6, (k) => { setCab(CAB_MIN + Math.sin(k * Math.PI) * 0.05); count(k * 0.1); });
+    await cloudVeil(true, 0.55);
+    goFloor(f, true, true);
+    const top = CAB_MIN + (CAB_MAX - CAB_MIN) * 0.75;
+    shotSide = -0.95;
+    setCab(top);
+    cloudVeil(false, 0.8);
+    await tween(3.4, (k) => {
+      const e = easeIO(k);
+      shotSide = -0.95 + 1.9 * e;
+      setCab(top + (CAB_MIN - top) * e);
+      count(0.1 + e * 0.9);
+    });
+  }
+  rideTo.veil = false;
+  setCab(CAB_MIN);
+  elevator.showFloor(f + 1, 0);
+  await later(250);
+  ding();
+  haptic([10, 40, 10]);
+  elevator.setOpen(true);
+  liftDoors();
+  toast(`🛗 Piso ${f + 1} · ${floorName(f)}`);
+  await later(900);
+  P.pos.y = elevator.cabPoint(0).y;
+  await leaveLift();
 }
 
 function goFloor(f, quiet = false, instant = false) {
@@ -1216,8 +1414,11 @@ const visitFeatured = () => { const f = memorials.find((m) => m.featured); if (f
 $$('[data-featured]').forEach((b) => { b.onclick = visitFeatured; });
 
 // ---------- pisos, menú y modales ----------
-$('#floors-btn').onclick = () => { renderFloors(); $('#floors').showModal(); };
-$('#floors').addEventListener('close', () => { if (!riding) elevator?.setOpen(false); });
+$('#floors-btn').onclick = () => callElevator();
+// Si cerrás la botonera sin elegir piso, tu personaje sale caminando de la cabina.
+$('#floors').addEventListener('close', () => {
+  if (insideLift) { insideLift = false; leaveLift(true); } else if (!riding) elevator?.setOpen(false);
+});
 $('#hub-btn').onclick = () => openHub();
 
 // La hoja de menú: todo lo que antes estaba en la barra de abajo, con íconos grandes.
@@ -1274,7 +1475,7 @@ const THEN = {
   featured: visitFeatured,
   help: () => $('#help').showModal(),
   home: () => goHome(),
-  floors: () => { renderFloors(); $('#floors').showModal(); },
+  floors: () => callElevator(),
   install: () => installPrompt?.prompt(),
   photo: () => photoMode(),
   meadow: () => goMeadow(),

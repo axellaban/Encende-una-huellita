@@ -73,6 +73,9 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   let stickZone = null;
   // Mientras una escena mueve al personaje (entrar y salir del ascensor), ni la palanca ni el suelo lo tocan.
   let held = false;
+  // Planeando (pisos del cielo): salto, y después cae despacio hacia adelante con los brazos abiertos.
+  let air = null;
+  const landFns = [];
   const setJoy = (x, y) => {
     joy.x = x;
     joy.y = y;
@@ -299,6 +302,18 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     set stickZone(fn) { stickZone = fn; },
     get sticking() { return !!stick?.moved; },
     get held() { return held; },
+    // Planear: un salto y después cae despacio hacia adelante. Devuelve false si no se puede.
+    glide() {
+      if (air || held || fly) return false;
+      if (mode === 'focus') leaveFocus();
+      walkTarget = null;
+      marker.visible = false;
+      air = { vy: 8.5, t: 0 };
+      return true;
+    },
+    get gliding() { return !!air; },
+    get airY() { return air ? player.pos.y : 0; },
+    onLand: (fn) => landFns.push(fn),
     set held(v) { held = !!v; if (held) { walkTarget = null; marker.visible = false; joy.x = 0; joy.y = 0; } },
     set enabled(v) {
       enabled = v;
@@ -365,7 +380,31 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     update(dt) {
       now += dt;
       // ---------- personaje ----------
-      if (!held) {
+      if (air && !held) {
+        air.t += dt;
+        // Se dobla con la palanca (o A/D, flechas); avanza solo, cada vez un poco más lento.
+        let steer = joy.x;
+        if (keys.has('a') || keys.has('arrowleft')) steer -= 1;
+        if (keys.has('d') || keys.has('arrowright')) steer += 1;
+        const turnRate = THREE.MathUtils.clamp(steer, -1, 1) * 1.5;
+        player.heading -= turnRate * dt;
+        player.turn = -turnRate;
+        const fwd = Math.max(3.2, 6.2 - air.t * 0.25) * (joy.y > 0.4 || keys.has('s') || keys.has('arrowdown') ? 0.6 : 1);
+        player.speed = fwd;
+        player.moving = true;
+        tryMove(Math.sin(player.heading) * fwd * dt, Math.cos(player.heading) * fwd * dt);
+        // Primero el salto; después baja suave, como con un paracaídas de tela.
+        air.vy = air.t < 0.55 ? air.vy - 14 * dt : air.vy + (-1.05 - air.vy) * Math.min(1, dt * 2.5);
+        player.pos.y += air.vy * dt;
+        const gy = colliders.up ? 0 : groundY(player.pos.x, player.pos.z);
+        if (air.t > 0.5 && player.pos.y <= gy) {
+          player.pos.y = gy;
+          air = null;
+          player.speed = 1.2;
+          landFns.forEach((fn) => fn());
+        }
+        listeners.move.forEach((fn) => fn());
+      } else if (!held) {
       let mx = 0;
       let mz = 0;
       let run = keys.has('shift') ? 1.6 : 1;

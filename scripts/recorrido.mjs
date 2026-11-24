@@ -105,12 +105,14 @@ async function full(b, tag, dev) {
   check(tag, 'visitar a Luca', (await visible(p, '#sheet')) && (await text(p, '#s-name')) === 'Luca');
 
   // Vela (y que no sume dos veces), flor, abrazo, regalito, libro.
+  // Relativo a lo que había (si se corren varios dispositivos seguidos, comparten los datos).
+  const c0 = Number(await text(p, '#s-candles'));
   await tap(p, tag, '#s-candle', 'vela');
   await wait(p, 1500);
   const c1 = await text(p, '#s-candles');
   await p.evaluate(() => document.querySelector('#s-candle').click());
   await wait(p, 1500);
-  check(tag, 'vela (una sola por día)', c1 === '1' && (await text(p, '#s-candles')) === '1', `velas ${c1} → ${await text(p, '#s-candles')}`);
+  check(tag, 'vela (una sola por día)', Number(c1) === c0 + 1 && (await text(p, '#s-candles')) === c1, `velas ${c0} → ${c1} → ${await text(p, '#s-candles')}`);
   await p.evaluate(() => document.querySelector('#s-flower').click());
   await wait(p, 1500);
   check(tag, 'flor', (await text(p, '#s-flowers')) === '1');
@@ -249,14 +251,21 @@ async function full(b, tag, dev) {
   check(tag, '"Así te ven los demás"', await isOpen(p, '#me-dialog'));
   await closeTop(p);
 
-  // Pisos y quitar la huellita.
+  // Pisos: el ascensor (caminás hasta la puerta, entrás, la botonera; al cerrarla salís caminando).
   await hub(p, tag, '[data-then="floors"]', 'Pisos');
-  await wait(p, 700);
-  check(tag, 'pisos', await isOpen(p, '#floors') && (await p.locator('#floor-list button').count()) === 99);
+  await p.waitForFunction(() => document.querySelector('#floors').open, null, { timeout: 40000 }).catch(() => {});
+  check(tag, 'ascensor: entrar y botonera', await isOpen(p, '#floors') && (await p.locator('#floor-list button').count()) === 99);
+  await p.evaluate(() => [...document.querySelectorAll('#floor-list button')].find((x) => x.querySelector('b').textContent === '3')?.click());
+  await p.waitForFunction(() => !document.body.classList.contains('riding'), null, { timeout: 60000 }).catch(() => {});
+  check(tag, 'ascensor: viajar al piso 3 y salir', (await text(p, '.floor-num')) === '3' && (await p.evaluate(() => !document.body.classList.contains('riding') && window.__huellita.controls.mode === 'follow')));
+  await hub(p, tag, '[data-then="floors"]', 'Pisos');
+  await p.waitForFunction(() => document.querySelector('#floors').open, null, { timeout: 40000 }).catch(() => {});
   await closeTop(p);
+  await p.waitForFunction(() => !document.body.classList.contains('riding'), null, { timeout: 30000 }).catch(() => {});
+  check(tag, 'ascensor: cerrar la botonera y salir caminando', await p.evaluate(() => !document.body.classList.contains('riding')));
   await p.evaluate(() => window.__huellita.goFloor(5));
   await wait(p, 2500);
-  check(tag, 'ir a otro piso', (await text(p, '.floor-num')) === '6');
+  check(tag, 'ir a otro piso (directo)', (await text(p, '.floor-num')) === '6');
   await p.evaluate(() => window.__huellita.goFloor(0));
   await wait(p, 2500);
   await hub(p, tag, '[data-list="all"]', 'Huellitas');

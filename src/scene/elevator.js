@@ -14,6 +14,8 @@ const W = 2.6; // ancho de la torre
 const D = 2.2; // fondo
 const H = 3.1; // alto de la planta baja (donde está la puerta)
 const TOWER = 13; // alto del vidrio por donde viaja la cabina
+const DOOR_W = 1.64; // hueco de la puerta
+const DOOR_H = 2.2;
 
 // Número de piso en un cartelito luminoso (canvas que se redibuja).
 function floorDisplay() {
@@ -54,6 +56,29 @@ function floorDisplay() {
   };
 }
 
+// El espejo del fondo de la cabina: oscuro, con un par de brillos en diagonal (si no, parece una pantalla).
+function mirrorTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 64;
+  const g = c.getContext('2d');
+  const bg = g.createLinearGradient(0, 0, 128, 64);
+  bg.addColorStop(0, '#3a2c3e');
+  bg.addColorStop(1, '#1e1622');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, 128, 64);
+  g.globalAlpha = 0.22;
+  g.fillStyle = '#f3e2ff';
+  for (const [x, w] of [[18, 16], [44, 6], [86, 10]]) {
+    g.beginPath();
+    g.moveTo(x, 64); g.lineTo(x + w, 64); g.lineTo(x + w + 30, 0); g.lineTo(x + 30, 0);
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export function createElevator(scene, colliders, rnd) {
   const g = new THREE.Group();
   g.position.copy(ELEVATOR_POS);
@@ -77,12 +102,29 @@ export function createElevator(scene, colliders, rnd) {
   base.position.y = 0.15;
   const steps = new THREE.Mesh(new THREE.BoxGeometry(W - 0.2, 0.15, 0.6), new THREE.MeshLambertMaterial({ color: '#a69689' }));
   steps.position.set(0, 0.075, D / 2 + 0.5);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), wall);
-  body.position.y = 0.3 + H / 2;
-  const frieze = new THREE.Mesh(new THREE.BoxGeometry(W + 0.04, 0.34, D + 0.04), tileMat);
-  frieze.position.y = 0.3 + 0.17;
-  const cornice = new THREE.Mesh(new THREE.BoxGeometry(W + 0.36, 0.2, D + 0.36), roofMat);
-  cornice.position.y = 0.3 + H + 0.1;
+  // Paredes con el hueco de la puerta y sin techo: adentro está la cabina, que sube por la torre.
+  const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
+  const T = 0.12;
+  const sideW = (W - DOOR_W) / 2;
+  const body = new THREE.Mesh(mergeGeometries([
+    box(W, H, T, 0, 0.3 + H / 2, -D / 2 + T / 2),
+    box(T, H, D, -W / 2 + T / 2, 0.3 + H / 2, 0),
+    box(T, H, D, W / 2 - T / 2, 0.3 + H / 2, 0),
+    box(sideW, H, T, -(DOOR_W / 2 + sideW / 2), 0.3 + H / 2, D / 2 - T / 2),
+    box(sideW, H, T, DOOR_W / 2 + sideW / 2, 0.3 + H / 2, D / 2 - T / 2),
+    box(DOOR_W, H - DOOR_H, T, 0, 0.3 + DOOR_H + (H - DOOR_H) / 2, D / 2 - T / 2),
+  ]), wall);
+  // Friso de talavera y cornisa: como marco (no como tapa), para no cortar el hueco ni la subida.
+  const frameRing = (w, d, h, y, gap = 0) => {
+    const parts = [box(w, h, 0.06, 0, y, -d / 2), box(0.06, h, d, -w / 2, y, 0), box(0.06, h, d, w / 2, y, 0)];
+    if (gap) {
+      const fw = (w - gap) / 2;
+      parts.push(box(fw, h, 0.06, -(gap / 2 + fw / 2), y, d / 2), box(fw, h, 0.06, gap / 2 + fw / 2, y, d / 2));
+    } else parts.push(box(w, h, 0.06, 0, y, d / 2));
+    return mergeGeometries(parts);
+  };
+  const frieze = new THREE.Mesh(frameRing(W + 0.04, D + 0.04, 0.34, 0.3 + 0.17, DOOR_W + 0.36), tileMat);
+  const cornice = new THREE.Mesh(frameRing(W + 0.36, D + 0.36, 0.2, 0.3 + H + 0.1), roofMat);
   g.add(base, steps, body, frieze, cornice);
 
   // Columnas de bronce en las esquinas, de arriba a abajo.
@@ -123,16 +165,48 @@ export function createElevator(scene, colliders, rnd) {
   const cabW = W - 0.5;
   const cabH = 2.2;
   const cabD = D - 0.5;
-  const cabBody = new THREE.Mesh(new THREE.BoxGeometry(cabW, cabH, cabD), new THREE.MeshStandardMaterial({ color: '#e6bd6a', roughness: 0.35, metalness: 0.6, emissive: '#7a4a10', emissiveIntensity: 0.55, transparent: true, opacity: 0.92 }));
-  cabBody.position.y = cabH / 2;
+  // Abierta adelante (la puerta es la de la planta baja): se ve el interior al abrirse y, al subir,
+  // desde adentro se ve el jardín a través de la torre de vidrio.
+  const gold = new THREE.MeshStandardMaterial({ color: '#e6bd6a', roughness: 0.4, metalness: 0.55, emissive: '#6a3c0c', emissiveIntensity: 0.6 });
+  const woodIn = new THREE.MeshLambertMaterial({ color: '#8a5530', emissive: '#3a1c08' });
+  const floorMat = new THREE.MeshLambertMaterial({ color: '#5a3420', emissive: '#1c0c04' });
+  const cabBody = new THREE.Mesh(mergeGeometries([
+    box(cabW, 0.06, cabD, 0, cabH - 0.03, 0), // techo
+    box(cabW, cabH, 0.05, 0, cabH / 2, -cabD / 2 + 0.025), // fondo
+    box(0.05, cabH, cabD, -cabW / 2 + 0.025, cabH / 2, 0), // costados
+    box(0.05, cabH, cabD, cabW / 2 - 0.025, cabH / 2, 0),
+    box(cabW, 0.3, 0.05, 0, cabH - 0.15, cabD / 2 - 0.025), // dintel
+    box(0.22, cabH, 0.05, -cabW / 2 + 0.11, cabH / 2, cabD / 2 - 0.025), // jambas
+    box(0.22, cabH, 0.05, cabW / 2 - 0.11, cabH / 2, cabD / 2 - 0.025),
+  ]), gold);
+  const cabFloor = new THREE.Mesh(box(cabW - 0.1, 0.06, cabD - 0.08, 0, 0.03, 0), floorMat);
+  // Paneles de madera por dentro (a media altura) y pasamanos de bronce.
+  const panels = new THREE.Mesh(mergeGeometries([
+    box(cabW - 0.14, 0.95, 0.02, 0, 0.6, -cabD / 2 + 0.06),
+    box(0.02, 0.95, cabD - 0.3, -cabW / 2 + 0.06, 0.6, -0.05),
+    box(0.02, 0.95, cabD - 0.3, cabW / 2 - 0.06, 0.6, -0.05),
+  ]), woodIn);
+  const railGeo = [];
+  for (const [len, x, z, ry] of [[cabW - 0.4, 0, -cabD / 2 + 0.13, 0], [cabD - 0.6, -cabW / 2 + 0.13, -0.1, Math.PI / 2], [cabD - 0.6, cabW / 2 - 0.13, -0.1, Math.PI / 2]]) {
+    railGeo.push(new THREE.CylinderGeometry(0.025, 0.025, len, 8).rotateZ(Math.PI / 2).rotateY(ry).translate(x, 0.98, z));
+  }
+  const rails = new THREE.Mesh(mergeGeometries(railGeo), brass);
+  // Espejo al fondo (un degradé claro) y la lámpara del techo.
+  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(cabW - 0.7, 0.85), new THREE.MeshBasicMaterial({ map: mirrorTexture() }));
+  mirror.position.set(0, 1.62, -cabD / 2 + 0.056);
+  const lamp = new THREE.Mesh(new THREE.PlaneGeometry(cabW - 0.7, cabD - 0.6).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.3, 1.75, 1.0) }));
+  lamp.position.set(0, cabH - 0.065, 0);
+  // Botonera por dentro, a la derecha de la puerta: botoncitos que brillan.
+  const btnPanel = new THREE.Mesh(box(0.02, 0.62, 0.24, cabW / 2 - 0.065, 1.15, cabD / 2 - 0.32), brass);
+  const dotGeo = [];
+  for (let i = 0; i < 6; i++) dotGeo.push(new THREE.SphereGeometry(0.022, 8, 6).translate(cabW / 2 - 0.08, 0.95 + (i % 3) * 0.13 + 0.05, cabD / 2 - 0.36 + Math.floor(i / 3) * 0.08));
+  const dots = new THREE.Mesh(mergeGeometries(dotGeo), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.6, 0.6) }));
   const cabTop = new THREE.Mesh(new THREE.CylinderGeometry(0.1, cabW * 0.62, 0.55, 4).rotateY(Math.PI / 4), brass);
   cabTop.position.y = cabH + 0.27;
-  const cabLight = new THREE.Mesh(new THREE.BoxGeometry(cabW - 0.2, cabH - 0.3, 0.02), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.6, 0.9) }));
-  cabLight.position.set(0, cabH / 2, cabD / 2 + 0.012);
-  const cabGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(1.0, 0.75, 0.4), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.8 }));
-  cabGlow.scale.setScalar(4.2);
-  cabGlow.position.y = cabH / 2;
-  cab.add(cabBody, cabTop, cabLight, cabGlow);
+  const cabGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(1.0, 0.75, 0.4), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.55 }));
+  cabGlow.scale.setScalar(3.2);
+  cabGlow.position.set(0, cabH + 0.45, 0); // afuera, sobre el techo (adentro encandilaba)
+  cab.add(cabBody, cabFloor, panels, rails, mirror, lamp, btnPanel, dots, cabTop, cabGlow);
   cab.position.y = 0.3 + 0.05;
   g.add(cab);
   const CAB_MIN = 0.35;
@@ -165,9 +239,6 @@ export function createElevator(scene, colliders, rnd) {
     doorFrame.push(side);
   }
   g.add(arch, new THREE.Mesh(mergeGeometries(doorFrame), brass));
-  const inside = new THREE.Mesh(new THREE.PlaneGeometry(1.64, 2.2), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.8, 1.25, 0.7) }));
-  inside.position.set(0, 0.3 + 1.1, front - 0.05);
-  g.add(inside);
   const doorGeo = new THREE.BoxGeometry(0.82, 2.2, 0.05);
   const doors = [-1, 1].map((s) => {
     const d = new THREE.Mesh(doorGeo, brass);
@@ -187,6 +258,10 @@ export function createElevator(scene, colliders, rnd) {
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.43), new THREE.MeshBasicMaterial({ map: display.texture, transparent: true, toneMapped: false }));
   screen.position.set(0, 0.3 + H - 0.38, front + 0.03);
   g.add(screen);
+  const screenIn = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.25), screen.material);
+  screenIn.rotation.y = Math.PI;
+  screenIn.position.set(0, cabH - 0.17, cabD / 2 - 0.06);
+  cab.add(screenIn);
 
   // Cartel colgado arriba.
   const sign = twoSided(new THREE.PlaneGeometry(2.4, 0.5), new THREE.MeshBasicMaterial({
@@ -255,31 +330,53 @@ export function createElevator(scene, colliders, rnd) {
   let cabY = CAB_MIN;
   let cabTarget = CAB_MIN;
   let travelDir = 0;
+  let manual = null; // altura de la cabina que pone la escena del viaje (null: sola)
+  const v = new THREE.Vector3();
+  const world = (x, y, z) => { g.updateMatrixWorld(); return g.localToWorld(new THREE.Vector3(x, y, z)); };
   return {
     hit,
+    CAB_MIN,
+    CAB_MAX,
+    // Hacia dónde mira la puerta (el rumbo para salir).
+    get outHeading() { return g.rotation.y; },
+    // Un punto frente a la puerta, a `dist` (en metros de la torre) del frente, a la altura del suelo.
+    doorPoint(dist, side = 0) { const p = world(side, 0, D / 2 + dist); p.y = 0; return p; },
+    // Un punto dentro de la cabina (z hacia la puerta), con la altura del piso de la cabina.
+    cabPoint(z = 0, x = 0) { return world(x, cab.position.y + 0.06, z); },
+    // La toma del ascensor: afuera, un poco de costado, a la altura de la cabina y mirándola (sube con
+    // ella: se te ve adentro, a través del vidrio, con el jardín cada vez más abajo).
+    // `drop`: baja el punto de mira para que la cabina quede arriba en la pantalla (con la botonera abierta).
+    shot(outPos, outLook, side = 0.95, drop = 0) {
+      outPos.copy(world(side, cab.position.y + 1.75, D / 2 + 4.4));
+      outLook.copy(world(0, cab.position.y + 1.0 - drop, 0));
+    },
+    setCab(y) { manual = y; if (y !== null) { cabY = y; cab.position.y = y; } },
+    showFloor(n, dir = 0) { display.draw(n, dir); },
+    get open() { return open; },
     standPoint() {
       const frontPt = new THREE.Vector3(0, 0, (D / 2 + 3.4) * ELEVATOR_SCALE).applyQuaternion(g.quaternion).add(g.position);
       frontPt.y = 2.4;
       return { stand: frontPt, target: new THREE.Vector3(g.position.x, 1.9 * ELEVATOR_SCALE, g.position.z) };
     },
     setOpen(v) { openTarget = v ? 1 : 0; },
+    // La cabina espera en la planta baja de cada piso (el viaje lo anima la escena del ascensor).
     setFloor(n) {
-      travelDir = Math.sign(n - floor);
       floor = n;
-      // La cabina sube por la torre (piso 1 abajo, piso 99 arriba de todo).
-      cabTarget = CAB_MIN + (CAB_MAX - CAB_MIN) * Math.min(1, n / 98);
-      display.draw(n + 1, travelDir);
+      travelDir = 0;
+      cabTarget = CAB_MIN;
+      display.draw(n + 1, 0);
     },
     animate(t, dt) {
       open += (openTarget - open) * Math.min(1, dt * 3);
       doors[0].position.x = -0.41 - open * 0.8;
       doors[1].position.x = 0.41 + open * 0.8;
       light.intensity = open * 5;
-      const prev = cabY;
-      cabY += (cabTarget - cabY) * Math.min(1, dt * 1.6);
-      cab.position.y = cabY;
-      if (Math.abs(cabTarget - cabY) < 0.01 && travelDir) { travelDir = 0; display.draw(floor + 1, 0); }
-      cabGlow.material.opacity = 0.65 + Math.abs(cabY - prev) * 20;
+      const prev = cab.position.y;
+      if (manual === null) {
+        cabY += (cabTarget - cabY) * Math.min(1, dt * 1.6);
+        cab.position.y = cabY;
+      }
+      cabGlow.material.opacity = Math.min(1, 0.5 + Math.abs(cab.position.y - prev) * 20);
       const pulse = 0.65 + Math.sin(t * 3.5) * 0.25;
       btnHalo.material.opacity = pulse;
       beaconGlow.material.opacity = 0.6 + Math.sin(t * 1.8) * 0.25;

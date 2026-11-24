@@ -390,6 +390,66 @@ export function ding() {
   });
 }
 
+// Puertas del ascensor: un susurro que se desliza y, al cerrar, un golpecito suave.
+export function liftDoors(closing = false) {
+  if (!ctx || !soundsOn) return;
+  const t = ctx.currentTime;
+  const len = 0.85;
+  const b = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * len), ctx.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const k = i / d.length;
+    d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * k) * 0.8;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = b;
+  const f = ctx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.Q.value = 0.8;
+  f.frequency.setValueAtTime(closing ? 900 : 500, t);
+  f.frequency.linearRampToValueAtTime(closing ? 500 : 900, t + len);
+  const g = ctx.createGain();
+  g.gain.value = 0.05;
+  src.connect(f).connect(g).connect(sfx);
+  src.start(t);
+  if (closing) {
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(140, t + len - 0.05);
+    o.frequency.exponentialRampToValueAtTime(70, t + len + 0.12);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.setValueAtTime(0.07, t + len - 0.05);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + len + 0.16);
+    o.connect(og).connect(sfx);
+    o.start(t);
+    o.stop(t + len + 0.2);
+  }
+}
+
+// El motor del ascensor: un zumbido grave que arranca, se sostiene y se apaga (dura `dur` segundos).
+export function liftHum(dur = 3.5) {
+  if (!ctx || !soundsOn) return;
+  const t = ctx.currentTime;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.035, t + 0.6);
+  g.gain.setValueAtTime(0.035, t + Math.max(0.7, dur - 0.7));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 260;
+  for (const [f, type] of [[55, 'sawtooth'], [110.6, 'sine']]) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f * 0.9, t);
+    o.frequency.linearRampToValueAtTime(f, t + 0.8);
+    o.connect(lp);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+  lp.connect(g).connect(sfx);
+}
+
 // Toque suave para botones.
 export function tick() {
   if (!ctx || !soundsOn) return;

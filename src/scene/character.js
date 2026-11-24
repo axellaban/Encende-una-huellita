@@ -56,6 +56,9 @@ function sharedGeo() {
   // Párpados (tapan los ojos pintados al parpadear) y cachetes.
   shared.lid = new THREE.SphereGeometry(0.046, 14, 10).scale(1, 1, 0.45);
   shared.cheek = new THREE.CircleGeometry(0.036, 16);
+  // Para sonreír: ojitos cerrados de contento (∩) y una sonrisa (∪).
+  shared.arc = new THREE.TorusGeometry(0.03, 0.0075, 6, 14, Math.PI);
+  shared.smile = new THREE.TorusGeometry(0.05, 0.009, 6, 16, Math.PI).rotateZ(Math.PI);
   // Flecos del sarape: tiritas alrededor del borde de abajo.
   {
     const parts = [];
@@ -203,6 +206,22 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
     head.add(l);
     return l;
   });
+  // Contento (al dejar una vela, una flor o un regalito, al abrazar o saludar): ojitos ∩ y sonrisa.
+  const inkMat = new THREE.MeshBasicMaterial({ color: '#3a1f2b' });
+  const happyEyes = [-1, 1].map((sd) => {
+    const a = new THREE.Mesh(G.arc, inkMat);
+    a.position.set(sd * 0.079, 0.075, 0.226);
+    a.lookAt(sd * 0.079 * 3, 0.075 * 3, 0.226 * 3);
+    a.visible = false;
+    head.add(a);
+    return a;
+  });
+  const smile = new THREE.Mesh(G.smile, inkMat);
+  smile.position.set(0, -0.045, 0.228);
+  smile.lookAt(0, -0.045 * 3, 0.228 * 3);
+  smile.visible = false;
+  head.add(smile);
+  let happy = 0;
   // Cachetes rosados.
   const cheekMat = new THREE.MeshBasicMaterial({ color: '#ff7aa8', transparent: true, opacity: 0.32, depthWrite: false });
   for (const sd of [-1, 1]) {
@@ -228,6 +247,8 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.32, depthWrite: false }));
   shadow.position.y = 0.025;
   shadow.renderOrder = 1;
+  // Con sombras de verdad (pisos del cielo, calidad alta) el cuerpo proyecta su sombra.
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   g.add(shadow);
 
   let phase = 0;
@@ -246,11 +267,13 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
     // Con correa: el brazo un poco hacia adelante.
     set leashing(v) { leashing = v; },
     throw() { act = { kind: 'throw', t: 0, dur: 0.55 }; },
-    wave() { act = { kind: 'wave', t: 0, dur: 1.6 }; },
-    // Ofrecer algo a la ofrenda: los dos brazos hacia adelante, una leve reverencia.
-    offer() { act = { kind: 'offer', t: 0, dur: 1.3 }; },
+    wave() { act = { kind: 'wave', t: 0, dur: 1.6 }; happy = Math.max(happy, 1.8); },
+    // Ofrecer algo a la ofrenda: los dos brazos hacia adelante, una leve reverencia (y una sonrisa).
+    offer() { act = { kind: 'offer', t: 0, dur: 1.3 }; happy = 2.6; },
     // Abrazo: se abraza a sí mismo y se mece.
-    hug() { act = { kind: 'hug', t: 0, dur: 1.9 }; },
+    hug() { act = { kind: 'hug', t: 0, dur: 1.9 }; happy = 2.8; },
+    // Sonreír un rato (segundos).
+    smile(sec = 2) { happy = Math.max(happy, sec); },
     // Agacharse a acariciar al espíritu.
     pet() { act = { kind: 'pet', t: 0, dur: 1.8 }; },
     get busy() { return !!act; },
@@ -275,6 +298,14 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
       const closed = blinkT < 0.13 ? 1 - Math.abs(blinkT - 0.065) / 0.065 : 0;
       for (const l of lids) { l.visible = closed > 0.02; l.scale.y = Math.max(0.01, closed); }
       if (blinkT < 0) blinkT = 1.8 + Math.random() * 4;
+      // Contento: los párpados tapan los ojos pintados y aparecen los ojitos ∩ y la sonrisa.
+      happy = Math.max(0, happy - dt);
+      const hk = Math.min(1, happy / 0.25);
+      if (hk > 0.02) for (const l of lids) { l.visible = true; l.scale.y = Math.max(l.scale.y, hk); }
+      for (const a of happyEyes) { a.visible = hk > 0.3; }
+      smile.visible = hk > 0.05;
+      smile.scale.setScalar(0.4 + 0.6 * hk);
+      cheekMat.opacity = 0.32 + 0.3 * hk;
       // De vez en cuando, quieto, mira el cielo.
       skyT -= dt;
       if (skyT < 0) { skyT = 9 + Math.random() * 12; if (k < 0.1) sky = 2.2; }

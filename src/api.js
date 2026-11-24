@@ -51,7 +51,6 @@ const remote = {
   gift: (id, who, gift) => req(`/api/memorials/${encodeURIComponent(id)}/gift`, { method: 'POST', body: { ...who, gift } }),
   hug: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/hug`, { method: 'POST', body: who }),
   sign: (id, entry) => req(`/api/memorials/${encodeURIComponent(id)}/guestbook`, { method: 'POST', body: entry }),
-  activity: (since) => req(`/api/activity/${Math.max(0, since | 0)}`),
   heartbeat: (info) => req('/api/now', { method: 'POST', body: info }),
   night: () => req('/api/night'),
   jar: () => req('/api/jar'),
@@ -282,7 +281,6 @@ function makeLocal() {
       persist();
       return { entry: e, count: db.jar.length };
     },
-    async activity(since) { return { events: db.events.filter((e) => e.seq > since), seq: db.seq, here: 1 }; },
     async heartbeat(info = {}) {
       const since = Number.isInteger(info.since) ? info.since : null;
       return since === null ? { here: 1, others: [] } : { here: 1, others: [], events: db.events.filter((e) => e.seq > since), seq: db.seq };
