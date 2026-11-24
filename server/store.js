@@ -7,8 +7,8 @@
 //   photo:<id>       STR   JSON { t: mime, d: base64 }
 //   gb:<id>          LIST  libro de visitas (JSON, lo más nuevo primero)
 //   gf:<id>          LIST  regalitos (JSON)
-//   ev / seq         LIST / INT  actividad reciente
-//   now              ZSET  sid -> último latido;  p:<sid> STR posición y gesto (expira solo)
+//   ev / seq         LIST / INT  historial de gestos (la API lee sólo los recientes)
+//   pres             HASH  sid -> posición y gesto con hora del último latido
 //   d:<acc>:<sid>:<id>:<día>  STR  gesto ya hecho hoy (una vela, una flor, un regalo... por día)
 //   night:<día> / nco:<día>   INT / SET  velas y países de la noche
 //   jar / jarn       LIST / INT  frasco de gracias
@@ -92,7 +92,8 @@ export function createStore(kv) {
   async function event(type, m, visitor, extra = {}) {
     const seq = await kv.cmd('INCR', `${P}seq`);
     const ev = { seq, type, memorialId: m.id, petName: m.name, visitor: visitor || 'Alguien', at: Date.now(), c: m.candles, f: m.flowers, ...extra };
-    await kv.pipeline([['LPUSH', `${P}ev`, JSON.stringify(ev)], ['LTRIM', `${P}ev`, '0', '199']]);
+    // Los recuerdos no se recortan: limitar la lectura no debe borrar el historial.
+    await kv.cmd('LPUSH', `${P}ev`, JSON.stringify(ev));
   }
 
   const getRaw = async (id) => fromHash(await kv.cmd('HGETALL', `${P}m:${id}`));
@@ -250,7 +251,6 @@ export function createStore(kv) {
       const last = [gift.split(' ')[0], ...(h.lastGifts ? JSON.parse(h.lastGifts) : [])].slice(0, 3);
       await kv.pipeline([
         ['LPUSH', `${P}gf:${id}`, JSON.stringify(entry)],
-        ['LTRIM', `${P}gf:${id}`, '0', '49'],
         ['HINCRBY', `${P}m:${id}`, 'gifts', '1'],
         // Cuántos de cada regalito (para la repisa: "🦴 ×2").
         ['HINCRBY', `${P}m:${id}`, `gc:${gift.split(' ')[0]}`, '1'],
@@ -280,7 +280,6 @@ export function createStore(kv) {
       const e = { id: newId(), name: entry.name, text: entry.text, at: Date.now() };
       await kv.pipeline([
         ['LPUSH', `${P}gb:${id}`, JSON.stringify(e)],
-        ['LTRIM', `${P}gb:${id}`, '0', '499'],
         ['HINCRBY', `${P}m:${id}`, 'gb', '1'],
       ]);
       const glow = (await onceToday('w', who.sid, id)) ? await grantGlow(id, 'words', who) : { gained: 0, to: null };
@@ -364,7 +363,7 @@ export function createStore(kv) {
       const o = await owner(id, token);
       if (o.error) return o.error;
       const e = { id: newId(), text: page.text, prompt: page.prompt || null, at: Date.now() };
-      await kv.pipeline([['LPUSH', `${P}dy:${id}`, JSON.stringify(e)], ['LTRIM', `${P}dy:${id}`, '0', '199'], ['HINCRBY', `${P}m:${id}`, 'dc', '1']]);
+      await kv.pipeline([['LPUSH', `${P}dy:${id}`, JSON.stringify(e)], ['HINCRBY', `${P}m:${id}`, 'dc', '1']]);
       await event('diary', toPublic(o.h, id), 'La familia');
       return e;
     },
@@ -415,7 +414,7 @@ export function createStore(kv) {
     // Tableros de notas: frasco de gracias ("jar") y palabras de consuelo ("comfort").
     async boardAdd(name, text, who) {
       const e = { text, who: who || 'Alguien', at: Date.now() };
-      const [, , n] = await kv.pipeline([['LPUSH', `${P}${name}`, JSON.stringify(e)], ['LTRIM', `${P}${name}`, '0', '299'], ['INCR', `${P}${name}n`]]);
+      const [, n] = await kv.pipeline([['LPUSH', `${P}${name}`, JSON.stringify(e)], ['INCR', `${P}${name}n`]]);
       return { entry: e, count: n };
     },
 

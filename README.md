@@ -172,6 +172,15 @@ tarjeta para historias, farolillo que se va volando y palabras de consuelo.
 Sin el paso 2 el sitio funciona igual en **modo demo**: cada visitante ve sólo lo que suma en su
 propio navegador (aparece un aviso abajo). Con Upstash conectado, todo es compartido y en vivo.
 
+**Antes de conectar una base a un sitio que ya se usó en modo demo:** los recuerdos de esos
+navegadores no se importan automáticamente. No borres sus datos; el rescate está pendiente en
+`PENDIENTES.md`. El permiso de edición también se guarda en el navegador: conservá el enlace de
+familia para poder entrar desde otro dispositivo.
+
+La base conserva el historial de diarios, mensajes, regalitos, notas y gestos sin borrar los
+anteriores cuando llegan nuevos. La interfaz muestra los más recientes; consultar los anteriores
+con paginación sigue pendiente. La presencia se actualiza cada 5–12 segundos.
+
 ## Cambiar los datos de Luca
 
 Están en [`server/seed.js`](server/seed.js): nombre, foto, cumpleaños, día que partió y mensaje.
