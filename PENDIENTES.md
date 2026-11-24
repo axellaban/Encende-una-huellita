@@ -4,6 +4,30 @@ Lista para quien siga el proyecto (persona o IA). Leé primero [`AGENTS.md`](AGE
 Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** = lo que más suma,
 **P2** = completa el relevamiento del sitio de referencia, **P3** = deuda técnica y mejoras.
 
+## 🆕 Última tanda (24/11/2026, tarde) — publicada con apuro, falta revisar en pantalla
+
+Hecho y en `main` (`npm test` 24/24 y build OK; capturas en celular del salón, pasillos, nichos,
+ascensor por fuera y piso 5; **no** se corrió el recorrido completo `scripts/recorrido.mjs`):
+- **Salón nuevo** (`hall.js`): salón redondo (`ROOM_R` = 12) con la pérgola, y 5 pasillos anchos
+  (`CORRIDOR_DEG` en `world.js`), 18 nichos cada uno (siguen siendo 90 lugares por piso, mismos números).
+  Nichos libres: puertitas de madera con plaquita de bronce (un `InstancedMesh`, `updateDoors`); al
+  llegar una huellita se abren y quedan foto en marco claro detrás de un vidrio, lucecitas de colores
+  (`nicheBulbs`) y plaquita con el nombre. Vitral al fondo, alfombra, macetas, cartel en cada boca.
+  Los muros tapan los toques (`hall.blockers`).
+- **Luca sólo en el piso 1**: la ofrenda se esconde arriba (y su choque); en su lugar, una fuente con velitas.
+  Visitar a Luca baja al piso 1. Los espíritus del Prado se esconden en los pisos del cielo (`spirits.setUp`).
+- **Ascensor adentro del salón** (`elevator.js`): pared de madera entre dos pasillos, puertas metálicas
+  lisas, indicador "PISO n", botonera; la cabina está detrás. La torre de vidrio del jardín y su caminito
+  se sacaron. El viaje (`main.js`): la cámara entra a la cabina, se cierran las puertas, cuenta, sacudón,
+  velo de nubes, se abren en el piso nuevo. **Revisar**: el interior de la cabina salía quemado en naranja
+  (se bajó la luz al final, sin captura nueva) y la cámara de adentro (`insideShot`).
+- **Río bioluminiscente** (`river.js`): azul eléctrico en orillas y olas, anillos alrededor de velitas,
+  tus pasos y tu mascota (`setMovers`), chispitas en el barro. Vía Láctea más cargada, árboles en silueta
+  con borde azul. **Sin captura**: mirarlo desde el puente.
+- **Valle del cielo encendido** (`VALLEY_READY = true`, pilares más lejos, base que se funde con las nubes,
+  copas más grandes), **bruma** conectada (`mist.js`) y **planear** (🌬️ en los pisos del cielo, brazos
+  abiertos, estela, aterrizaje). **Sin capturas**: revisar pisos 20, 50 y 99 y medir FPS.
+
 ## 🤝 Traspaso (24/11/2026): hasta dónde llegó la última sesión y qué sigue
 
 Todo lo de abajo ya está en `main` (y en la rama que publica Vercel, ver AGENTS).

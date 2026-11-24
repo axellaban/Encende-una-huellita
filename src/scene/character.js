@@ -190,10 +190,12 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
   halo.position.y = -0.1;
   lantern.add(lb, halo);
   arms[1].add(lantern);
+  let lanternLight = null;
   if (light) {
     const l = new THREE.PointLight('#ffb36b', 2.2, 6, 1.8);
     l.position.y = -0.1;
     lantern.add(l);
+    lanternLight = l;
   }
   // Ojos que parpadean: párpados del color de la cara pintada, encima de los ojos del dibujo.
   const lidMat = new THREE.MeshLambertMaterial({ color: '#fbf3e6', emissive: '#4a3a34', emissiveIntensity: 0.5 });
@@ -222,6 +224,7 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
   smile.visible = false;
   head.add(smile);
   let happy = 0;
+  let gk = 0; // cuánto está planeando (0..1, suave)
   // Cachetes rosados.
   const cheekMat = new THREE.MeshBasicMaterial({ color: '#ff7aa8', transparent: true, opacity: 0.32, depthWrite: false });
   for (const sd of [-1, 1]) {
@@ -277,9 +280,12 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
     // Agacharse a acariciar al espíritu.
     pet() { act = { kind: 'pet', t: 0, dur: 1.8 }; },
     get busy() { return !!act; },
+    // Con la cámara muy cerca (adentro del ascensor): el farolito sin halo ni luz, para no encandilar.
+    set close(v) { halo.visible = !v; lb.material.color.setRGB(v ? 1.1 : 2.0, v ? 0.8 : 1.45, v ? 0.5 : 0.9); if (lanternLight) lanternLight.visible = !v; },
     // `speed` en m/s; `turn` en rad/s.
-    update(dt, { speed = 0, turn = 0 } = {}) {
+    update(dt, { speed = 0, turn = 0, gliding = false } = {}) {
       t += dt;
+      gk += ((gliding ? 1 : 0) - gk) * Math.min(1, dt * 6);
       const k = Math.min(1, speed / 1.2);
       phase += dt * (speed > 0.05 ? 3.2 + speed * 1.35 : 0);
       const swing = Math.sin(phase) * (0.35 + 0.35 * Math.min(1, speed / 4)) * k;
@@ -356,6 +362,21 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
         }
         if (p >= 1) { act = null; arms[0].rotation.z = -0.12; arms[1].rotation.z = 0.12; hips.position.y = 0.46; head.rotation.x = 0; }
       } else arms[0].rotation.z = -0.12;
+      // Planeando: brazos bien abiertos (el sarape hace de alas), el cuerpo hacia adelante, las piernas
+      // atrás y se inclina en las curvas.
+      if (gk > 0.01) {
+        const flap = Math.sin(t * 5) * 0.06;
+        arms[0].rotation.z = THREE.MathUtils.lerp(arms[0].rotation.z, -1.45 - flap, gk);
+        arms[1].rotation.z = THREE.MathUtils.lerp(arms[1].rotation.z, 1.45 + flap, gk);
+        arms[0].rotation.x = THREE.MathUtils.lerp(arms[0].rotation.x, -0.2, gk);
+        arms[1].rotation.x = THREE.MathUtils.lerp(arms[1].rotation.x, -0.2, gk);
+        legs[0].rotation.x = THREE.MathUtils.lerp(legs[0].rotation.x, 0.35 + flap, gk);
+        legs[1].rotation.x = THREE.MathUtils.lerp(legs[1].rotation.x, 0.5 - flap, gk);
+        torso.rotation.x = THREE.MathUtils.lerp(torso.rotation.x, 0.32, gk);
+        body.rotation.z = THREE.MathUtils.lerp(body.rotation.z, THREE.MathUtils.clamp(-turn * 0.22, -0.45, 0.45), gk);
+        head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, -0.2, gk);
+        happy = Math.max(happy, 0.5 * gk);
+      }
     },
     dispose() {
       skin.dispose();
