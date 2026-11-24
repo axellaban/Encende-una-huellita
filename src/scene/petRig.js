@@ -584,7 +584,7 @@ function createAnimator(pet) {
     const set = (i, u, l, p) => { L[i * 3] = u; L[i * 3 + 1] = l; L[i * 3 + 2] = p; };
     if (name === 'sit') {
       const hp = -0.62;
-      Q.hipsY = 0.21 * s * (bunny ? 0.9 : 1);
+      Q.hipsY = 0.235 * s * (bunny ? 0.9 : 1);
       Q.hipsPitch = hp;
       Q.chestPitch = 0.05;
       Q.hipsRoll = 0;
@@ -596,7 +596,7 @@ function createAnimator(pet) {
       Q.tailCarry = -0.25;
       Q.tailCurl = 0.05;
     } else if (name === 'lie') {
-      Q.hipsY = 0.155 * s;
+      Q.hipsY = 0.185 * s;
       Q.hipsPitch = 0.02;
       Q.chestPitch = 0;
       Q.hipsRoll = 0.12;
@@ -611,7 +611,7 @@ function createAnimator(pet) {
       Q.tailFreq = P.tailFreq * 0.5;
     } else if (name === 'bow') {
       const hp = 0.55;
-      Q.hipsY = (H - 0.035) * s + Math.sin(t * 11) * 0.012 * s;
+      Q.hipsY = (H + 0.02) * s + Math.sin(t * 11) * 0.012 * s;
       Q.hipsPitch = hp;
       Q.chestPitch = 0.1;
       for (const i of [0, 1]) set(i, -hp - 0.1 - 1.15, 0.15, 1.0);
@@ -682,6 +682,7 @@ function createAnimator(pet) {
       else if (k < 0.75) roll = Math.PI + Math.sin((k - 0.3) * 30) * 0.3;
       else roll = Math.PI + smooth((k - 0.75) / 0.25) * Math.PI;
       P.hipsRoll += roll * shot.spinDir;
+      P.hipsY += Math.max(0, -Math.cos(roll)) * 0.15 * s;
       if (k > 0.2 && k < 0.85) {
         const kk = Math.sin(t * 13);
         for (let i = 0; i < 4; i++) {

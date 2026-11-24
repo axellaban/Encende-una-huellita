@@ -93,10 +93,10 @@ function createFx(scene) {
   let pnext = 0;
 
   return {
-    print(x, z, heading, color, s = 1) {
+    print(x, z, heading, color, s = 1, baseY = 0) {
       const i = next;
       next = (next + 1) % N;
-      m.position.set(x, 0.024 + i * 0.00002, z);
+      m.position.set(x, baseY + 0.02 + i * 0.00002, z);
       m.rotation.set(0, heading, 0);
       m.scale.setScalar(s);
       m.updateMatrix();
@@ -172,14 +172,15 @@ function createBall(scene) {
     idle: 0,
     bounced: 0,
     get free() { return !this.held; },
-    get inAir() { return this.pos.y > r + 0.03 || Math.abs(this.vel.y) > 0.3; },
+    get inAir() { return this.pos.y > groundY(this.pos.x, this.pos.z) + r + 0.03 || Math.abs(this.vel.y) > 0.3; },
     // Dónde va a tocar el piso (para correr hacia ahí y no hacia donde está ahora).
     landing(out = new THREE.Vector3()) {
+      const fy = groundY(this.pos.x, this.pos.z) + r;
       if (!this.inAir) return out.copy(this.pos);
       const vy = this.vel.y;
-      const h = this.pos.y - r;
+      const h = this.pos.y - fy;
       const tl = (vy + Math.sqrt(vy * vy + 2 * 9.8 * Math.max(0, h))) / 9.8;
-      return out.set(this.pos.x + this.vel.x * tl, r, this.pos.z + this.vel.z * tl);
+      return out.set(this.pos.x + this.vel.x * tl, fy, this.pos.z + this.vel.z * tl);
     },
   };
 }
@@ -386,7 +387,7 @@ export function createSpirits(scene, { blocked, tier }) {
       else if (!blocked(a.pos.x, nz, body)) a.pos.z = nz;
       else a.speed *= 0.3;
     }
-    a.pos.y = up ? 0 : groundY(a.pos.x, a.pos.z);
+    a.pos.y = groundY(a.pos.x, a.pos.z, up);
   }
 
   function animate(a, dt) {
@@ -401,7 +402,7 @@ export function createSpirits(scene, { blocked, tier }) {
       bank: clamp(-a.turn * a.speed * 0.05, -0.32, 0.32),
     });
     // Chispitas al correr y huellitas al pisar.
-    if (a.speed > 2.4 * a.s && R() < dt * 14) fx.emit(tmp.copy(a.pos).setY(0.35 * a.s), a.rim, 1, { spread: 0.3, up: 0.25, speed: 0.2, sz: 0.035, lifeT: 0.9 });
+    if (a.speed > 2.4 * a.s && R() < dt * 14) fx.emit(tmp.copy(a.pos).setY(a.pos.y + 0.35 * a.s), a.rim, 1, { spread: 0.3, up: 0.25, speed: 0.2, sz: 0.035, lifeT: 0.9 });
     if (a.label) {
       const d = a.pos.distanceTo(camPos);
       const want = (a.role === 'companion' ? d < 14 : d < 8) ? 0.95 : 0;
@@ -414,8 +415,8 @@ export function createSpirits(scene, { blocked, tier }) {
     a.pet.anim.onStep((i) => {
       if (a.speed < 0.35 * a.s || a.pet.anim.jumping || a.fade < 0.5) return;
       const p = a.pet.pawWorld(i, tmp2);
-      if (p.y > 0.12 * a.s) return;
-      fx.print(p.x, p.z, a.heading, a.rim, a.s * (i < 2 ? 0.95 : 0.85));
+      if (p.y - a.pos.y > 0.12 * a.s) return;
+      fx.print(p.x, p.z, a.heading, a.rim, a.s * (i < 2 ? 0.95 : 0.85), a.pos.y);
     });
   }
 
@@ -481,7 +482,7 @@ export function createSpirits(scene, { blocked, tier }) {
     dig: {
       enter(a) {
         a.goal = null;
-        a.want = { bow: true, sniff: true };
+        a.want = { bow: true };
         a.excite = 0.85;
         a.dur = 2.3 + R() * 1.3;
         a.d.digT = 0;
@@ -934,7 +935,8 @@ export function createSpirits(scene, { blocked, tier }) {
     if (ball.held !== a) return;
     ball.held = null;
     a.pet.mouthWorld(ball.pos);
-    ball.pos.y = Math.max(ball.r, ball.pos.y);
+    const fy = groundY(ball.pos.x, ball.pos.z, up) + ball.r;
+    ball.pos.y = Math.max(fy, ball.pos.y);
     const f = new THREE.Vector3(Math.sin(a.heading), 0, Math.cos(a.heading));
     ball.vel.copy(f).multiplyScalar(power).add(new THREE.Vector3(0, power * 0.55, 0));
     if (!power) ball.vel.set(f.x * 0.4, 0.5, f.z * 0.4);
@@ -942,15 +944,16 @@ export function createSpirits(scene, { blocked, tier }) {
   }
 
   function reappear(a, o) {
-    fx.emit(tmp.copy(a.pos).setY(0.4), a.rim, 14, { up: 1 });
+    fx.emit(tmp.copy(a.pos).setY(a.pos.y + 0.4), a.rim, 14, { up: 1 });
     a.pos.set(o.pos.x - Math.sin(o.heading) * 1.4, 0, o.pos.z - Math.cos(o.heading) * 1.4);
     if (blocked(a.pos.x, a.pos.z, 0.2)) a.pos.set(o.pos.x, 0, o.pos.z);
+    a.pos.y = groundY(a.pos.x, a.pos.z, up);
     a.heading = o.heading;
     a.goal = null;
     a.speed = 0;
     a.turn = 0;
     a.fade = 0;
-    fx.emit(tmp.copy(a.pos).setY(0.4), a.rim, 20, { up: 1 });
+    fx.emit(tmp.copy(a.pos).setY(a.pos.y + 0.4), a.rim, 20, { up: 1 });
   }
 
   // Qué hace un espíritu cuando termina lo que estaba haciendo, según su especie y personalidad.
@@ -1042,8 +1045,9 @@ export function createSpirits(scene, { blocked, tier }) {
     const v = ball.vel;
     v.y -= 9.8 * dt;
     ball.pos.addScaledVector(v, dt);
-    if (ball.pos.y < ball.r) {
-      ball.pos.y = ball.r;
+    const floorY = groundY(ball.pos.x, ball.pos.z, up) + ball.r;
+    if (ball.pos.y < floorY) {
+      ball.pos.y = floorY;
       if (v.y < -1.2) {
         if (v.y < -2.6 && dist2(ball.pos, camPos) < 14) listeners.event.forEach((fn) => fn('bounce'));
         v.y = -v.y * 0.55;
@@ -1051,7 +1055,7 @@ export function createSpirits(scene, { blocked, tier }) {
         v.z *= 0.82;
       } else v.y = 0;
     }
-    if (ball.pos.y <= ball.r + 0.001) { const f = Math.exp(-dt * 1.6); v.x *= f; v.z *= f; }
+    if (ball.pos.y <= floorY + 0.001) { const f = Math.exp(-dt * 1.6); v.x *= f; v.z *= f; }
     // Rebota contra el cerco, el salón y los árboles.
     const rd = Math.hypot(ball.pos.x, ball.pos.z);
     if (rd > GARDEN_RADIUS - 1.2) { const nx = ball.pos.x / rd; const nz = ball.pos.z / rd; const dot = v.x * nx + v.z * nz; if (dot > 0) { v.x -= 1.6 * dot * nx; v.z -= 1.6 * dot * nz; } }
@@ -1140,6 +1144,7 @@ export function createSpirits(scene, { blocked, tier }) {
         a = spawnAgent(lookFor(m), { name: m.name, memorialId: m.featured || m.candles !== undefined ? m.id : null, zone }, 'pack');
         a.d.key = k;
         a.pos.copy(zonePoint(a));
+        a.pos.y = groundY(a.pos.x, a.pos.z, up);
         go(a, 'idle');
       }
       next.push(a);
@@ -1150,7 +1155,7 @@ export function createSpirits(scene, { blocked, tier }) {
     if (!ball.held || ball.held.role === 'pack') {
       if (ball.held) dropBall(ball.held, 0);
       const bc = up ? SKY_TERRACE : MEADOW;
-      ball.pos.set(bc.x + 1.2, ball.r, bc.z - 0.8);
+      ball.pos.set(bc.x + 1.2, groundY(bc.x + 1.2, bc.z - 0.8, up) + ball.r, bc.z - 0.8);
       ball.vel.set(0, 0, 0);
     }
   }
@@ -1168,9 +1173,10 @@ export function createSpirits(scene, { blocked, tier }) {
     // Aparece adelante tuyo (en el paseo va adelante, con la correa).
     const end = new THREE.Vector3(player.pos.x + Math.sin(player.heading) * 1.6, 0, player.pos.z + Math.cos(player.heading) * 1.6);
     if (blocked(end.x, end.z, 0.25)) end.copy(player.pos);
+    end.y = groundY(end.x, end.z, up);
     a.pos.copy(end);
     a.heading = player.heading;
-    a.d.orb = { start, end: end.clone().setY(0.5), t: 0 };
+    a.d.orb = { start, end: end.clone().setY(end.y + 0.5), t: 0 };
     go(a, 'follow');
     return a;
   }
@@ -1253,7 +1259,7 @@ export function createSpirits(scene, { blocked, tier }) {
       const k = i / LEASH_PTS;
       const p = new THREE.Vector3().lerpVectors(leashA, leashB, k);
       p.y -= Math.sin(Math.PI * k) * slack;
-      p.y = Math.max(0.04, p.y);
+      p.y = Math.max(a.pos.y + 0.04, p.y);
       pts.push(p);
       p.toArray(leashPos, i * 3);
     }

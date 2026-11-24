@@ -332,8 +332,8 @@ export function createElevator(scene, colliders, rnd) {
       hit,
       exitTurn,
       get outHeading() { return g.rotation.y; },
-      doorPoint(dist, side = 0) { const p = world(side, 0, T / 2 + dist); p.y = 0; return p; },
-      cabPoint(z = 0, x = 0) { const p = world(x, 0, CZ + z); p.y = 0; return p; },
+      doorPoint(dist, side = 0) { const p = world(side, 0, T / 2 + dist); p.y = 0.16; return p; },
+      cabPoint(z = 0, x = 0) { const p = world(x, 0, CZ + z); p.y = 0.16; return p; },
       shot(outPos, outLook, side = 0.95, drop = 0) {
         outPos.copy(world(side * 1.35, 1.9, T / 2 + 3.7));
         outLook.copy(world(0, 1.3 - drop, -0.2));

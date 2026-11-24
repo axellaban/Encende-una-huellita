@@ -28,7 +28,7 @@ const PX = 1.32; // paso entre columnas de nichos
 const OW = 1.0; // hueco de cada nicho
 const OH = 0.9;
 const DEPTH = 0.4; // lo hondo del nicho
-const ROWS_Y = [0.75, 1.91, 3.07]; // de abajo hacia arriba
+const ROWS_Y = [0.92, 2.02, 3.12]; // de abajo hacia arriba (la fila de abajo queda bien arriba del piso de madera y=0.16)
 // Orden de los lugares: primero la fila del medio (a la altura de los ojos), después la de abajo y la de arriba.
 const ROW_ORDER = [1, 0, 2];
 const Z0 = 0.7; // dónde empieza la grilla de nichos, desde la boca del pasillo
@@ -656,8 +656,8 @@ export function buildHall(scene, colliders, tier) {
     const glass = new THREE.Mesh(new THREE.PlaneGeometry(OW, OH), glassMat);
     glass.position.z = -0.015;
     glass.renderOrder = 4;
-    const name = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.13), new THREE.MeshBasicMaterial({ transparent: true }));
-    name.position.set(0, -OH / 2 - 0.13, 0.008);
+    const name = new THREE.Mesh(new THREE.PlaneGeometry(0.68, 0.125), new THREE.MeshBasicMaterial({ transparent: true }));
+    name.position.set(0, -OH / 2 - 0.055, 0.048);
     const pick = new THREE.Mesh(new THREE.PlaneGeometry(OW + 0.1, OH + 0.1), pickMat);
     pick.position.z = 0.05;
     pick.userData = { kind: 'slot', local };

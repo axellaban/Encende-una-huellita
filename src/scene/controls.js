@@ -330,7 +330,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     walkTo(point) {
       if (mode === 'focus') leaveFocus();
       walkTarget = new THREE.Vector3(point.x, 0, point.z);
-      marker.position.set(point.x, (point.y || 0) + 0.03, point.z);
+      marker.position.set(point.x, Math.max(point.y || 0, groundY(point.x, point.z, colliders.up)) + 0.025, point.z);
       marker.visible = true;
     },
     // Vuelo de cámara a un punto mirando a un objetivo; al llegar queda en modo "focus".
@@ -357,7 +357,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
       camera.lookAt(lookAt);
     },
     placePlayer(p, facing = null) {
-      player.pos.set(p.x, colliders.up ? 0 : groundY(p.x, p.z), p.z);
+      player.pos.set(p.x, groundY(p.x, p.z, colliders.up), p.z);
       if (facing) player.heading = Math.atan2(facing.x - p.x, facing.z - p.z);
       player.speed = 0;
       walkTarget = null;
@@ -397,7 +397,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         // Primero el salto; después baja suave, como con un paracaídas de tela.
         air.vy = air.t < 0.55 ? air.vy - 14 * dt : air.vy + (-1.05 - air.vy) * Math.min(1, dt * 2.5);
         player.pos.y += air.vy * dt;
-        const gy = colliders.up ? 0 : groundY(player.pos.x, player.pos.z);
+        const gy = groundY(player.pos.x, player.pos.z, colliders.up);
         if (air.t > 0.5 && player.pos.y <= gy) {
           player.pos.y = gy;
           air = null;
@@ -473,8 +473,8 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         if (!moving) player.speed *= 0.5;
       }
       player.moving = moving && player.speed > 0.15;
-      // Sube y baja por el arco del puente.
-      const gy = colliders.up ? 0 : groundY(player.pos.x, player.pos.z);
+      // Sube y baja por el arco del puente y el piso de madera del salón.
+      const gy = groundY(player.pos.x, player.pos.z, colliders.up);
       player.pos.y += (gy - player.pos.y) * Math.min(1, dt * 12);
       if (player.moving) listeners.move.forEach((fn) => fn());
       if (marker.visible) {

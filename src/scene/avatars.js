@@ -127,7 +127,7 @@ export function createAvatars(scene) {
           g.position.x += (dx / d) * step;
           g.position.z += (dz / d) * step;
         }
-        g.position.y = (p.data.fl || 0) > 0 ? 0 : groundY(g.position.x, g.position.z);
+        g.position.y = groundY(g.position.x, g.position.z, (p.data.fl || 0) > 0);
         const moved = Math.hypot(g.position.x - bx, g.position.z - bz) / Math.max(dt, 1e-3);
         p.speed += (moved - p.speed) * Math.min(1, dt * 6);
         const face = d > 0.15 ? Math.atan2(dx, dz) : p.ry;

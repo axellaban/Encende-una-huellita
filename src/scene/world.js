@@ -87,11 +87,12 @@ export const outside = (x, z) => z > creekZ(x) + CREEK_HALF * 0.5;
 // En el agua (no se puede caminar, salvo por el puente).
 export const inWater = (x, z) => Math.abs(z - creekZ(x)) < CREEK_HALF + 0.15 && !onBridge(x, z, -0.12);
 // Altura del piso donde se camina: el arco del puente y el piso de madera del salón.
-export function groundY(x, z) {
-  if (onBridge(x, z, 0.15)) {
+export function groundY(x, z, up = false) {
+  if (!up && onBridge(x, z, 0.15)) {
     const k = (z - (BRIDGE.z - BRIDGE.halfL)) / (BRIDGE.halfL * 2);
     return Math.sin(Math.min(1, Math.max(0, k)) * Math.PI) * BRIDGE.arch + 0.13;
   }
+  if (insideHall(x, z)) return 0.16;
   return 0;
 }
 export const nearCreek = (x, z, pad = 0) => Math.abs(z - creekZ(x)) < CREEK_HALF + 0.6 + pad;
