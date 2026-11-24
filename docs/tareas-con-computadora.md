@@ -13,6 +13,15 @@ libro, regalitos, diario, fotos y voz. Los datos del modo demo anterior se recup
 cuando su familia vuelve a entrar desde el navegador que los creó. El original se conserva y los
 reintentos no duplican las huellitas ni los recuerdos.
 
+La recuperación se verificó contra Upstash real: foto de 1,1 MB, foto extra, voz, diario con
+corazones, libro, regalitos y permiso de edición. Repetir el lote no duplica registros. La huellita
+técnica se mantuvo fuera del listado público y se eliminó al terminar.
+
+`scripts/presencia.mjs` verifica dos sesiones Chromium independientes con los dos personajes
+visibles y el contador de visitantes. `scripts/rescate.mjs` verifica en iPhone SE y Android
+emulados una respuesta perdida, el respaldo descargable, reintento sin duplicados, acceso
+familiar y una vela que llega a la otra sesión. Las 35 pruebas de API/datos también pasan.
+
 Pasos de referencia para una instalación nueva:
 
 1. Entrar a <https://vercel.com> → proyecto **encende-una-huellita**.

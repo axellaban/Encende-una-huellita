@@ -270,11 +270,12 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       al sitio conserva sus datos sólo en ese navegador hasta la próxima visita.
 - [x] **Dos clientes independientes de la API**: presencia en ambas direcciones y velas/flores/
       mensajes que llegan por el siguiente latido; una vela repetida no suma dos veces.
-- [ ] **Verificación visual con dos navegadores**: confirmar los personajes 3D y el contador de
-      visitantes en el mismo piso. El movimiento se actualiza cada 5–12 s (no hay WebSockets).
-      La prueba de dos sesiones Chromium quedó pendiente: la segunda no terminó de iniciar antes
-      de 120 s. Una sesión sí entró con la base compartida. No confundir esto con teléfonos físicos
-      ni con la prueba de API, que sí pasó en ambas direcciones.
+- [x] **Verificación visual con dos navegadores**: `scripts/presencia.mjs` abre dos sesiones
+      Chromium independientes (iPhone 13 y Pixel 5 emulados), verifica los nombres recibidos por
+      los latidos, los personajes 3D y el contador de visitantes en ambas direcciones. Se revisaron
+      las capturas con los dos personajes juntos. En CI sin GPU se pausa una escena al iniciar la
+      otra; los latidos siguen activos. El movimiento se actualiza cada 5–12 s (no hay WebSockets).
+      Esto no mide rendimiento en teléfonos físicos.
 - [ ] **Teléfonos reales** (iPhone Safari y Android Chrome): rendimiento del 3D, calidad automática
       (`src/quality.js`), palanca, hoja deslizable, teclado sobre formularios, áreas seguras del notch.
       Con la tercera persona: que la cámara no se meta en los muros, que la palanca se sienta natural

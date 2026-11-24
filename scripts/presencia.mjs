@@ -14,12 +14,19 @@ const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? { execut
 const pages = [];
 const errors = [];
 const seen = [[], []];
-const names = ['Navegador de prueba A', 'Navegador de prueba B'];
+const run = randomUUID().slice(0, 5);
+const names = [`Prueba A ${run}`, `Prueba B ${run}`];
 try {
   for (let i = 0; i < 2; i++) {
     const ctx = await browser.newContext({ ...(i === 0 ? devices['iPhone 13'] : devices['Pixel 5']), deviceScaleFactor: 1, reducedMotion: 'reduce' });
     await ctx.addInitScript(({ name, sid }) => {
       for (const [k, v] of Object.entries({ quality: 'low', welcomed: '1', music: '0', sounds: '0', name, sid })) localStorage.setItem(`huellita.${k}`, v);
+      let debug;
+      Object.defineProperty(window, '__huellita', { get: () => debug, set: (value) => {
+        debug = value;
+        const setLoop = value.renderer.setAnimationLoop.bind(value.renderer);
+        value.renderer.setAnimationLoop = (fn) => { if (fn) window.__presenceLoop = fn; setLoop(fn); };
+      } });
     }, { name: names[i], sid: randomUUID() });
     const p = await ctx.newPage(); pages.push(p);
     p.on('pageerror', (e) => errors.push(e.message));
@@ -29,9 +36,10 @@ try {
     assert.equal(await p.locator('#mode').evaluate((e) => e.hidden), true);
     await p.locator('#enter').click();
     await p.waitForFunction(() => !!window.__huellita?.renderer, null, { timeout: 20000 });
+    await p.mouse.click(250, 200); // salta la intro antes de ubicar el personaje
     await p.evaluate((i) => {
       const H = window.__huellita;
-      H.controls.placePlayer(new H.THREE.Vector3(i === 0 ? -0.8 : 0.8, 0, 56), new H.THREE.Vector3(0, 0, 30));
+      H.controls.placePlayer(new H.THREE.Vector3(i === 0 ? -0.8 : 0.8, 0, 25), new H.THREE.Vector3(0, 0, 15));
       H.controls.snapFollow();
       H.renderer.setAnimationLoop(null);
       H.me.group.position.copy(H.controls.player.pos);
@@ -40,13 +48,18 @@ try {
   }
   for (let i = 0; i < 2; i++) {
     const p = pages[i];
+    await p.waitForResponse(async (r) => new URL(r.url()).pathname === '/api/now' && r.ok() &&
+      (await r.json()).others.some((o) => o.name === names[1 - i]), { timeout: 30000 });
+    await p.evaluate(() => window.__huellita.renderer.setAnimationLoop(window.__presenceLoop));
+    await p.waitForTimeout(3000);
+    await p.evaluate(() => window.__huellita.renderer.setAnimationLoop(null));
     await p.waitForFunction(() => {
       let avatars = 0;
       window.__huellita.scene.traverse((o) => { if (o.isSprite && o.position.y === 1.72) avatars++; });
       return avatars > 0 && Number(document.querySelector('#here').textContent) >= 2;
     }, null, { timeout: 30000 });
     assert.ok(seen[i].some((o) => o.name === names[1 - i]));
-    await p.evaluate(() => { const H = window.__huellita; H.camera.position.set(0, 3, 64); H.camera.lookAt(0, 1, 56); H.renderer.render(H.scene, H.camera); });
+    await p.evaluate(() => { const H = window.__huellita; H.camera.position.set(0, 3, 30); H.camera.lookAt(0, 1, 25); H.renderer.render(H.scene, H.camera); });
     await p.waitForTimeout(500);
     await p.screenshot({ path: `${shots}/sesion-${i + 1}.png` });
     console.log(`OK: sesión ${i + 1} recibió y dibujó al personaje de la otra.`);
