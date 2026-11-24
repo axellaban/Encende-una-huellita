@@ -4,8 +4,8 @@
 // de los espíritus y el frasco de gracias.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HALL_CENTER, HALL_RADIUS, SPAWN, PATH_HALF, GARDEN_RADIUS, BRIDGE, outside, MEADOW, MEADOW_R, nearCreek, insideHall, uTime, rand } from './world.js';
-import { EASEL_POS, ALTAR_SCALE, POST_H } from './hall.js';
+import { HALL_CENTER, ROOM_R, SPAWN, PATH_HALF, GARDEN_RADIUS, BRIDGE, outside, MEADOW, MEADOW_R, nearCreek, insideHall, uTime, rand } from './world.js';
+import { EASEL_POS, ALTAR_SCALE } from './hall.js';
 import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture, twoSided } from './textures.js';
 import { picadoBanner, PALETTE } from './muertos.js';
 import { buildRiver } from './river.js';
@@ -55,7 +55,7 @@ export function createCozy(scene, tier, colliders, ground = scene) {
       const z = zStart - t * (zStart - (EASEL_POS.z + 1.2 * ALTAR_SCALE));
       const spread = (r() + r() + r() - 1.5) * 0.9;
       const x = spread + Math.sin(z * 0.35) * 0.3;
-      m.position.set(x, 0.03 + (z < HALL_CENTER.z + HALL_RADIUS + 1.3 ? 0.14 : 0) + r() * 0.01, z);
+      m.position.set(x, 0.03 + (z < HALL_CENTER.z + ROOM_R + 0.7 ? 0.14 : 0) + r() * 0.01, z);
       m.rotation.set((r() - 0.5) * 0.3, r() * 6, (r() - 0.5) * 0.3);
       m.scale.setScalar(0.7 + r() * 0.8);
       m.updateMatrix();
@@ -146,7 +146,7 @@ export function createCozy(scene, tier, colliders, ground = scene) {
     ground.add(capMesh);
   }
 
-  // ---------- el cuenco y la pelota de Luca ----------
+  // ---------- el cuenco y la pelota de Luca (en el piso 1, al lado de su ofrenda) ----------
   {
     const g = new THREE.Group();
     g.position.set(EASEL_POS.x + 2.95, 0.16, EASEL_POS.z + 1.35);
@@ -159,29 +159,7 @@ export function createCozy(scene, tier, colliders, ground = scene) {
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12), new THREE.MeshLambertMaterial({ color: '#cfe05a', emissive: '#303a00' }));
     ball.position.set(-0.32, 0.07, 0.12);
     g.add(bowl, water, base, ball);
-    scene.add(g);
-  }
-
-  // ---------- farolitos de papel colgando en la pérgola ----------
-  {
-    const colors = [new THREE.Color(1.8, 0.9, 0.7), new THREE.Color(1.7, 1.4, 0.6), new THREE.Color(1.1, 0.9, 1.7), new THREE.Color(1.8, 0.8, 1.1), new THREE.Color(0.8, 1.4, 1.2)];
-    const geo = new THREE.SphereGeometry(0.22, 14, 10);
-    geo.scale(1, 0.85, 1);
-    for (let p = 0; p < 11; p++) {
-      const a = THREE.MathUtils.degToRad(40 + (p - 0.5) * (280 / 9));
-      const rad = HALL_RADIUS - 1.0;
-      const lantern = new THREE.Group();
-      lantern.position.set(HALL_CENTER.x + Math.sin(a) * rad, POST_H - 0.75, HALL_CENTER.z + Math.cos(a) * rad);
-      const ball = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: colors[p % colors.length], transparent: true, opacity: 0.92 }));
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.012, 6, 16).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#2a1d16' }));
-      ring.position.y = 0.19;
-      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.5, 4), new THREE.MeshBasicMaterial({ color: '#1b1512' }));
-      cord.position.y = 0.45;
-      lantern.add(ball, ring, cord);
-      scene.add(lantern);
-      const seed = r() * 10;
-      animated.push((t) => { lantern.rotation.z = Math.sin(t * 0.9 + seed) * 0.06; lantern.rotation.x = Math.cos(t * 0.7 + seed) * 0.05; });
-    }
+    ground.add(g);
   }
 
   // ---------- pétalos que caen ----------
@@ -254,7 +232,7 @@ export function createCozy(scene, tier, colliders, ground = scene) {
   }
 
   // ---------- el río, el Puente del Arcoíris y el arco de entrada (river.js) ----------
-  buildRiver({ ground, animated, colliders, r, density: tierCount(tier, 100) / 100 });
+  const river = buildRiver({ ground, animated, colliders, r, density: tierCount(tier, 100) / 100 });
 
   // ---------- cartel con flecha en la entrada: por acá al Prado ----------
   {
@@ -404,6 +382,7 @@ export function createCozy(scene, tier, colliders, ground = scene) {
       stars.count = Math.min(STAR_MAX, Math.max(3, n));
     },
     jarWorldPos: () => new THREE.Vector3(JAR_POS.x, 1.0, JAR_POS.z),
+    setRiverMovers: (list) => river.setMovers(list),
   };
 }
 

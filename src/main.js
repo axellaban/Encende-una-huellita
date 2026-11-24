@@ -8,7 +8,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
-import { buildWorld, SPAWN, HALL_CENTER, ELEVATOR_POS, uTime, creekZ, CREEK_HALF, onPath, insideHall, onBridge } from './scene/world.js';
+import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF, onPath, insideHall, inCorridor, onBridge } from './scene/world.js';
 import { buildHall, SLOTS_PER_FLOOR, EASEL_POS } from './scene/hall.js';
 import { createControls } from './scene/controls.js';
 import { createLanterns } from './scene/lanterns.js';
@@ -20,6 +20,7 @@ import { createHeaven, FLOORS } from './scene/heaven.js';
 import { createCharacter } from './scene/character.js';
 import { createOfferFx } from './scene/gifts3d.js';
 import { createSparkles } from './scene/sparkles.js';
+import { createMist } from './scene/mist.js';
 import { FURS, EARS, SIZES, SNOUTS } from '../server/looks.js';
 import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard, drawKeepsake } from './share.js';
 import { polaroid } from './photo.js';
@@ -171,6 +172,8 @@ let spirits;
 let me; // tu personaje
 let captureNext = null; // modo foto
 let heaven = null; // el cielo que cambia con el piso
+let mist = null; // la bruma en capas del jardín (mist.js)
+let glideFx = 0; // para la estela de viento al planear
 let bloomPass = null;
 let composer = null;
 let adaptive = null;
@@ -295,11 +298,20 @@ async function buildScene() {
   elevator = createElevator(scene, world.colliders, Math.random);
   avatars.visible = store.get('huellita.quiet') !== '1';
   controls = createControls(camera, canvas, world.colliders, { reduced });
+  // Al aterrizar de un planeo: un puf de brillitos y un pasito.
+  controls.onLand(() => {
+    const P = controls.player;
+    spirits?.sparkle(new THREE.Vector3(P.pos.x, 0.15, P.pos.z), new THREE.Color(1.6, 1.5, 1.9), 22);
+    step(world.colliders.up ? 'cloud' : 'grass');
+    haptic(8);
+  });
   scene.add(controls.marker);
   me = createCharacter({ hue: visitorHue, light: tierName !== 'low' });
   scene.add(me.group);
   spirits = createSpirits(scene, { blocked: controls.blocked, tier });
   heaven = createHeaven(scene, world, { renderer, bloom: bloomPass, tier });
+  // Bruma en capas sobre el río y a lo lejos (se esconde con el jardín en los pisos del cielo).
+  mist = createMist(world.ground, { tier, reduced });
   // Sombras de día en los pisos del cielo (sólo calidad alta): el sol proyecta tu sombra y la de los
   // espíritus sobre el piso del salón. La luz sigue a tu personaje (así alcanza un mapa chico).
   if (tierName === 'high') {
@@ -312,7 +324,7 @@ async function buildScene() {
     L.shadow.bias = -0.0008;
     L.shadow.normalBias = 0.03;
     scene.add(L.target);
-    world.deck.receiveShadow = true;
+    world.deck.traverse((o) => { if (o.isMesh) o.receiveShadow = true; });
     sunShadows = L;
   }
   spirits.setHand((v) => me.leashHand(v));
@@ -324,8 +336,10 @@ async function buildScene() {
   controls.onTap((e) => {
     if (document.body.classList.contains('intro')) return skipIntro();
     if (!sheetEl.hidden) { closeSheet(); return; }
-    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, ...spirits.pickables, elevator.hit, ...world.walkable]);
+    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...cozy.pickables, ...spirits.pickables, elevator.hit, ...world.walkable]);
     if (!hit) return;
+    // Un muro: caminar hacia él (no abrir lo que haya del otro lado).
+    if (hit.object.userData.kind === 'wall') { controls.walkTo(hit.point.clone().setY(0)); hideHint(); return; }
     if (hit.object.userData.kind === 'jar') { clink(); return openJar(); }
     if (hit.object.userData.kind === 'elevator') return callElevator();
     if (hit.object.userData.kind === 'spirit') return tapSpirit(spirits.spiritOf(hit.object));
@@ -350,10 +364,10 @@ async function buildScene() {
     hideHint();
   });
   controls.onHover((e) => {
-    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, ...spirits.pickables, elevator.hit]);
+    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...cozy.pickables, ...spirits.pickables, elevator.hit]);
     const key = hit && hit.distance < 16 ? slotKeyFromHit(hit.object) : null;
     hall.setHover(key);
-    canvas.style.cursor = hit && hit.distance < 16 && (key !== null || hit.object.userData.kind) ? 'pointer' : '';
+    canvas.style.cursor = hit && hit.distance < 16 && (key !== null || (hit.object.userData.kind && hit.object.userData.kind !== 'wall')) ? 'pointer' : '';
   });
   controls.onMove(hideHint);
   if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
@@ -380,7 +394,16 @@ async function buildScene() {
     me.group.position.copy(P.pos);
     me.group.rotation.y = P.heading;
     me.leashing = !!(walking && spirits.companion && spirits.companion.state === 'follow');
-    me.update(dt, { speed: P.speed, turn: P.turn });
+    me.update(dt, { speed: P.speed, turn: P.turn, gliding: controls.gliding });
+    // Planeando: una estela de viento detrás tuyo.
+    if (controls.gliding && !reduced) {
+      glideFx -= dt;
+      if (glideFx < 0) {
+        glideFx = 0.07;
+        _v.set(P.pos.x - Math.sin(P.heading) * 0.5, P.pos.y + 1.0, P.pos.z - Math.cos(P.heading) * 0.5);
+        spirits.sparkle(_v, new THREE.Color(1.3, 1.5, 1.9), 3);
+      }
+    }
     spirits.setPlayer(P.pos, P.heading, P.moving, dt);
     spirits.update(dt, camera.position);
     // Botón de acción según lo que haya cerca, y la interfaz que se desvanece al caminar o mientras
@@ -392,6 +415,7 @@ async function buildScene() {
     calmT = busy ? 0.6 : calmT - dt;
     if ((calmT > 0) !== hudAway) { hudAway = calmT > 0; document.body.classList.toggle('moving', hudAway); }
     heaven.update(dt, t);
+    mist?.update(world.fog);
     if (sunShadows) {
       // De día (arriba) hay sombras; de noche, en el jardín, no.
       const day = heaven.k > 0.3;
@@ -412,7 +436,7 @@ async function buildScene() {
         stepT = 1;
         const x = P.pos.x;
         const z = P.pos.z;
-        step(world.colliders.up ? 'cloud' : onBridge(x, z, 0.1) ? 'wood' : onPath(x, z, 0.1) || insideHall(x, z) ? 'stone' : 'grass');
+        step(world.colliders.up ? 'cloud' : onBridge(x, z, 0.1) ? 'wood' : insideHall(x, z) ? 'wood' : onPath(x, z, 0.1) ? 'stone' : 'grass');
       }
     }
     // Si otro visitante pasa cerca, se saludan.
@@ -439,6 +463,15 @@ async function buildScene() {
       riverT = 0.3;
       const d = Math.abs(P.pos.z - creekZ(P.pos.x)) - CREEK_HALF;
       setRiver(world.colliders.up ? 0 : Math.max(0, 1 - d / 16) ** 1.6);
+    }
+    // Tus pasos sobre el puente (o cerca del agua) y tu mascota encienden el plancton del río.
+    if (!world.colliders.up) {
+      const near = (p) => Math.abs(p.z - creekZ(p.x)) < CREEK_HALF + 1.2;
+      const c = spirits?.companion;
+      cozy.setRiverMovers([
+        near(P.pos) ? { x: P.pos.x, z: P.pos.z, w: P.moving ? 1 : 0.45 } : null,
+        c && c.fade > 0.5 && near(c.pos) ? { x: c.pos.x, z: c.pos.z, w: 0.8 } : null,
+      ]);
     }
     cozy.animate(t, dt);
     elevator.animate(t, dt);
@@ -551,12 +584,12 @@ function renderFloors() {
 }
 
 // ---------- el ascensor, como uno de verdad ----------
-// Llamarlo: tu personaje camina hasta la puerta, suena la campanita y se abren las puertas (adentro,
-// la cabina iluminada). Entra caminando, se da vuelta y aparece la botonera. Al elegir el piso se
-// cierran las puertas y la cámara queda adentro, detrás tuyo, mirando afuera: para subir, la cabina
-// sube de verdad por la torre de vidrio y el jardín queda abajo; para bajar, se la ve descender hacia
-// el piso nuevo. En el medio se cruzan unas nubes (ahí cambia el piso), frena suave, campanita, se
-// abren las puertas y salís caminando. Si cerrás la botonera sin elegir, salís caminando.
+// Está en la pared del salón, entre dos pasillos. Llamarlo: tu personaje camina hasta la puerta,
+// suena la campanita y se abren las puertas metálicas (adentro, la cabina iluminada). Entra caminando,
+// se da vuelta y la cámara entra con vos: queda al fondo de la cabina, detrás tuyo, mirando las
+// puertas, y aparece la botonera. Al elegir el piso se cierran las puertas, el indicador cuenta los
+// pisos, hay un sacudón al arrancar y al frenar, un velo de nubes tapa el cambio de piso, campanita,
+// se abren las puertas en el piso nuevo y salís caminando. Si cerrás la botonera sin elegir, salís.
 let riding = false; // la escena del ascensor está en curso
 let insideLift = false; // tu personaje está adentro de la cabina, con la botonera abierta
 const tween = (dur, fn) => new Promise((res) => {
@@ -622,9 +655,14 @@ function cloudVeil(on, dur = 0.5) {
 }
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
-let shotSide = 0.95;
-function liftCam(drop = 0) {
-  elevator.shot(camPos, camLook, shotSide, drop);
+let liftDrop = 0; // cuánto baja la mirada de la cámara de la cabina (con la botonera abierta)
+// La cámara dentro de la cabina; `shake` es el sacudón del viaje.
+function liftCam(drop = liftDrop, shake = 0) {
+  elevator.insideShot(camPos, camLook, drop);
+  if (shake) {
+    camPos.x += (Math.random() - 0.5) * shake;
+    camPos.y += (Math.random() - 0.5) * shake;
+  }
   controls.teleportCamera(camPos, camLook);
 }
 function liftBegin() {
@@ -641,7 +679,8 @@ function liftEnd() {
   controls.held = false;
   controls.enabled = true;
   document.body.classList.remove('riding');
-  elevator.setCab(null);
+  elevator.setInside(false);
+  if (me) me.close = false;
   riding = false;
   insideLift = false;
 }
@@ -651,10 +690,10 @@ async function callElevator() {
   if (reduced) { renderFloors(); $('#floors').showModal(); return; }
   liftBegin();
   const P = controls.player;
-  const door = elevator.doorPoint(1.25);
-  // Lejos (desde el menú): aparece cerca del ascensor, mirándolo.
+  const door = elevator.doorPoint(1.1);
+  // Lejos (desde el menú): aparece en el salón, cerca del ascensor, mirándolo.
   if (Math.hypot(P.pos.x - door.x, P.pos.z - door.z) > 11) {
-    teleportPlayer(elevator.doorPoint(5.5), door);
+    teleportPlayer(elevator.doorPoint(4.2), door);
     controls.snapFollow();
   }
   controls.held = false;
@@ -662,25 +701,28 @@ async function callElevator() {
   controls.held = true;
   await scriptedWalk(door, 0.35);
   await scriptedTurn(elevator.outHeading + Math.PI, 0.35);
-  // Campanita, se prende el botón y se abren las puertas; la cámara se pone de costado para ver entrar.
+  // Campanita, se prende el botón y se abren las puertas; la cámara se pone de costado para verte entrar.
   ding();
   haptic(8);
-  shotSide = 0.95;
-  elevator.shot(camPos, camLook, shotSide);
-  controls.flyTo(camPos, camLook, null, { duration: 1.1 });
-  const settled = later(1150);
-  await later(350);
+  elevator.shot(camPos, camLook, 0.6);
+  controls.flyTo(camPos, camLook, null, { duration: 1.0 });
+  await later(450);
   elevator.setOpen(true);
   liftDoors();
-  await later(900);
-  // Entra (un escalón y el piso de la cabina) y se da vuelta.
-  const inCab = elevator.cabPoint(0.05);
-  await scriptedWalk(elevator.doorPoint(0.15), 0.55, inCab.y * 0.6);
-  await scriptedWalk(inCab, 0.75, inCab.y);
-  await scriptedTurn(elevator.outHeading, 0.6);
-  await settled;
-  // La botonera tapa la mitad de abajo: la cabina, arriba en la pantalla.
-  await tween(0.6, (k) => liftCam(easeIO(k) * 1.55));
+  await later(850);
+  // Entra (cruza el umbral) y se da vuelta hacia las puertas.
+  elevator.setInside(true);
+  await scriptedWalk(elevator.doorPoint(-0.15), 0.5);
+  await scriptedWalk(elevator.cabPoint(0.45, -0.1), 0.6);
+  await scriptedTurn(elevator.outHeading, 0.55);
+  me.close = true;
+  // La cámara entra con vos (por el medio de la puerta) y se queda al fondo de la cabina.
+  elevator.insideShot(camPos, camLook, 0);
+  controls.flyTo(camPos, camLook, null, { duration: 1.0, path: [elevator.doorPoint(0.9).setY(1.95), elevator.doorPoint(-0.3).setY(2.0)] });
+  await later(1050);
+  // La botonera tapa la mitad de abajo: la puerta y el indicador, arriba en la pantalla.
+  await tween(0.5, (k) => liftCam(easeIO(k) * 0.8));
+  liftDrop = 0.8;
   insideLift = true;
   renderFloors();
   $('#floors').showModal();
@@ -688,16 +730,21 @@ async function callElevator() {
 
 // Salir caminando de la cabina (al llegar, o si no elegiste piso).
 async function leaveLift(fromPanel = false) {
-  const out = elevator.doorPoint(2.1);
-  // Si cerraste la botonera sin elegir, la cámara vuelve a encuadrar la cabina entera.
-  if (fromPanel) await tween(0.5, (k) => liftCam((1 - easeIO(k)) * 1.55));
-  await scriptedWalk(elevator.doorPoint(0.3), 0.7, 0.15);
-  await scriptedWalk(out, 0.65, 0);
-  // Gira hacia el jardín antes de que la cámara lo siga: detrás suyo está la torre y la cámara
-  // pasaría por adentro de la puerta.
+  if (fromPanel) await tween(0.45, (k) => liftCam((1 - easeIO(k)) * liftDrop));
+  liftDrop = 0;
+  if (elevator.open < 0.5) {
+    elevator.setOpen(true);
+    liftDoors();
+    await later(700);
+  }
+  me.close = false;
+  await scriptedWalk(elevator.doorPoint(-0.1), 0.6);
+  elevator.setInside(false);
+  await scriptedWalk(elevator.doorPoint(1.9), 0.65);
+  // Gira hacia el salón antes de que la cámara lo siga (detrás suyo está la pared del ascensor).
   await scriptedTurn(elevator.outHeading + 1.15, 0.45);
   controls.placePlayer(controls.player.pos, null);
-  controls.follow({ duration: 1.1 });
+  controls.follow({ duration: 1.1, path: [elevator.doorPoint(0.6).setY(2.0)] });
   await later(650);
   elevator.setOpen(false);
   liftDoors(true);
@@ -710,70 +757,40 @@ async function rideTo(f) {
   insideLift = false;
   const from = currentFloor();
   const up = f > from;
-  const P = controls.player;
-  const { CAB_MIN, CAB_MAX } = elevator;
-  const setCab = (y) => {
-    elevator.setCab(y);
-    P.pos.y = elevator.cabPoint(0).y;
-    liftCam();
-  };
   const count = (k) => {
     const n = Math.round(from + (f - from) * k);
     if (n !== count.last) { count.last = n; elevator.showFloor(n + 1, up ? 1 : -1); tick(); }
   };
-  // Se cierran las puertas (la cámara vuelve a encuadrar la cabina entera).
-  shotSide = 0.95;
-  tween(0.6, (k) => liftCam((1 - easeIO(k)) * 1.55));
+  count.last = from;
+  // Se cierran las puertas (la cámara vuelve a mirar derecho las puertas).
+  const d0 = liftDrop;
+  tween(0.6, (k) => liftCam((1 - easeIO(k)) * d0));
+  liftDrop = 0;
   elevator.setOpen(false);
   liftDoors(true);
   haptic(10);
   await later(1000);
-  liftHum(up ? 5.2 : 5.0);
-  if (up) {
-    // Sube por la torre de vidrio: el jardín (o el mar de nubes) queda abajo.
-    const top = CAB_MIN + (CAB_MAX - CAB_MIN) * 0.9;
-    await tween(3.4, (k) => {
-      const e = easeIO(k);
-      shotSide = 0.95 - 1.9 * e;
-      setCab(CAB_MIN + (top - CAB_MIN) * e);
-      count(e * 0.85);
-      if (k > 0.72 && !rideTo.veil) { rideTo.veil = true; cloudVeil(true, 0.7); }
-    });
-    await later(150);
-    goFloor(f, true, true);
-    count(1);
-    // Llega desde abajo, frenando.
-    shotSide = 0.95;
-    setCab(CAB_MIN + 0.55);
-    cloudVeil(false, 0.8);
-    await tween(1.3, (k) => setCab(CAB_MIN + 0.55 * (1 - easeOut(k))));
-  } else {
-    // Baja: un sacudón al arrancar, nubes, y se ve el piso nuevo acercarse desde arriba.
-    await tween(0.6, (k) => { setCab(CAB_MIN + Math.sin(k * Math.PI) * 0.05); count(k * 0.1); });
-    await cloudVeil(true, 0.55);
-    goFloor(f, true, true);
-    const top = CAB_MIN + (CAB_MAX - CAB_MIN) * 0.75;
-    shotSide = -0.95;
-    setCab(top);
-    cloudVeil(false, 0.8);
-    await tween(3.4, (k) => {
-      const e = easeIO(k);
-      shotSide = -0.95 + 1.9 * e;
-      setCab(top + (CAB_MIN - top) * e);
-      count(0.1 + e * 0.9);
-    });
-  }
-  rideTo.veil = false;
-  setCab(CAB_MIN);
+  liftHum(4.8);
+  // Arranca con un sacudón y cuenta los pisos; a mitad de camino, el velo de nubes tapa el cambio.
+  const shakeAt = (k) => (k < 0.1 ? Math.sin((k / 0.1) * Math.PI) * 0.035 : 0.004);
+  await tween(1.6, (k) => { liftCam(0, shakeAt(k * 0.45)); count(easeIO(k) * 0.45); });
+  await cloudVeil(true, 0.35);
+  goFloor(f, true, true);
+  cloudVeil(false, 0.7);
+  await tween(2.0, (k) => {
+    const kk = 0.45 + k * 0.55;
+    liftCam(0, kk > 0.9 ? Math.sin(((kk - 0.9) / 0.1) * Math.PI) * 0.03 : 0.004);
+    count(0.45 + easeOut(k) * 0.55);
+  });
+  liftCam(0);
   elevator.showFloor(f + 1, 0);
-  await later(250);
+  await later(220);
   ding();
   haptic([10, 40, 10]);
   elevator.setOpen(true);
   liftDoors();
   toast(`🛗 Piso ${f + 1} · ${floorName(f)}`);
   await later(900);
-  P.pos.y = elevator.cabPoint(0).y;
   await leaveLift();
 }
 
@@ -781,6 +798,7 @@ function goFloor(f, quiet = false, instant = false) {
   if (!hall || f === hall.floor) return;
   hall.setFloor(f, memorials);
   heaven?.setFloor(f, instant);
+  spirits?.setUp(f > 0);
   renderFloors();
   elevator?.setFloor(f);
   heartbeat();
@@ -794,7 +812,8 @@ function visit(m) {
   closeModals();
   if (hall && controls) {
     const key = m.slot < 0 ? 'featured' : m.slot % SLOTS_PER_FLOOR;
-    if (m.slot >= 0) goFloor(floorOf(m), true);
+    // La ofrenda de la destacada está sólo en el piso 1.
+    goFloor(m.slot < 0 ? 0 : floorOf(m), true);
     const sheet = bottomSheet();
     const shift = sheet ? 0 : key === 'featured' ? 0.9 : 1.1;
     // En pantallas verticales el campo horizontal es angosto: nos paramos más lejos.
@@ -1068,12 +1087,11 @@ function updateMemorial(m) {
 
 function releaseLantern(m, { burst = false } = {}) {
   if (!hall || !lanterns) return;
-  const key = m.slot < 0 ? 'featured' : floorOf(m) === hall.floor ? m.slot % SLOTS_PER_FLOOR : null;
-  const from = key !== null ? hall.worldPos(key) : new THREE.Vector3(HALL_CENTER.x, 7.2, HALL_CENTER.z);
+  const key = hall.memorialKey(m);
+  const from = key !== null ? hall.worldPos(key, 0.5) : new THREE.Vector3(HALL_CENTER.x, 7.2, HALL_CENTER.z);
   if (key !== null) {
-    // Un poco hacia adelante del marco, hacia el centro del salón.
-    const toCenter = new THREE.Vector3(HALL_CENTER.x - from.x, 0, HALL_CENTER.z - from.z).normalize();
-    from.addScaledVector(toCenter, key === 'featured' ? -0.6 : 0.5);
+    // Un poco adelante del marco (de la ofrenda, hacia la entrada; del nicho, hacia el pasillo).
+    if (key === 'featured') from.z += 0.6;
     from.y -= 0.35;
     if (burst) lanterns.burst(from.clone());
   }
@@ -2232,6 +2250,12 @@ function nearestFrame(P) {
   });
   return best;
 }
+function startGlide() {
+  if (!controls?.glide()) return;
+  me?.smile(3);
+  haptic(12);
+  hideHint();
+}
 function computeAction() {
   if (!controls || !hall || !introDone) return null;
   const P = controls.player;
@@ -2240,7 +2264,7 @@ function computeAction() {
   // La ofrenda de la destacada es enorme: se la ofrece desde la entrada del salón si la mirás.
   const fd = Math.hypot(EASEL_POS.x - P.pos.x, EASEL_POS.z - P.pos.z);
   const ff = ((EASEL_POS.x - P.pos.x) * Math.sin(P.heading) + (EASEL_POS.z - P.pos.z) * Math.cos(P.heading)) / Math.max(fd, 1e-3);
-  if (hall.featured && (fd < 6 || (fd < 11.5 && ff > 0.5))) {
+  if (hall.featured && hall.floor === 0 && (fd < 6 || (fd < 11.5 && ff > 0.5))) {
     const f = hall.featured;
     return { kind: 'visit', ic: '🕯️', lbl: f.name, key: `f:${f.id}`, run: () => visit(f) };
   }
@@ -2250,12 +2274,14 @@ function computeAction() {
     if (m) return { kind: 'visit', ic: '🕯️', lbl: m.name, key: `m:${m.id}`, run: () => visit(m) };
     return { kind: 'add', ic: '＋', lbl: 'Sumar acá', key: `a:${fr.i}`, run: () => openAdd(hall.floor * SLOTS_PER_FLOOR + fr.i) };
   }
-  if (P.pos.distanceTo(_v.set(ELEVATOR_POS.x, 0, ELEVATOR_POS.z)) < 5.5) return { kind: 'lift', ic: '🛗', lbl: 'Ascensor', key: 'lift', run: callElevator };
+  if (elevator && P.pos.distanceTo(elevator.doorPoint(1.2)) < 3.4) return { kind: 'lift', ic: '🛗', lbl: 'Ascensor', key: 'lift', run: callElevator };
   if (currentFloor() === 0 && P.pos.distanceTo(_v.set(JAR_POS.x, 0, JAR_POS.z)) < 3.2) return { kind: 'jar', ic: '🫙', lbl: 'Frasco', key: 'jar', run: () => { clink(); openJar(); } };
   const c = spirits?.companion;
   // Paseando, el botón es la pelota; si te quedás quieto un rato al lado de tu mascota, acariciarla.
   if (c && c.fade > 0.5 && stillFor > 2.5 && P.pos.distanceTo(c.pos) < 2.4) return { kind: 'pet', ic: '🐾', lbl: 'Acariciar', key: 'pet', run: () => { stillFor = 0; tapSpirit(c); } };
   if (walking) return { kind: 'ball', ic: '🎾', lbl: 'Tirar', key: 'ball-w', run: throwBall };
+  // En los pisos del cielo, afuera de los pasillos: saltar y planear con el sarape abierto.
+  if (currentFloor() > 0 && !inCorridor(P.pos.x, P.pos.z) && !controls.gliding) return { kind: 'glide', ic: '🌬️', lbl: 'Planear', key: 'glide', run: startGlide };
   return { kind: 'gestures', ic: '🤍', lbl: 'Gestos', key: 'g', run: null };
 }
 function updateAction() {

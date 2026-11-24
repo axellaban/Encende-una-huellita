@@ -82,7 +82,10 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
   // con olitas que corren río abajo (las normales salen del ruido y mueven los reflejos).
   const lamps = [];
   for (const s of [-1, 1]) for (const e of [-1, 1]) lamps.push(new THREE.Vector3(BRIDGE.x + s * BRIDGE.halfW, 0.98, BRIDGE.z + e * BRIDGE.halfL));
-  const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uLamps: { value: lamps } }]);
+  // Lo que se mueve en el agua o sobre el puente (velitas que flotan, tus pasos, tu mascota): alrededor,
+  // el plancton se enciende azul. xyz posición, w fuerza (0 = nada).
+  const movers = Array.from({ length: 6 }, () => new THREE.Vector4(0, -50, 0, 0));
+  const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uLamps: { value: lamps }, uMovers: { value: movers }, uBio: { value: 1 } }]);
   uniforms.uTime = uTime;
   const water = new THREE.Mesh(
     ribbon((t, v) => (v - 0.5) * 2 * widthAt(t), 0.045),
@@ -97,7 +100,7 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
           vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
           #include <fog_vertex>
         }`,
-      fragmentShader: `uniform float uTime; uniform vec3 uLamps[4]; varying vec2 vUv; varying vec3 vW;
+      fragmentShader: `uniform float uTime; uniform vec3 uLamps[4]; uniform vec4 uMovers[6]; uniform float uBio; varying vec2 vUv; varying vec3 vW;
         #include <fog_pars_fragment>
         float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -156,15 +159,30 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
           body = mix(body, vec3(0.003, 0.012, 0.028), depth);
           body *= 0.75 + f0 * 0.5;
           vec3 c = mix(body, refl, clamp(fres, 0.0, 1.0));
-          // Destellos sueltos que viajan con el agua.
+          // Destellos sueltos que viajan con el agua: plancton que titila azul.
           vec2 g = vec2(vUv.x * 1.4 - uTime * 0.45, across * 9.0);
           float sp = h(floor(g));
-          float tw = smoothstep(0.94, 1.0, sp) * (0.5 + 0.5 * sin(uTime * 3.0 + sp * 40.0));
-          c += vec3(0.9, 0.85, 0.75) * tw * (1.0 - smoothstep(0.0, 0.2, length(fract(g) - 0.5))) * depth;
+          float tw = smoothstep(0.9, 1.0, sp) * (0.5 + 0.5 * sin(uTime * 3.0 + sp * 40.0));
+          c += mix(vec3(0.9, 0.85, 0.75), vec3(0.35, 1.5, 2.2), uBio) * tw * (1.0 - smoothstep(0.0, 0.2, length(fract(g) - 0.5))) * mix(depth, 1.0, uBio * 0.6);
           // Espumita contra las orillas, cortada por la corriente.
           float band = (1.0 - smoothstep(0.0, 0.06, across)) + smoothstep(0.94, 1.0, across);
-          float foam = band * smoothstep(0.5, 0.75, fbm(vec2(vUv.x * 3.0 - uTime * 0.5, across * 10.0)));
-          c = mix(c, vec3(0.14, 0.15, 0.18), foam * 0.55);
+          float churn = fbm(vec2(vUv.x * 3.0 - uTime * 0.5, across * 10.0));
+          float foam = band * smoothstep(0.5, 0.75, churn);
+          c = mix(c, vec3(0.14, 0.15, 0.18), foam * 0.55 * (1.0 - uBio * 0.7));
+          // Bioluminiscencia: el agua brilla azul eléctrico donde se agita (contra la orilla, en las
+          // crestas de las olitas) y alrededor de lo que se mueve, con anillos que se abren.
+          float edge = (1.0 - smoothstep(0.0, 0.12, across)) + smoothstep(0.88, 1.0, across);
+          float agit = clamp(length(grad) * 1.8, 0.0, 1.0);
+          float patchy = smoothstep(0.42, 0.78, fbm(vec2(vUv.x * 5.0 - uTime * speed * 1.3, across * 12.0 + uTime * 0.1)));
+          float bio = (edge * (0.55 + churn) + agit * agit * 0.9) * patchy;
+          for (int i = 0; i < 6; i++) {
+            vec2 dm = vW.xz - uMovers[i].xz;
+            float dd = dot(dm, dm);
+            float ring = 0.5 + 0.5 * sin(sqrt(dd) * 8.0 - uTime * 4.5);
+            bio += exp(-dd * 0.8) * uMovers[i].w * (0.5 + ring * 0.9);
+          }
+          bio *= 0.8 + 0.2 * sin(uTime * 0.8 + vUv.x * 7.0);
+          c += vec3(0.1, 0.9, 1.65) * bio * uBio;
           gl_FragColor = vec4(c, mix(0.8, 0.97, smoothstep(0.0, 0.12, mid)));
           #include <fog_fragment>
         }`,
@@ -330,12 +348,14 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
       boats.push({ b, t: r(), v: (r() - 0.5) * 1.2, sp: 0.0014 + r() * 0.0016, bob: r() * 6 });
     }
     animated.push((t, dt) => {
-      for (const o of boats) {
+      boats.forEach((o, i) => {
         o.t = (o.t + (dt || 0.016) * o.sp) % 1;
         const p = along(o.t, o.v * widthAt(o.t) * 0.8);
         o.b.position.set(p.x, 0.06 + Math.sin(t * 1.6 + o.bob) * 0.015, p.z);
         o.b.rotation.y = t * 0.2 + o.bob;
-      }
+        // Las primeras cuatro velitas encienden el agua a su alrededor.
+        if (i < 4) movers[i].set(p.x, 0, p.z, 0.55);
+      });
     });
   }
 
@@ -587,5 +607,52 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
     ground.add(gate);
   }
 
-  return { curve, widthAt };
+  // ---------- chispitas en el barro mojado de las orillas ----------
+  {
+    const n = Math.round(420 * density);
+    const pos = new Float32Array(n * 3);
+    const ph = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const t = r();
+      const side = r() < 0.5 ? -1 : 1;
+      const p = along(t, side * (widthAt(t) + 0.05 + r() * 0.5));
+      if (nearBridge(p.x, p.z, 0.4)) { pos[i * 3 + 1] = -50; continue; }
+      pos.set([p.x, 0.035, p.z], i * 3);
+      ph[i] = r() * 100;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('aPh', new THREE.BufferAttribute(ph, 1));
+    const pts = new THREE.Points(geo, new THREE.ShaderMaterial({
+      uniforms: { uTime, uBio: uniforms.uBio },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: `uniform float uTime; attribute float aPh; varying float vA;
+        void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          float tw = 0.5 + 0.5 * sin(uTime * (1.2 + fract(aPh) * 2.0) + aPh);
+          vA = tw * tw * tw;
+          gl_PointSize = clamp(46.0 / max(-mv.z, 0.5), 1.0, 9.0);
+          gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform float uBio; varying float vA;
+        void main(){ float d = length(gl_PointCoord - 0.5); float a = (1.0 - smoothstep(0.0, 0.5, d)) * vA * uBio;
+          gl_FragColor = vec4(vec3(0.3, 1.4, 2.2) * a, a); }`,
+    }));
+    pts.frustumCulled = false;
+    pts.renderOrder = 2;
+    ground.add(pts);
+  }
+
+  return {
+    curve,
+    widthAt,
+    // Tus pasos y tu mascota (sobre el puente o cerca de la orilla) encienden el agua.
+    setMovers(list) {
+      for (let i = 0; i < 2; i++) {
+        const m = list[i];
+        if (m) movers[4 + i].set(m.x, 0, m.z, m.w ?? 1);
+        else movers[4 + i].w = 0;
+      }
+    },
+  };
 }

@@ -137,8 +137,8 @@ export function createHeaven(scene, world, { renderer, bloom = null, hideUp = []
   let target = 0;
   const tmp = new THREE.Color();
   // El piso del salón: madera abajo, madera blanqueada con brillo perlado arriba.
-  const deckMat = world.deck?.material;
-  const deckBase = deckMat ? deckMat.color.clone() : null;
+  const deckMats = world.deck ? (world.deck.userData.mats || [world.deck.material]) : [];
+  const deckBases = deckMats.map((m) => m.color.clone());
   // Un halo dorado bajo el salón, como si flotara en luz.
   const halo = new THREE.Mesh(new THREE.CircleGeometry(HALL_RADIUS + 9, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: glowTexture(), color: new THREE.Color(1.0, 0.85, 0.55), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0, fog: false }));
   halo.position.set(HALL_CENTER.x, -0.3, HALL_CENTER.z);
@@ -184,11 +184,11 @@ export function createHeaven(scene, world, { renderer, bloom = null, hideUp = []
     clouds.material.transparent = clouds.material.opacity < 0.99;
     clouds.material.depthWrite = !clouds.material.transparent;
     clouds.material.emissive.copy(c3('#d9a7c7').lerp(c3('#d8e6f7'), smooth(kk)));
-    if (deckMat) {
-      deckMat.color.copy(deckBase).lerp(c3('#fff4e4'), smooth(kk) * 0.7);
+    deckMats.forEach((deckMat, i) => {
+      deckMat.color.copy(deckBases[i]).lerp(c3('#fff4e4'), smooth(kk) * 0.7);
       deckMat.emissive = deckMat.emissive || new THREE.Color();
       deckMat.emissive.copy(c3('#000000')).lerp(c3('#5a4a3a'), smooth(kk) * 0.5);
-    }
+    });
     halo.visible = up;
     halo.material.opacity = Math.min(0.5, kk * 2);
     sun.visible = kk > 0.15;

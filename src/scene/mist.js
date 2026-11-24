@@ -55,7 +55,7 @@ export function createMist(parent, { tier, reduced = false } = {}) {
         float beyond = smoothstep(creek + 2.0, creek + 14.0, p.y);
         float hall = 1.0 - smoothstep(${(HALL_RADIUS - 4).toFixed(1)}, ${(HALL_RADIUS + 4).toFixed(1)}, length(p - vec2(${HALL_CENTER.x.toFixed(1)}, ${HALL_CENTER.z.toFixed(1)})));
         // Sobre todo sobre el agua; afuera apenas un velo (ahí se entra: no tiene que lavar la imagen).
-        float dens = 0.08 + 0.85 * river + 0.3 * max(out_, beyond);
+        float dens = 0.08 + 0.5 * river + 0.3 * max(out_, beyond);
         dens *= 1.0 - 0.9 * hall;
         float t = uTime * uDrift * uV;
         float n = fbm(p * uS + vec2(t * 0.9, t * 0.35), ${oct});
