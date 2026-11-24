@@ -20,11 +20,11 @@ const WALL_COLORS = ['#178f8c', '#c2186b', '#d9901c', '#6a2aa6', '#239a62', '#d9
 
 // ---------- el plano de los nichos ----------
 export const CORRIDORS = CORRIDOR_DEG.length;
-const COLS = 3; // nichos a lo largo de cada pared
+const COLS = 6; // nichos a lo largo de cada pared (dos tramos de 3 columnas = pasillos largos)
 const ROWS = 3;
 export const PER_CORRIDOR = 2 * COLS * ROWS;
-export const SLOTS_PER_FLOOR = CORRIDORS * PER_CORRIDOR; // 90, igual que antes (los lugares guardados no cambian de número)
-const PX = 1.32; // paso entre columnas de nichos
+export const SLOTS_PER_FLOOR = CORRIDORS * PER_CORRIDOR; // 180 por piso (0..89 mantienen el mismo lugar de las primeras 3 columnas)
+const PX = 1.35; // paso entre columnas de nichos
 const OW = 1.0; // hueco de cada nicho
 const OH = 0.9;
 const DEPTH = 0.4; // lo hondo del nicho
@@ -565,7 +565,7 @@ export function buildHall(scene, colliders, tier) {
         for (const x of [-0.5, 0.5]) { const p = P(x, LEN - 0.4); colliders.circles.push({ x: p.x, z: p.z, r: 0.35 }); }
       }
       // Vigas cruzadas arriba, alfombra y una guirnalda de lucecitas en zigzag de viga a viga.
-      const beamZ = [0.0, 1.6, 3.2, 4.8, LEN - 0.2];
+      const beamZ = [0.0, 1.8, 3.6, 5.4, 7.2, 9.0, LEN - 0.2];
       for (const z of beamZ) beamParts.push(toWorld(box(2 * (HW + WALL) + 0.3, 0.16, 0.2, 0, WALL_H + 0.24, z)));
       for (let k = 0; k < beamZ.length - 1; k++) {
         const sd = k % 2 ? 1 : -1;
@@ -583,18 +583,18 @@ export function buildHall(scene, colliders, tier) {
       runner.material.map.repeat.set(1, (LEN - 0.9) / 1.6);
       runner.position.set(0, 0.168, (LEN - 0.9) / 2 + 0.05);
       cg.add(runner);
-      // Un farolito de papel colgando en el medio del pasillo.
-      {
+      // Dos farolitos de papel colgando a lo largo del pasillo.
+      for (const [li, lz] of [[0, 3.0], [1, 7.2]]) {
         const hang = new THREE.Group();
-        hang.position.set(0, WALL_H + 0.24, 2.4);
+        hang.position.set(0, WALL_H + 0.24, lz);
         const string = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.36, 4), new THREE.MeshBasicMaterial({ color: '#2a1d16' }));
         string.position.y = -0.18;
         const TINTS = [[2.2, 0.9, 1.3], [2.2, 1.3, 0.5], [0.8, 1.8, 1.6], [2.2, 1.7, 0.6], [1.3, 0.9, 2.0]];
-        const l = paperLantern({ scale: 1.4, tint: TINTS[c % TINTS.length], glow: 1.0 });
+        const l = paperLantern({ scale: 1.4, tint: TINTS[(c + li) % TINTS.length], glow: 1.0 });
         l.position.y = -0.48;
         hang.add(string, l);
         cg.add(hang);
-        animators.push((tt) => { hang.rotation.z = Math.sin(tt * 0.9 + c) * 0.05; hang.rotation.x = Math.sin(tt * 0.7 + c * 2) * 0.04; flickerLantern(l, tt); });
+        animators.push((tt) => { hang.rotation.z = Math.sin(tt * 0.9 + c + li) * 0.05; hang.rotation.x = Math.sin(tt * 0.7 + c * 2 + li) * 0.04; flickerLantern(l, tt); });
       }
       // La boca del pasillo: dintel sobre la entrada y el cartel colgado con el nombre del pasillo.
       {
@@ -614,10 +614,12 @@ export function buildHall(scene, colliders, tier) {
       }
 
       // ---------- los nichos de este pasillo ----------
+      // Las primeras 3 columnas conservan los números 0..89; las 3 columnas del fondo usan 90..179.
       for (let rowIdx = 0; rowIdx < ROWS; rowIdx++) {
         for (const [sdIdx, sd] of [[0, -1], [1, 1]]) {
           for (let col = 0; col < COLS; col++) {
-            const local = c * PER_CORRIDOR + rowIdx * 2 * COLS + sdIdx * COLS + col;
+            const block = Math.floor(col / 3);
+            const local = block * 90 + c * 18 + rowIdx * 6 + sdIdx * 3 + (col % 3);
             const g = new THREE.Group();
             g.position.set(sd * HW, slotRow(rowIdx), Z0 + PX / 2 + col * PX);
             g.rotation.y = -sd * Math.PI / 2; // +z hacia el pasillo
@@ -1327,7 +1329,8 @@ export function buildHall(scene, colliders, tier) {
     slots.forEach((s, i) => (here.has(i) ? fillSlot(s, here.get(i)) : clearSlot(s)));
     // Cada pasillo con su nombre y cuántas huellitas tiene en este piso.
     const per = new Array(CORRIDORS).fill(0);
-    for (const i of here.keys()) per[Math.floor(i / PER_CORRIDOR)]++;
+    const corridorOfSlot = (i) => Math.floor((i % 90) / 18);
+    for (const i of here.keys()) per[corridorOfSlot(i)]++;
     corridorLabels.forEach((lbl, c) => {
       const n = per[c];
       const text = n ? `${CORRIDOR_NAMES[c]} · ${n} ${n === 1 ? 'huellita' : 'huellitas'}` : CORRIDOR_NAMES[c];
@@ -1371,7 +1374,7 @@ export function buildHall(scene, colliders, tier) {
       return floor === 0 ? [...pickables, ...featuredPicks] : pickables;
     },
     // De qué pasillo es un lugar (0..4).
-    corridorOf: (i) => Math.floor(i / PER_CORRIDOR),
+    corridorOf: (i) => Math.floor((i % 90) / 18),
     // Dónde pararse para mirar un lugar. `shift` corre la vista para que la ficha no tape el marco.
     viewpoint(key, shift = 0, distMul = 1) {
       if (key === 'featured') {

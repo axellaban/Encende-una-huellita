@@ -5,7 +5,8 @@
 import * as THREE from 'three';
 import { createPet, lookFor } from './petRig.js';
 import { glowTexture, bubbleTexture } from './textures.js';
-import { HALL_CENTER, HALL_RADIUS, GARDEN_RADIUS, MEADOW, MEADOW_R, BRIDGE, onBridge, groundY } from './world.js';
+import { HALL_CENTER, HALL_RADIUS, ROOM_R, GARDEN_RADIUS, MEADOW, MEADOW_R, BRIDGE, onBridge, groundY } from './world.js';
+import { SLOTS_PER_FLOOR } from './hall.js';
 
 export { MEADOW, MEADOW_R };
 
@@ -359,7 +360,7 @@ export function createSpirits(scene, { blocked, tier }) {
           const fd = Math.hypot(fx2, fz2) || 1;
           if (fd < 2.95) { vx += (fx2 / fd) * 1.8; vz += (fz2 / fd) * 1.8; }
         } else if (a.zone === 'sky') {
-          if (hd < HALL_RADIUS - 7) { vx += (hx / hd) * 1.4; vz += (hz / hd) * 1.4; }
+          if (hd < ROOM_R + 2) { vx += (hx / hd) * 1.4; vz += (hz / hd) * 1.4; }
         } else if (hd < HALL_RADIUS + 3) {
           vx += (hx / hd) * 1.5;
           vz += (hz / hd) * 1.5;
@@ -1113,7 +1114,7 @@ export function createSpirits(scene, { blocked, tier }) {
     up = floor > 0;
     // En cada piso juegan las huellitas de ese piso, las del muro y espíritus propios del piso.
     const all = memorials.filter((m) => m.id !== excludeId);
-    const onThisFloor = all.filter((m) => (floor === 0 ? (m.featured || (m.slot >= 0 && Math.floor(m.slot / 90) === 0)) : (m.slot >= 0 && Math.floor(m.slot / 90) === floor)));
+    const onThisFloor = all.filter((m) => (floor === 0 ? (m.featured || (m.slot >= 0 && Math.floor(m.slot / SLOTS_PER_FLOOR) === 0)) : (m.slot >= 0 && Math.floor(m.slot / SLOTS_PER_FLOOR) === floor)));
     const otherFloor = all.filter((m) => !onThisFloor.includes(m)).sort((a, b) => (b.candles || 0) - (a.candles || 0));
     const rotated = otherFloor.length
       ? otherFloor.slice((floor * 3) % otherFloor.length).concat(otherFloor.slice(0, (floor * 3) % otherFloor.length))

@@ -9,13 +9,13 @@ import { paperLantern, flickerLantern } from './lanterns.js';
 // Plano del jardín (en metros). Todo lo demás se ubica a partir de estos números.
 export const HALL_CENTER = new THREE.Vector3(0, 0, -14);
 // Todo lo que ocupa el salón con sus pasillos entra en este radio (el jardín empieza afuera).
-export const HALL_RADIUS = 21;
+export const HALL_RADIUS = 25;
 // El salón central: redondo, con la ofrenda y la pérgola de luces. De él salen los pasillos.
 export const ROOM_R = 12; // radio del muro del salón
 export const ROOM_WALL_H = 4.6;
-// Los pasillos: anchos (4,6 m libres), con nichos en las dos paredes y un vitral al fondo.
+// Los pasillos: anchos (4,6 m libres) y largos (10,8 m), con nichos en las dos paredes y un vitral al fondo.
 // `hw` medio ancho libre, `wall` espesor de la pared de nichos, `len` largo desde la boca, `h` alto.
-export const CORRIDOR = { hw: 2.3, wall: 0.55, len: 6.6, h: 3.8 };
+export const CORRIDOR = { hw: 2.3, wall: 0.55, len: 10.8, h: 3.8 };
 // Hacia dónde sale cada pasillo (grados: 0 = hacia la entrada, 90 = a la derecha de quien entra,
 // 180 = al fondo). El orden es el de los lugares: el pasillo 0 es el del fondo, de frente a la entrada.
 export const CORRIDOR_DEG = [180, 135, 225, 90, 270];
