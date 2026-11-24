@@ -9,9 +9,10 @@ import * as THREE from 'three';
 import { GARDEN_RADIUS, SPAWN, inWater, groundY } from './world.js';
 
 const BODY = 0.3;
-const HEAD = 1.3;
-const DIST_MIN = 2.3;
-const DIST_MAX = 10;
+const HEAD = 1.55;
+const DEFAULT_PITCH = 0.24;
+const DIST_MIN = 2.6;
+const DIST_MAX = 14;
 
 export function createBlocker(colliders) {
   return function blocked(x, z, body = BODY) {
@@ -54,10 +55,10 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   const player = { pos: new THREE.Vector3(SPAWN.x, 0, SPAWN.z), heading: Math.PI, speed: 0, turn: 0, moving: false };
   let mode = 'fixed';
   let yaw = 0;
-  let pitch = 0.3;
-  let dist = 4.8;
-  let distTarget = 4.8;
-  let camDist = 4.8;
+  let pitch = DEFAULT_PITCH;
+  let dist = 6.8;
+  let distTarget = 6.8;
+  let camDist = 6.8;
   const pivot = new THREE.Vector3(SPAWN.x, HEAD, SPAWN.z);
   const focus = { target: new THREE.Vector3(), yaw0: 0, dist: 3 };
   let vYaw = 0;
@@ -98,7 +99,8 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   marker.visible = false;
 
   const portrait = () => camera.aspect < 0.8;
-  const defaultDist = () => (portrait() ? 5.6 : 4.8);
+  // Vista estilo GTA: más atrás y con el personaje en el tercio inferior para ver bien el horizonte.
+  const defaultDist = () => (portrait() ? 7.8 : 6.8);
   distTarget = dist = camDist = defaultDist();
 
   // Se puede vadear el arroyo y el estanque (chapoteando en el agua luminosa).
@@ -270,10 +272,10 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   }
 
   function followPose(outPos, outLook) {
-    const lift = portrait() ? 0.15 : 0;
+    const lift = portrait() ? 0.24 : 0.14;
     outLook.set(pivot.x, pivot.y + lift, pivot.z);
     offset(yaw, pitch, camDist, outPos).add(outLook);
-    outPos.y = Math.max(0.45, outPos.y);
+    outPos.y = Math.max(0.55, outPos.y);
   }
 
   function anglesFrom(stand, target) {
@@ -290,7 +292,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     // Si venimos de mirar un marco, la cámara queda detrás del personaje mirando hacia donde mira él.
     if (mode !== 'follow') {
       yaw = player.heading + Math.PI;
-      pitch = 0.3;
+      pitch = DEFAULT_PITCH;
       distTarget = defaultDist();
       dist = camDist = distTarget;
     }
@@ -378,7 +380,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
       mode = 'follow';
       fly = null;
       yaw = player.heading + Math.PI;
-      pitch = 0.3;
+      pitch = DEFAULT_PITCH;
       dist = distTarget = camDist = defaultDist();
       pivot.set(player.pos.x, HEAD, player.pos.z);
       followPose(camera.position, lookAt);

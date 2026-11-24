@@ -1035,7 +1035,7 @@ export function buildWorld(scene, tier) {
     const MAX_CROWNS = 390;
     const MAX_GRASS = tier.grass >= 20000 ? 1800 : 1000;
     const MAX_FLOWERS = 650;
-    const MAX_WATER = 160;
+    const MAX_WATER = 260;
     const MAX_STONES = 220;
     const MAX_LAMPS = 32;
 
@@ -1104,7 +1104,20 @@ export function buildWorld(scene, tier) {
 
     // Discos de agua bioluminiscente para los arroyos serpenteantes y lagunitas del camino.
     const waterDiscGeo = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
-    const waterDiscMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.08, 0.42, 0.68), transparent: true, opacity: 0.88, depthWrite: false });
+    const waterDiscMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.08, 0.45, 0.72), transparent: true, opacity: 0.9, depthWrite: false });
+    waterDiscMat.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = uTime;
+      sh.vertexShader = `varying vec3 vWPos;\n${sh.vertexShader}`.replace('#include <project_vertex>', 'vec4 wp = modelMatrix * vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\n  wp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);\n#endif\n  vWPos = wp.xyz;\n#include <project_vertex>');
+      sh.fragmentShader = `uniform float uTime;\nvarying vec3 vWPos;\n${sh.fragmentShader}`.replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+         float w1 = sin(vWPos.x * 1.8 + vWPos.z * 1.4 - uTime * 2.2) * 0.5 + 0.5;
+         float w2 = cos(vWPos.x * 3.1 - vWPos.z * 2.7 + uTime * 1.7) * 0.5 + 0.5;
+         float bio = smoothstep(0.65, 0.98, w1 * w2);
+         diffuseColor.rgb = mix(vec3(0.03, 0.16, 0.28), vec3(0.18, 1.15, 1.75), bio * 0.75 + 0.12);`,
+      );
+    };
+    waterDiscMat.customProgramCacheKey = () => 'open-water-bio-1';
     const openWater = new THREE.InstancedMesh(waterDiscGeo, waterDiscMat, MAX_WATER);
     openWater.frustumCulled = false;
     openWater.renderOrder = 1;
@@ -1149,31 +1162,31 @@ export function buildWorld(scene, tier) {
       const maxX = (cx0 + RAD + 1) * CHUNK;
       const minZ = (cz0 - RAD) * CHUNK;
       const maxZ = (cz0 + RAD + 1) * CHUNK;
-      for (let z = minZ; z <= maxZ && nW < MAX_WATER - 20; z += 3.2) {
+      for (let z = minZ; z <= maxZ && nW < MAX_WATER - 30; z += 1.85) {
         const sx = openStreamX(z);
-        if (sx >= minX - 4 && sx <= maxX + 4 && Math.hypot(sx, z) > GARDEN_RADIUS + 6) {
+        if (sx >= minX - 4 && sx <= maxX + 4 && Math.hypot(sx, z) > GARDEN_RADIUS + 4) {
           dummy.position.set(sx, 0.038, z);
           dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(2.35, 1, 2.35);
+          dummy.scale.set(2.45, 1, 2.45);
           dummy.updateMatrix();
           openWater.setMatrixAt(nW++, dummy.matrix);
         }
       }
-      for (let x = minX; x <= maxX && nW < MAX_WATER - 10; x += 3.2) {
+      for (let x = minX; x <= maxX && nW < MAX_WATER - 14; x += 1.85) {
         const sz = openStreamZ(x);
-        if (sz >= minZ - 4 && sz <= maxZ + 4 && Math.hypot(x, sz) > GARDEN_RADIUS + 6) {
+        if (sz >= minZ - 4 && sz <= maxZ + 4 && Math.hypot(x, sz) > GARDEN_RADIUS + 4) {
           dummy.position.set(x, 0.038, sz);
           dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(2.35, 1, 2.35);
+          dummy.scale.set(2.45, 1, 2.45);
           dummy.updateMatrix();
           openWater.setMatrixAt(nW++, dummy.matrix);
         }
-        // Continuación infinita del río principal más allá de |x| > 70.
-        if (Math.abs(x) > 70 && nW < MAX_WATER - 6) {
+        // Continuación infinita del río principal más allá de |x| > 68.
+        if (Math.abs(x) > 68 && nW < MAX_WATER - 8) {
           const czMain = creekZ(x);
           if (czMain >= minZ - 4 && czMain <= maxZ + 4) {
             dummy.position.set(x, 0.04, czMain);
-            dummy.scale.set(CREEK_HALF * 1.05, 1, CREEK_HALF * 1.05);
+            dummy.scale.set(CREEK_HALF * 1.08, 1, CREEK_HALF * 1.08);
             dummy.updateMatrix();
             openWater.setMatrixAt(nW++, dummy.matrix);
           }
