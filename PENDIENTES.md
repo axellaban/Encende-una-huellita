@@ -4,6 +4,48 @@ Lista para quien siga el proyecto (persona o IA). Leé primero [`AGENTS.md`](AGE
 Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** = lo que más suma,
 **P2** = completa el relevamiento del sitio de referencia, **P3** = deuda técnica y mejoras.
 
+## 🗺️ Plan Maestro en curso (24/11/2026) — Implementar por etapas y mergear a `main` en cada avance
+
+> **Instrucción para cualquier IA que continúe este plan**: cada etapa se implementa, se prueba con
+> `npm run build && npm test`, se marca `[x]` acá en `PENDIENTES.md` y se hace commit + push directo a `main`.
+
+### Etapa 1: Corrección de lámina del Principito y hoja de ruta
+- [x] Tapar por completo las 4 líneas originales de `luca-estampita.jpg` (hasta `y = 590` a los costados del corazón) para que la 4ª línea (*“y ahora es único en el mundo.”*) no se vea duplicada debajo de la versión en alta definición.
+- [x] Documentar el Plan Maestro completo en `PENDIENTES.md`.
+
+### Etapa 2: Mundo abierto infinito con hitos, puentes, fogatas y botón "Volver al salón"
+- [ ] **Hitos mágicos en el mundo abierto (`src/scene/world.js`)**:
+  - **Puentes de madera rústicos y piedras de paso** sobre los arroyos (`openStreamX`, `openStreamZ`) para cruzarlos también por arriba.
+  - **Fogatas / altares de descanso** en los claros del valle (troncos para sentarse, fueguito cálido o veladoras y faroles) y **Árboles de los Deseos** más grandes con farolitos colgantes.
+- [ ] **Brújula / botón discreto `🏛️ Volver al salón` (`index.html`, `src/main.js`, `src/styles.css`)**:
+  - Cuando tu personaje se aleja más allá del jardín central (`r > 64 m`), mostrar una pastilla suave arriba o abajo (`🏛️ Volver al salón · N m`) que con un toque te trae de regreso a la entrada del salón junto a tu mascota.
+
+### Etapa 3: Paseo vivo y nuevas interacciones con los perritos y gatitos
+- [ ] **Sacudirse el agua (`shake`) al salir del arroyo o lagunita (`src/scene/spirits.js`)**:
+  - Cuando un espíritu estuvo chapoteando en el agua (`inWater`) y sale a tierra firme, dispara automáticamente `a.pet.anim.trigger('shake')` salpicando gotitas brillantes (`fx.splash`).
+- [ ] **Tomar agüita en la orilla (`src/scene/spirits.js`)**:
+  - Si te detenés cerca del borde de un arroyo o lagunita, tu mascota de paseo se acerca a la orilla, agacha la cabecita (`want.bow` / `want.sniff`) y toma agüita generando ondas suaves en el agua.
+- [ ] **Botón de Mimo / Premio (`🦴` / `🤍`) en la barra de paseo (`index.html`, `src/main.js`, `src/scene/spirits.js`)**:
+  - Sumar en `#walk-hud` un botón `#walk-treat` (`🦴 Darle un mimo`) para que tu personaje se agache o le ofrezca un premio luminoso y tu mascota haga una pirueta feliz (salto, vueltita o reverencia con corazones y chispitas).
+
+### Etapa 4: Atmósfera, pétalos en flor, reflejos del agua y clima nocturno
+- [ ] **Pétalos que caen debajo de los jacarandás y árboles en flor (`src/scene/world.js`)**:
+  - Partículas suaves lilas, rosadas y doradas que flotan y caen despacio alrededor de las copas de los árboles en flor en el jardín y el mundo abierto.
+- [ ] **Reflejos bioluminiscentes del agua en las orillas (`src/scene/world.js`, `src/scene/river.js`)**:
+  - Halo turquesa suave en las piedras y orillas junto a los arroyos y lagunitas.
+- [ ] **Selector de atmósfera / cielo en Opciones (`index.html`, `src/main.js`, `src/scene/world.js`, `src/scene/skymagic.js`)**:
+  - Permitir elegir en `#menu` (*Opciones*) el clima del cielo: **Noche estrellada** (por defecto), **Atardecer dorado** o **Lluvia de estrellas fugaces**.
+
+### Etapa 5: Nichos vivos, estilos de marco y guía luminosa al pasillo
+- [ ] **Luz cálida interior en los nichos ocupados (`src/scene/hall.js`)**:
+  - Que las velas encendidas de cada nicho iluminen con más calidez el interior de la caja de madera, las repisas laterales y los regalitos.
+- [ ] **Estilos de marco para la foto (`index.html`, `src/main.js`, `src/scene/hall.js`, `server/store.js`)**:
+  - Permitir elegir o lucir marcos especiales en el nicho (madera clásica, dorado luminoso, talavera y cempasúchil).
+- [ ] **Camino de chispitas guía al buscar o visitar una huellita (`src/main.js`, `src/scene/spirits.js`)**:
+  - Al elegir una huellita desde la lista o el buscador, además de encuadrar su nicho, soltar una estela de pétalos/chispitas desde la boca de su pasillo hasta su marco.
+
+---
+
 ## 🆕 Última tanda (24/11/2026, noche) — verificada con capturas y recorrido en los 6 dispositivos
 
 Hecho y verificado en `main` (`npm test` 37/37, build OK, capturas de todas las escenas y recorrido completo `scripts/recorrido.mjs` en celular, iPhone SE, acostado, compu, modo demo y sin WebGL):

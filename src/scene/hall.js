@@ -1544,13 +1544,19 @@ export function buildHall(scene, colliders, tier) {
         g.imageSmoothingEnabled = true;
         g.imageSmoothingQuality = 'high';
         g.drawImage(img, 0, 0, W, H);
-        // Redibujar la frase completa y la firma en alta definición para que en celular se lea súper nítida.
-        const sky = g.createLinearGradient(0, 40, 0, 560);
-        sky.addColorStop(0, 'rgba(130, 178, 204, 0.92)');
-        sky.addColorStop(0.75, 'rgba(138, 185, 210, 0.94)');
-        sky.addColorStop(1, 'rgba(146, 190, 214, 0)');
+        // Tapar por completo las 4 líneas originales del JPEG (que llegan hasta y=565 a los costados del corazón)
+        // con el mismo color papel acuarela celeste para que ninguna línea salga duplicada.
+        const sky = g.createLinearGradient(0, 0, 0, 565);
+        sky.addColorStop(0, '#78abc9');
+        sky.addColorStop(0.55, '#86b5d1');
+        sky.addColorStop(0.92, '#8ebbd6');
+        sky.addColorStop(1, 'rgba(142, 187, 214, 0)');
         g.fillStyle = sky;
-        g.fillRect(40, 40, W - 80, 520);
+        g.fillRect(0, 0, W, 565);
+        // A los costados del corazón central (x < 395 y x > 625) cubrimos hasta y=590 donde caía la "y" y el final de la 4ª línea original.
+        g.fillStyle = '#8ebbd6';
+        g.fillRect(0, 480, 395, 95);
+        g.fillRect(625, 480, W - 625, 95);
         // Gotitas de colores suaves arriba a la derecha como en la lámina original.
         const dropCols = ['rgba(235,205,70,0.48)', 'rgba(218,95,72,0.48)', 'rgba(86,158,196,0.48)', 'rgba(232,145,68,0.48)'];
         for (let i = 0; i < 32; i++) {
@@ -1572,10 +1578,11 @@ export function buildHall(scene, colliders, tier) {
           'y ahora es único en el mundo.”',
         ];
         lines.forEach((ln, idx) => {
+          const ly = 152 + idx * 106;
           g.strokeStyle = 'rgba(235, 246, 255, 0.65)';
           g.lineWidth = 5;
-          g.strokeText(ln, W / 2, 138 + idx * 96, W - 96);
-          g.fillText(ln, W / 2, 138 + idx * 96, W - 96);
+          g.strokeText(ln, W / 2, ly, W - 96);
+          g.fillText(ln, W / 2, ly, W - 96);
         });
         // Banda inferior tipo papel madera con la firma bien nítida.
         const kraft = g.createLinearGradient(0, 1270, 0, H);
