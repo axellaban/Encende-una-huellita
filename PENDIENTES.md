@@ -57,6 +57,32 @@ compu, modo demo y sin WebGL pasaron antes del ascensor, y SE también con el as
    - **Árboles** (`world.js`): de noche, más oscuros (siluetas) con un borde de luz azul suave.
    - Sacar capturas en celular desde el puente y la orilla antes de mergear.
 
+**Más pedidos del dueño (24/11), con capturas del original que mandó desde Instagram** (no copiar textos,
+nombres ni imágenes del original: tomar la idea, que es la de un columbario/memorial de verdad):
+6. **El salón da a pasillos anchos.** En el original, del salón central salen pasillos rectos y anchos
+   (unos 4–5 m), largos, con un cartel colgado en la entrada de cada uno ("Pasillo N · cuántas huellitas";
+   acá ya tenemos nombres propios en `src/floors.js`). Cada pasillo: piso de madera cálida, paredes
+   cubiertas de nichos del piso hasta ~2,5 m a los dos lados, macetas con plantas a lo largo, una ventana
+   o un panel de retratos al fondo. Hoy nuestro salón es un muro en semicírculo con 10 paneles de 3×3
+   (`hall.js`, `PANELS`/`PER_PANEL`, slots ~línea 214–330). Plan: el salón central queda con la ofrenda
+   (sólo piso 1) y de él salen 4–6 pasillos; los 90 lugares por piso se reparten en los pasillos.
+   Hay que rehacer posiciones de slots, `viewpoint()`, colisiones (`colliders.segments`), la cámara que
+   esquiva muros, `nearestFrame()` en `main.js`, faroles/guirnaldas de la pérgola y revisar el plano
+   desde arriba (AGENTS → "Plano del jardín").
+7. **El ascensor, adentro del salón** como en la captura: puertas metálicas lisas metidas en una pared de
+   madera del salón (entre dos pasillos), indicador de piso arriba ("Piso 1") y botonera al costado. Hoy es
+   una torre de vidrio en el jardín (`elevator.js`, `ELEVATOR_POS` en `world.js`). Mantener la escena de
+   entrar caminando / elegir piso / salir caminando (`callElevator`, `rideTo`, `leaveLift` en `main.js`),
+   pero el viaje con la cámara dentro de la cabina (no hay torre de vidrio): puertas que se cierran,
+   indicador que cuenta, un leve sacudón, velo de nubes y se abren en el piso nuevo. Decidir con el dueño
+   si la torre del jardín se saca o queda como decoración.
+8. **Nichos más reales.** Cerrados (lugares libres): puertitas de madera oscura tipo columbario, en grilla,
+   cada una con una plaquita de bronce chiquita en el medio, con biselado y un brillo suave (hoy son
+   ventanitas con postigos pintados: `updateShutters` en `hall.js`). Abiertos (con una huellita): el nicho
+   abierto con la foto en un marco claro detrás de un vidrio (ventanita) y una guirnalda de lucecitas de
+   colores alrededor (HDR para el bloom), la repisa con sus regalitos. Todo en geometría/canvas propio.
+   Después de 6, 7 y 8: capturas en celular y el recorrido (`scripts/recorrido.mjs`).
+
 **Tareas que requieren usar la computadora** (Vercel, Upstash, teléfonos reales, vistas previas): paso a
 paso en [`docs/tareas-con-computadora.md`](docs/tareas-con-computadora.md).
 
