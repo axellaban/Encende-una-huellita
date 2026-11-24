@@ -19,8 +19,9 @@ export const CORRIDOR = { hw: 2.3, wall: 0.55, len: 6.6, h: 3.8 };
 // Hacia dónde sale cada pasillo (grados: 0 = hacia la entrada, 90 = a la derecha de quien entra,
 // 180 = al fondo). El orden es el de los lugares: el pasillo 0 es el del fondo, de frente a la entrada.
 export const CORRIDOR_DEG = [180, 135, 225, 90, 270];
-// El ascensor: en la pared del salón, entre los pasillos de 225° y 270°.
-export const LIFT_DEG = 247.5;
+// Los tres ascensores: en la pared del salón, entre los pasillos (izquierda 247.5°, derecha 112.5° y fondo 202.5°).
+export const LIFT_DEGS = [247.5, 112.5, 202.5];
+export const LIFT_DEG = LIFT_DEGS[0];
 const ENTRY_DEG = 17; // medio ancho de la entrada al salón (en grados)
 const MOUTH_DEG = THREE.MathUtils.radToDeg(Math.asin((CORRIDOR.hw + CORRIDOR.wall) / ROOM_R));
 const dirOf = (deg) => { const a = THREE.MathUtils.degToRad(deg); return new THREE.Vector3(Math.sin(a), 0, Math.cos(a)); };
@@ -36,8 +37,9 @@ export const ROOM_ARCS = (() => {
   const gaps = [[-ENTRY_DEG, ENTRY_DEG], ...CORRIDOR_DEG.map((a) => [a - MOUTH_DEG, a + MOUTH_DEG])].sort((p, q) => p[0] - q[0]);
   return gaps.map((g, i) => [g[1], i + 1 < gaps.length ? gaps[i + 1][0] : 360 - ENTRY_DEG]);
 })();
-// El tramo del ascensor es una sola pared recta (la cuerda del arco): la puerta queda en el medio.
-export const LIFT_ARC = ROOM_ARCS.find(([a, b]) => LIFT_DEG > a && LIFT_DEG < b);
+// Cada tramo de ascensor es una pared recta (la cuerda del arco): la puerta queda en el medio.
+export const LIFT_ARCS = LIFT_DEGS.map((d) => ROOM_ARCS.find(([a, b]) => d > a && d < b));
+export const LIFT_ARC = LIFT_ARCS[0];
 const LIFT_HALF = THREE.MathUtils.degToRad((LIFT_ARC[1] - LIFT_ARC[0]) / 2);
 export const LIFT_WIDTH = 2 * ROOM_R * Math.sin(LIFT_HALF);
 export function inCorridor(x, z, pad = 0) {
@@ -60,15 +62,20 @@ export const CREEK_HALF = 2.8; // medio ancho del río
 // El Prado de los espíritus: un claro sin árboles donde juegan las mascotas de luz.
 export const MEADOW = new THREE.Vector3(24, 0, 20);
 export const MEADOW_R = 9;
-// El ascensor: el centro de su pared, en el muro del salón (ver LIFT_DEG); la cabina queda detrás.
-export const ELEVATOR_POS = HALL_CENTER.clone().addScaledVector(dirOf(LIFT_DEG), ROOM_R * Math.cos(LIFT_HALF));
+// Los tres ascensores: el centro de cada pared en el muro del salón (ver LIFT_DEGS); las cabinas quedan detrás.
+export const ELEVATOR_POSITIONS = LIFT_DEGS.map((d) => HALL_CENTER.clone().addScaledVector(dirOf(d), ROOM_R * Math.cos(LIFT_HALF)));
+export const ELEVATOR_POS = ELEVATOR_POSITIONS[0];
 export function inLift(x, z, pad = 0) {
-  const u = dirOf(LIFT_DEG);
-  const rx = x - ELEVATOR_POS.x;
-  const rz = z - ELEVATOR_POS.z;
-  const s = rx * u.x + rz * u.z;
-  const t = rx * u.z - rz * u.x;
-  return s > -0.5 && s < 2.9 + pad && Math.abs(t) < 1.5 + pad;
+  for (let i = 0; i < LIFT_DEGS.length; i++) {
+    const u = dirOf(LIFT_DEGS[i]);
+    const p = ELEVATOR_POSITIONS[i];
+    const rx = x - p.x;
+    const rz = z - p.z;
+    const s = rx * u.x + rz * u.z;
+    const t = rx * u.z - rz * u.x;
+    if (s > -0.5 && s < 2.9 + pad && Math.abs(t) < 1.5 + pad) return true;
+  }
+  return false;
 }
 // El río serpentea (dos ondas, para que no se vea dibujado con regla).
 export const creekZ = (x) => CREEK_Z + Math.sin(x * 0.07) * 3.2 + Math.sin(x * 0.19 + 1) * 0.9;
@@ -605,9 +612,9 @@ export function buildWorld(scene, tier) {
   const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 2.0, 0.9) });
   const lampSpots = [
     [2.7, 31], [-2.7, 25.5], [2.7, 20], [-2.7, 15], [2.7, 10],
-    // Adentro del salón: dos a los lados de la ofrenda y dos al fondo, entre las bocas de los pasillos.
+    // Adentro del salón: dos a los lados de la ofrenda y dos cerca del cantero central (dejando libre la puerta de los tres ascensores).
     [HALL_CENTER.x - 7.4, HALL_CENTER.z + 5.2], [HALL_CENTER.x + 7.4, HALL_CENTER.z + 5.2],
-    [HALL_CENTER.x - 3.6, HALL_CENTER.z - 8.6], [HALL_CENTER.x + 3.6, HALL_CENTER.z - 8.6],
+    [HALL_CENTER.x - 4.2, HALL_CENTER.z - 2.4], [HALL_CENTER.x + 4.2, HALL_CENTER.z - 2.4],
   ];
   const lampParts = [];
   const hallLampParts = [];

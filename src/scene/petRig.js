@@ -27,9 +27,11 @@ export function lookFor(m) {
   const kind = m.species === 'gato' ? 'gato' : m.species === 'otro' ? 'otro' : 'perro';
   const l = m.look || {};
   const fur = FURS.find((f) => f.id === l.fur)?.hex || FURS[Math.floor(r() * FURS.length)].hex;
-  const fur2 = FURS.find((f) => f.id === l.fur2)?.hex || null;
-  const coat = ['short', 'normal', 'fluffy', 'curly'].includes(l.coat) ? l.coat : (r() < 0.28 ? 'fluffy' : 'normal');
-  const ears = ['up', 'down', 'tip', 'big'].includes(l.ears) ? l.ears : kind === 'perro' ? ['down', 'up', 'tip'][Math.floor(r() * 3)] : 'up';
+  const AUTO_PATTERNS = ['solid', 'tuxedo', 'socks', 'spots', 'patches', 'bicolor', 'calico', 'tabby', 'mask', 'eye'];
+  const pattern = l.pattern || (l.fur === 'atigrado' ? 'tabby' : r() < 0.32 ? 'solid' : AUTO_PATTERNS[Math.floor(r() * AUTO_PATTERNS.length)]);
+  const fur2 = FURS.find((f) => f.id === l.fur2)?.hex || (pattern !== 'solid' && r() < 0.5 ? FURS[Math.floor(r() * FURS.length)].hex : null);
+  const coat = ['short', 'normal', 'fluffy', 'curly'].includes(l.coat) ? l.coat : ['normal', 'normal', 'fluffy', 'short', 'curly'][Math.floor(r() * 5)];
+  const ears = ['up', 'down', 'tip', 'big'].includes(l.ears) ? l.ears : kind === 'perro' ? ['down', 'up', 'tip', 'big'][Math.floor(r() * 4)] : 'up';
   // Tamaños bien distintos (de un perrito mini a uno gigante); los gatos y los otros, más chicos.
   const SIZE_SCALE = {
     perro: { xs: 0.5, s: 0.68, m: 0.9, l: 1.15, xl: 1.42 },
@@ -37,7 +39,9 @@ export function lookFor(m) {
     otro: { xs: 0.45, s: 0.55, m: 0.65, l: 0.78, xl: 0.92 },
   };
   const size = SIZE_SCALE[kind][l.size] || (kind === 'gato' ? 0.78 : kind === 'otro' ? 0.6 : 0.72 + r() * 0.4);
-  const defTail = coat === 'fluffy' ? 'fluffy' : kind === 'gato' ? 'thin' : r() < 0.4 ? 'fluffy' : r() < 0.45 ? 'curl' : 'thin';
+  const defTail = coat === 'fluffy' ? 'fluffy' : kind === 'gato' ? 'thin' : r() < 0.35 ? 'fluffy' : r() < 0.35 ? 'curl' : r() < 0.15 ? 'bob' : 'thin';
+  const VIBES = ['jugueton', 'saltarin', 'mimoso', 'tranquilo', 'curioso', 'timido', 'guardian', 'travieso'];
+  const vibe = VIBES.includes(l.vibe) ? l.vibe : VIBES[Math.floor(r() * VIBES.length)];
   return {
     kind,
     fur,
@@ -45,8 +49,9 @@ export function lookFor(m) {
     coat,
     ears,
     size,
+    vibe,
     tail: ['thin', 'fluffy', 'curl', 'bob'].includes(l.tail) ? l.tail : defTail,
-    pattern: l.pattern || (l.fur === 'atigrado' ? 'tabby' : r() < 0.25 ? 'tuxedo' : r() < 0.25 ? 'socks' : 'solid'),
+    pattern,
     eyes: ['honey', 'dark', 'amber', 'green', 'blue', 'odd'].includes(l.eyes) ? l.eyes : (kind === 'gato' ? 'amber' : 'honey'),
     snout: kind === 'perro' ? ({ long: 1.45, mid: 1.0, flat: 0.45 }[l.snout] ?? 0.85 + r() * 0.45) : 0.4,
     rim: RIMS[Math.floor(r() * RIMS.length)],

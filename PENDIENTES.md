@@ -14,9 +14,9 @@ Hecho y verificado en `main` (`npm test` 37/37, build OK, capturas de todas las 
   (`nicheBulbs`), repisas de madera a los costados con hasta 5 regalitos y plaquita con el nombre. Vitral al fondo, alfombra, macetas, cartel en cada boca (elevado a `y = 4.06` para no cortar la cámara).
   Los muros tapan los toques (`hall.blockers`).
 - **Luca sólo en el piso 1**: la ofrenda se esconde arriba (y su choque); en su lugar, una fuente con velitas (con flores que varían según la altura y una corona dorada con huella de estrellas en el piso 99).
-  Visitar a Luca baja al piso 1. Los espíritus del Prado se esconden en los pisos del cielo (`spirits.setUp`).
-- **Ascensor adentro del salón** (`elevator.js`): pared de madera entre dos pasillos, puertas metálicas
-  lisas, indicador "PISO n", botonera; la cabina está detrás. Corregida la pared exterior (`outerMat`) que tapaba la puerta desde adentro y calibrada la luz e `insideShot` de la cabina.
+  Visitar a Luca baja al piso 1. En los 99 pisos juegan manadas de espíritus (`spirits.setFloor`): en el piso 1 en el Prado y en el césped del jardín, y en los pisos 2..99 adentro del salón alrededor de la fuente y en la terraza de nubes.
+- **3 ascensores adentro del salón** (`elevator.js`, `LIFT_DEGS = [247.5, 112.5, 202.5]` en `world.js`): tres paredes de madera tallada entre los pasillos (izquierda, derecha y fondo), con puertas metálicas
+  lisas, indicador "PISO n" compartido y botonera; detrás de cada uno está su cabina. Llamar al ascensor (o tocar cualquiera de las 3 puertas) usa automáticamente el más cercano. Corregida la pared exterior (`outerMat`) que tapaba la puerta desde adentro y calibrada la luz e `insideShot` de la cabina.
 - **Río bioluminiscente y pececitos de luz** (`river.js`): azul eléctrico en orillas y olas, anillos alrededor de velitas,
   tus pasos y tu mascota (`setMovers`), chispitas en el barro y cardumen de 32 pececitos de luz nadando bajo el puente (tu mascota se asoma a mirarlos cuando frenás en el puente). Vía Láctea más cargada, árboles en silueta con borde azul.
 - **Valle del cielo encendido** (`VALLEY_READY = true`, `uHole` ajustado al radio del salón nuevo `ROOM_R - 0.4`, corte limpio bajo el mar de nubes y halo suave en el piso 99), **bruma** conectada (`mist.js`) y **planear** (🌬️ en los pisos del cielo, brazos abiertos, estela, aterrizaje). Verificado en pisos 20, 50 y 99 a 60 FPS en calidad alta.
@@ -206,8 +206,8 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
 - [x] **Personajes**: nombre propio editable en el jardín (`#me-name-input` en `#me-dialog`, accesible desde la barra superior en compu y desde el menú en celular), 4 estilos de ropa (Sarape, Con rebozo, Poncho, Chaleco), parpadean, cachetes, respiración, aplastar/estirar,
       miran el cielo, y peinado a elegir (corto, trenzas, chongo, colita; va codificado en `hue`,
       ver `character.js`). Al cruzarse con otro visitante, se saludan (`avatars.greetNear`) y sonríen al regalar o abrazar.
-- [x] **Mascotas**: 12 colores principales, segundo color combinable (`fur2`), 10 dibujos/manchitas (`Liso`, `Pechera`, `Botitas`, `Manchitas`, `Vaquita / Parches`, `Manto`, `Tricolor / Carey`, `Rayitas / Atigrado`, `Antifaz / Siamés`, `Parche en el ojo`), 4 tipos de pelo (`Poquito pelo`, `Normal`, `Peludo`, `Con rulitos`), 4 tipos de orejas, 4 tipos de colita (`Finita`, `Peluda`, `Enrulada`, `Cortita`), 6 colores de ojos (incluyendo heterocromía `Uno y uno`), 3 hocicos, 5 tamaños bien distintos y tarjeta de vista previa en vivo mientras elegís.
-      Los espíritus de otros visitantes llevan todas estas opciones.
+- [x] **Mascotas**: 8 personalidades (`Juguetón`, `Saltarín`, `Mimoso`, `Tranquilo / Pachorra`, `Curioso`, `Tímido / Antisocial`, `Guardián`, `Travieso`) que cambian cómo juega y cómo te acompaña en el paseo, 13 colores principales, segundo color combinable (`fur2`), 10 dibujos/manchitas (`Liso`, `Pechera`, `Botitas`, `Manchitas`, `Vaquita / Parches`, `Manto`, `Tricolor / Carey`, `Rayitas / Atigrado`, `Antifaz / Siamés`, `Parche en el ojo`), 4 tipos de pelo (`Poquito pelo`, `Normal`, `Peludo`, `Con rulitos`), 4 tipos de orejas, 4 tipos de colita (`Finita`, `Peluda`, `Enrulada`, `Cortita`), 6 colores de ojos (incluyendo heterocromía `Uno y uno`), 3 hocicos, 5 tamaños bien distintos y tarjeta de vista previa en vivo mientras elegís.
+      Los espíritus juegan en los 99 pisos y los de otros visitantes llevan todas estas opciones.
 - [x] **Hall con pasillos y pisos con nombre** (`src/floors.js`, propios, no los del original):
       cartel colgado por muro con el contador, 99 nombres de piso.
 - [x] **Ventanitas en la pared**: cada lugar ocupado es un marco hondo con postigos pintados que se

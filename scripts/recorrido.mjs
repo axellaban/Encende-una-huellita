@@ -156,6 +156,7 @@ async function full(b, tag, dev) {
   await p.fill('#add-form input[name="name"]', 'Nieve');
   await p.evaluate(() => {
     document.querySelector('#add-form input[name="species"][value="gato"]').click();
+    document.querySelector('#add-look input[name="look-vibe"][value="saltarin"]')?.click();
     document.querySelector('#add-look input[name="look-fur"][value="blanco"]')?.click();
     document.querySelector('#add-look input[name="look-pattern"][value="spots"]')?.click();
     document.querySelector('#add-look input[name="look-fur2"][value="negro"]')?.click();
@@ -294,7 +295,7 @@ async function full(b, tag, dev) {
   check(tag, 'ascensor: cerrar la botonera y salir caminando', await p.evaluate(() => !document.body.classList.contains('riding')));
   await p.evaluate(() => window.__huellita.goFloor(5));
   await wait(p, 2500);
-  check(tag, 'ir a otro piso (directo)', (await text(p, '.floor-num')) === '6');
+  check(tag, 'ir a otro piso (directo) con 3 ascensores y espíritus', (await text(p, '.floor-num')) === '6' && (await p.evaluate(() => window.__huellita.elevator.lifts.length === 3 && window.__huellita.spirits.pack.length >= 6)));
   await p.evaluate(() => window.__huellita.goFloor(0));
   await wait(p, 2500);
   await hub(p, tag, '[data-list="all"]', 'Huellitas');

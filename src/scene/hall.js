@@ -5,7 +5,7 @@
 // vidrio, con una guirnalda de lucecitas de colores alrededor y, adentro, lo que le dejaron.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HALL_CENTER, ROOM_R, ROOM_WALL_H, CORRIDOR, CORRIDOR_DEG, ROOM_ARCS, LIFT_ARC, corridorFrame, rand, uTime } from './world.js';
+import { HALL_CENTER, ROOM_R, ROOM_WALL_H, CORRIDOR, CORRIDOR_DEG, ROOM_ARCS, LIFT_ARCS, corridorFrame, rand, uTime } from './world.js';
 import { portraitTexture, photoTexture, labelTexture, twoSided, flameTexture, glowTexture, woodTexture, lightConeTexture, emojiTexture, lanternTexture } from './textures.js';
 import { stageOf } from '../../server/glow.js';
 import { giftMesh, idleGift } from './gifts3d.js';
@@ -383,7 +383,7 @@ export function buildHall(scene, colliders, tier) {
     const T = 0.4;
     const outerMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture('#c9663a'), emissive: '#2a0e06' });
     ROOM_ARCS.forEach(([a0, a1], ai) => {
-      if (LIFT_ARC && a0 === LIFT_ARC[0]) return; // ese tramo es la pared del ascensor (elevator.js)
+      if (LIFT_ARCS.some((arc) => arc && a0 === arc[0])) return; // esos tramos son las paredes de los tres ascensores (elevator.js)
       const n = Math.max(1, Math.ceil((a1 - a0) / 9));
       const inner = [];
       for (let k = 0; k < n; k++) {

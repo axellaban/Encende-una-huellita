@@ -12,6 +12,7 @@ export const FURS = [
   { id: 'gris', name: 'Gris', hex: '#8f8c8a' },
   { id: 'ceniza', name: 'Gris humo', hex: '#575a62' },
   { id: 'rojizo', name: 'Colorado', hex: '#b4552b' },
+  { id: 'caramelo', name: 'Caramelo', hex: '#9e5a2c' },
   { id: 'canela', name: 'Canela', hex: '#a66e44' },
   { id: 'atigrado', name: 'Atigrado', hex: '#87683f' },
 ];
@@ -67,6 +68,16 @@ export const SIZES = [
   { id: 'l', name: 'Grande' },
   { id: 'xl', name: 'Gigante' },
 ];
+export const PERSONALITIES = [
+  { id: 'jugueton', name: '🎾 Juguetón' },
+  { id: 'saltarin', name: '🦘 Saltarín' },
+  { id: 'mimoso', name: '🤍 Mimoso' },
+  { id: 'tranquilo', name: '😴 Pachorra' },
+  { id: 'curioso', name: '🔍 Curioso' },
+  { id: 'timido', name: '🙈 Antisocial' },
+  { id: 'guardian', name: '🛡️ Guardián' },
+  { id: 'travieso', name: '🐾 Travieso' },
+];
 const ids = (list) => new Set(list.map((x) => x.id));
 const FUR_IDS = ids(FURS);
 const EAR_IDS = ids(EARS);
@@ -76,6 +87,7 @@ const SNOUT_IDS = ids(SNOUTS);
 const TAIL_IDS = ids(TAILS);
 const EYE_IDS = ids(EYES);
 const COAT_IDS = ids(COATS);
+const VIBE_IDS = ids(PERSONALITIES);
 
 // Deja sólo valores conocidos; devuelve null si no queda nada.
 export function cleanLook(v) {
@@ -90,5 +102,6 @@ export function cleanLook(v) {
   if (SNOUT_IDS.has(v.snout)) out.snout = v.snout;
   if (TAIL_IDS.has(v.tail)) out.tail = v.tail;
   if (EYE_IDS.has(v.eyes)) out.eyes = v.eyes;
+  if (VIBE_IDS.has(v.vibe)) out.vibe = v.vibe;
   return Object.keys(out).length ? out : null;
 }

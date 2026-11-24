@@ -22,7 +22,7 @@ import { createCharacter } from './scene/character.js';
 import { createOfferFx } from './scene/gifts3d.js';
 import { createSparkles } from './scene/sparkles.js';
 import { createMist } from './scene/mist.js';
-import { FURS, PATTERNS, COATS, EARS, TAILS, EYES, SIZES, SNOUTS } from '../server/looks.js';
+import { FURS, PATTERNS, COATS, EARS, TAILS, EYES, SIZES, SNOUTS, PERSONALITIES } from '../server/looks.js';
 import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard, drawKeepsake } from './share.js';
 import { polaroid } from './photo.js';
 // Cómo llegó esta persona (link de una huellita, invitación de alguien). Se lee antes de tocar la URL.
@@ -344,12 +344,12 @@ async function buildScene() {
   controls.onTap((e) => {
     if (document.body.classList.contains('intro')) return skipIntro();
     if (!sheetEl.hidden) { closeSheet(); return; }
-    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, elevator.hit, ...world.walkable]);
+    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, ...elevator.hits, ...world.walkable]);
     if (!hit) return;
     // Un muro: caminar hacia él (no abrir lo que haya del otro lado).
     if (hit.object.userData.kind === 'wall') { controls.walkTo(hit.point.clone().setY(0)); hideHint(); return; }
     if (hit.object.userData.kind === 'jar') { clink(); return openJar(); }
-    if (hit.object.userData.kind === 'elevator') return callElevator();
+    if (hit.object.userData.kind === 'elevator') return callElevator(hit.object.userData.liftIdx);
     if (hit.object.userData.kind === 'spirit') return tapSpirit(spirits.spiritOf(hit.object));
     if (hit.object.userData.kind === 'ball') {
       if (controls.player.pos.distanceTo(spirits.ball.pos.clone().setY(0)) < 4) return throwBall();
@@ -372,13 +372,13 @@ async function buildScene() {
     hideHint();
   });
   controls.onHover((e) => {
-    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, elevator.hit]);
+    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, ...elevator.hits]);
     const key = hit && hit.distance < 16 ? slotKeyFromHit(hit.object) : null;
     hall.setHover(key);
     canvas.style.cursor = hit && hit.distance < 16 && (key !== null || (hit.object.userData.kind && hit.object.userData.kind !== 'wall')) ? 'pointer' : '';
   });
   controls.onMove(hideHint);
-  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, renderer, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
+  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, renderer, THREE, spirits, elevator, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
     goFloor: (f) => goFloor(f, true, true),
     ogCard: async (id) => { const m = memorials.find((x) => x.id === id); return (await drawOgCard(m, photoSrc(m))).toDataURL('image/jpeg', 0.88); } };
 
@@ -538,7 +538,7 @@ async function refresh() {
     } else walking = w;
   }
   hall?.render(memorials);
-  spirits?.setPack(memorials, walking?.id);
+  spirits?.setPack(memorials, walking?.id, currentFloor());
   renderStats(r.stats);
   renderBirthdays();
   renderFloors();
@@ -712,13 +712,15 @@ function liftEnd() {
   insideLift = false;
 }
 
-async function callElevator() {
+async function callElevator(liftIdx = null) {
   if (!controls || !elevator || riding) return;
+  if (typeof liftIdx === 'number') elevator.useIndex(liftIdx);
+  else elevator.useNearest(controls.player.pos);
   if (reduced) { renderFloors(); $('#floors').showModal(); return; }
   liftBegin();
   const P = controls.player;
   const door = elevator.doorPoint(1.1);
-  // Lejos (desde el menú): aparece en el salón, cerca del ascensor, mirándolo.
+  // Lejos (desde el menú): aparece en el salón, cerca del ascensor más próximo, mirándolo.
   if (Math.hypot(P.pos.x - door.x, P.pos.z - door.z) > 11) {
     teleportPlayer(elevator.doorPoint(4.2), door);
     controls.snapFollow();
@@ -769,7 +771,7 @@ async function leaveLift(fromPanel = false) {
   elevator.setInside(false);
   await scriptedWalk(elevator.doorPoint(1.9), 0.65);
   // Gira hacia el salón antes de que la cámara lo siga (detrás suyo está la pared del ascensor).
-  await scriptedTurn(elevator.outHeading + 1.15, 0.45);
+  await scriptedTurn(elevator.outHeading + (elevator.exitTurn ?? 1.15), 0.45);
   controls.placePlayer(controls.player.pos, null);
   controls.follow({ duration: 1.1, path: [elevator.doorPoint(0.6).setY(2.0)] });
   await later(650);
@@ -825,7 +827,7 @@ function goFloor(f, quiet = false, instant = false) {
   if (!hall || f === hall.floor) return;
   hall.setFloor(f, memorials);
   heaven?.setFloor(f, instant);
-  spirits?.setUp(f > 0);
+  spirits?.setFloor(f, memorials, walking?.id);
   renderFloors();
   elevator?.setFloor(f);
   heartbeat();
@@ -1025,7 +1027,8 @@ function fillSheet(m) {
   $('.sheet-photo').dataset.rightGift = topGifts[1] || '🌼';
   $('#s-name').textContent = m.name;
   const kind = { perro: 'Perro', gato: 'Gato', otro: 'Compañero' }[m.species] || '';
-  const bits = [kind];
+  const vibeName = PERSONALITIES.find((p) => p.id === m.look?.vibe)?.name || '';
+  const bits = [kind, vibeName];
   if (m.birthday) bits.push(`🎂 ${fmtDay(m.birthday)}${m.birthYear ? ` de ${m.birthYear}` : ''}`);
   if (m.passedDay) bits.push(`🌈 ${fmtDay(m.passedDay)}${m.passedYear ? ` de ${m.passedYear}` : ''}`);
   if (m.birthYear && m.passedYear) bits.push(`${m.passedYear - m.birthYear} años de amor`);
@@ -2487,7 +2490,7 @@ function computeAction() {
     if (m) return { kind: 'visit', ic: '🕯️', lbl: m.name, key: `m:${m.id}`, run: () => visit(m) };
     return { kind: 'add', ic: '＋', lbl: 'Sumar acá', key: `a:${fr.i}`, run: () => openAdd(hall.floor * SLOTS_PER_FLOOR + fr.i) };
   }
-  if (elevator && P.pos.distanceTo(elevator.doorPoint(1.2)) < 3.4) return { kind: 'lift', ic: '🛗', lbl: 'Ascensor', key: 'lift', run: callElevator };
+  if (elevator && elevator.nearestDist(P.pos) < 3.4) return { kind: 'lift', ic: '🛗', lbl: 'Ascensor', key: 'lift', run: () => callElevator() };
   if (currentFloor() === 0 && P.pos.distanceTo(_v.set(JAR_POS.x, 0, JAR_POS.z)) < 3.2) return { kind: 'jar', ic: '🫙', lbl: 'Frasco', key: 'jar', run: () => { clink(); openJar(); } };
   const c = spirits?.companion;
   // Paseando, el botón es la pelota; si te quedás quieto un rato al lado de tu mascota, acariciarla.
@@ -3370,6 +3373,16 @@ $('#s-walk').onclick = () => {
 };
 
 const SPIRIT_LINES = ['mueve la cola de felicidad', 'te mira con ojitos brillantes', 'da un saltito de alegría', 'te quiere invitar a jugar'];
+const VIBE_LINES = {
+  jugueton: ['te invita a jugar dando saltitos 🎾', 'hace una reverencia para que corras con él 🐾'],
+  saltarin: ['pega un salto enorme de alegría 🦘', 'rebota en el aire moviendo la cola ✨'],
+  mimoso: ['se apoya contra tus piernas pidiendo mimos 🤍', 'se tira panza arriba para que lo acaricies 🐾'],
+  tranquilo: ['suspira calentito y mueve la punta de la cola 🌙', 'te mira con paz, bien pachorra 🤍'],
+  curioso: ['ladea la cabecita mirándote con intriga 🦋', 'olfatea tu mano con mucha curiosidad 🐾'],
+  timido: ['te mira de reojito desde su rincón tranquilo 🙈', 'mueve apenas la colita con timidez 🤍'],
+  guardian: ['se sienta derechito cuidando el jardín 🛡️', 'te acompaña firme y atento, como siempre 🐾'],
+  travieso: ['sale corriendo en círculos con cara de pícaro 😈', 'hace una pirueta traviesa y busca qué desenterrar 🐾'],
+};
 function tapSpirit(a) {
   boop();
   if (!a) return;
@@ -3379,6 +3392,7 @@ function tapSpirit(a) {
   if (petting) spirits.cuddle(a); else spirits.poke(a);
   haptic([8, 30, 8]);
   avatars?.floatAt('🤍', a.pos.clone().setY(0.9 * a.s + 0.3));
+  const line = pick(VIBE_LINES[a.vibe] || SPIRIT_LINES);
   if (a.role === 'companion') {
     // Si está cerca, tu personaje se agacha a acariciarlo.
     const P = controls.player;
@@ -3387,12 +3401,12 @@ function tapSpirit(a) {
       me.pet();
       return toast(`🤍 Acariciaste a ${a.name}`);
     }
-    return toast(`🐾 ${a.name} ${pick(SPIRIT_LINES)}`);
+    return toast(`🐾 ${a.name} ${line}`);
   }
   if (a.role === 'remote') return toast(`🐾 ${a.name} pasea con su familia`);
   const m = a.memorialId && memorials.find((x) => x.id === a.memorialId);
-  if (m) toast(`🐾 ${m.name} juega en el Prado de los espíritus`, { label: 'Visitar su lugar', fn: () => visit(m) });
-  else toast(a.kind === 'gato' ? '🐱 Un gatito de luz te saluda. Corré libre 🌈' : '🐶 Un perrito de luz mueve la cola. Corré libre 🌈');
+  if (m) toast(`🐾 ${m.name} ${line}`, { label: 'Visitar su lugar', fn: () => visit(m) });
+  else toast(a.kind === 'gato' ? `🐱 Un gatito de luz ${line}` : `🐶 Un perrito de luz ${line}`);
 }
 
 function wireSpirits() {
@@ -3672,6 +3686,7 @@ function lookPicker(box, value = {}, speciesFn = null) {
     }
     box.append(fs);
   };
+  make('Su personalidad', 'vibe', PERSONALITIES);
   make('Color principal', 'fur', FURS, true);
   make('Manchitas y dibujo', 'pattern', PATTERNS);
   make('Segundo color (manchas / pecho / patitas)', 'fur2', FURS, true, 'Automático');
@@ -3694,6 +3709,7 @@ function readLook(box) {
   if (!box) return null;
   const v = (n) => box.querySelector(`input[name="look-${n}"]:checked`)?.value || undefined;
   const out = {
+    vibe: v('vibe'),
     fur: v('fur'),
     fur2: v('fur2'),
     pattern: v('pattern'),

@@ -156,12 +156,12 @@ for (const name of ['local', 'vercel']) {
     assert.ok(!('at' in withEv.others[0]), 'no expone la hora interna');
   });
 
-  test(`[${name}] cómo era (pelaje, orejas, tamaño) y el espíritu que alguien pasea`, async () => {
-    const c = await (await post('/api/memorials', { name: 'Toby', species: 'perro', look: { fur: 'dorado', fur2: 'blanco', coat: 'fluffy', pattern: 'raro', ears: 'down', tail: 'curl', eyes: 'odd', size: 'l', x: 1 } })).json();
-    assert.deepEqual(c.memorial.look, { fur: 'dorado', fur2: 'blanco', coat: 'fluffy', ears: 'down', tail: 'curl', eyes: 'odd', size: 'l' });
+  test(`[${name}] cómo era (pelaje, orejas, tamaño, personalidad) y el espíritu que alguien pasea`, async () => {
+    const c = await (await post('/api/memorials', { name: 'Toby', species: 'perro', look: { fur: 'dorado', fur2: 'blanco', coat: 'fluffy', pattern: 'raro', ears: 'down', tail: 'curl', eyes: 'odd', size: 'l', vibe: 'saltarin', x: 1 } })).json();
+    assert.deepEqual(c.memorial.look, { fur: 'dorado', fur2: 'blanco', coat: 'fluffy', ears: 'down', tail: 'curl', eyes: 'odd', size: 'l', vibe: 'saltarin' });
     const own = { 'X-Edit-Token': c.editToken };
-    let r = await (await post(`/api/memorials/${c.memorial.id}/edit`, { look: { fur: 'negro', fur2: 'naranja', pattern: 'spots', coat: 'short', ears: 'up' }, species: 'gato' }, own)).json();
-    assert.deepEqual(r.look, { fur: 'negro', fur2: 'naranja', pattern: 'spots', coat: 'short', ears: 'up' });
+    let r = await (await post(`/api/memorials/${c.memorial.id}/edit`, { look: { fur: 'negro', fur2: 'naranja', pattern: 'spots', coat: 'short', ears: 'up', vibe: 'timido' }, species: 'gato' }, own)).json();
+    assert.deepEqual(r.look, { fur: 'negro', fur2: 'naranja', pattern: 'spots', coat: 'short', ears: 'up', vibe: 'timido' });
     assert.equal(r.species, 'gato');
     r = await (await post(`/api/memorials/${c.memorial.id}/edit`, { look: 'cualquier cosa' }, own)).json();
     assert.equal(r.look, null);
