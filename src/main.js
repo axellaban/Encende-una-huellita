@@ -8,6 +8,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
+import { downloadDemoBackup } from './migrate.js';
 import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF, onPath, insideHall, inCorridor, onBridge } from './scene/world.js';
 import { buildHall, SLOTS_PER_FLOOR, EASEL_POS } from './scene/hall.js';
 import { createControls } from './scene/controls.js';
@@ -370,7 +371,7 @@ async function buildScene() {
     canvas.style.cursor = hit && hit.distance < 16 && (key !== null || (hit.object.userData.kind && hit.object.userData.kind !== 'wall')) ? 'pointer' : '';
   });
   controls.onMove(hideHint);
-  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
+  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, renderer, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
     goFloor: (f) => goFloor(f, true, true),
     ogCard: async (id) => { const m = memorials.find((x) => x.id === id); return (await drawOgCard(m, photoSrc(m))).toDataURL('image/jpeg', 0.88); } };
 
@@ -3308,7 +3309,28 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheetEl.hidden &
 
 (async () => {
   const label = $('#enter-label');
-  api = await connect();
+  try {
+    api = await connect({ onProgress: () => { label.textContent = 'Guardando tus recuerdos…'; } });
+  } catch (err) {
+    $('#splash').classList.add('connection-issue');
+    $('#connection-error').hidden = false;
+    $('#connection-error').textContent = err.message;
+    $('#backup-demo').hidden = false;
+    $('#backup-demo').onclick = downloadDemoBackup;
+    label.textContent = 'Volver a intentar';
+    $('#enter').disabled = false;
+    $('#enter').onclick = () => location.reload();
+    return;
+  }
+  const recoveredIds = api.migration?.mapping || {};
+  game.remap(recoveredIds);
+  if (recoveredIds[ARRIVAL.id]) {
+    ARRIVAL.id = recoveredIds[ARRIVAL.id];
+    const url = new URL(location.href);
+    if (/^\/h\//.test(url.pathname)) url.pathname = `/h/${ARRIVAL.id}`;
+    if (url.hash.startsWith('#h/')) url.hash = `#h/${ARRIVAL.id}`;
+    history.replaceState(null, '', url);
+  }
   if (api.mode === 'local') {
     $('#mode').hidden = false;
     $('#mode').textContent = 'Modo demo · lo que sumes queda en este navegador';

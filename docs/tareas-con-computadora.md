@@ -9,8 +9,18 @@ de conectar la base real; las pruebas en teléfonos y apps siguen separadas de l
 `https://encende-una-huellita.vercel.app/api/health` ya responde `{"ok":true,"storage":"upstash"}`.
 Base `encende-una-huellita`, plan Free, región `iad1`, sin eviction ni cambio automático de plan.
 Se verificaron presencia en ambas direcciones con dos clientes independientes, velas, flores,
-libro, regalitos, diario, fotos y voz. Los datos del modo demo anterior siguen en cada navegador;
-su migración está pendiente (ver `PENDIENTES.md`).
+libro, regalitos, diario, fotos y voz. Los datos del modo demo anterior se recuperan automáticamente
+cuando su familia vuelve a entrar desde el navegador que los creó. El original se conserva y los
+reintentos no duplican las huellitas ni los recuerdos.
+
+La recuperación se verificó contra Upstash real: foto de 1,1 MB, foto extra, voz, diario con
+corazones, libro, regalitos y permiso de edición. Repetir el lote no duplica registros. La huellita
+técnica se mantuvo fuera del listado público y se eliminó al terminar.
+
+`scripts/presencia.mjs` verifica dos sesiones Chromium independientes con los dos personajes
+visibles y el contador de visitantes. `scripts/rescate.mjs` verifica en iPhone SE y Android
+emulados una respuesta perdida, el respaldo descargable, reintento sin duplicados, acceso
+familiar y una vela que llega a la otra sesión. Las 35 pruebas de API/datos también pasan.
 
 Pasos de referencia para una instalación nueva:
 

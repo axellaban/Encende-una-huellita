@@ -179,10 +179,11 @@ sirven para un proyecto nuevo:
 Sin el paso 2 el sitio funciona igual en **modo demo**: cada visitante ve sólo lo que suma en su
 propio navegador (aparece un aviso abajo). Con Upstash conectado, todo es compartido y en vivo.
 
-**Antes de conectar una base a un sitio que ya se usó en modo demo:** los recuerdos de esos
-navegadores no se importan automáticamente. No borres sus datos; el rescate está pendiente en
-`PENDIENTES.md`. El permiso de edición también se guarda en el navegador: conservá el enlace de
-familia para poder entrar desde otro dispositivo.
+**Si ya usaste el sitio en modo demo:** volvé a entrar desde ese mismo navegador. El jardín recupera
+automáticamente sus huellitas, fotos, voz, diarios, libros, regalitos y notas en la base compartida,
+conservando el acceso familiar y una copia original en el dispositivo. Si se corta la conexión,
+podés reintentar sin duplicados o guardar una copia. Conservá el enlace de familia para poder
+editar desde otro dispositivo; todavía no hay inicio de sesión ni recuperación por email.
 
 La base conserva el historial de diarios, mensajes, regalitos, notas y gestos sin borrar los
 anteriores cuando llegan nuevos. La interfaz muestra los más recientes; consultar los anteriores
@@ -264,6 +265,7 @@ lab/gifts.html          Los 36 regalitos en 3D juntos (sólo en desarrollo)
 | Método y ruta | Qué hace |
 | --- | --- |
 | `GET /api/health` | Si hay base de datos conectada |
+| `POST /api/import` | Recupera por lotes los recuerdos del modo demo, con recibos para reintentar y permisos familiares nuevos |
 | `GET /api/memorials` | Todas las huellitas y totales |
 | `POST /api/memorials` | Crea una (`name`, `species`, `photo` como data URL, `birthday`/`passedDay` en `MM-DD`, `message`, `slot`, `look` = `{fur, ears, size, pattern}`). Devuelve `editToken` |
 | `GET /api/memorials/:id` | Una huellita con su libro de visitas |
@@ -296,5 +298,6 @@ La investigación inicial, hecha con [REA](https://github.com/morluto/rea), est�
 
 ## Pendientes
 
-Lo que falta, priorizado, está en [`PENDIENTES.md`](PENDIENTES.md). Lo más urgente: rescatar los recuerdos
-del modo demo anterior, moderación mínima y probarlo en teléfonos reales. Producción ya usa Upstash.
+Lo que falta, priorizado, está en [`PENDIENTES.md`](PENDIENTES.md). Lo más urgente: moderación mínima,
+recuperación de acceso por email y probarlo en teléfonos reales. Producción ya usa Upstash y rescata
+los recuerdos del modo demo al volver a visitar desde el navegador que los creó.

@@ -3,6 +3,7 @@
 // así la lógica de datos es la misma que en producción con Upstash.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { ONCE_SCRIPT } from './once.js';
 
 export function createMemoryKv({ file } = {}) {
   /** @type {Map<string, {t:'s'|'h'|'z'|'l', v:any, exp?:number}>} */
@@ -63,8 +64,25 @@ export function createMemoryKv({ file } = {}) {
     return r;
   }
 
+  function once(key, cmds) {
+    if (exec(['EXISTS', key])) return 0;
+    for (const cmd of cmds) exec(cmd);
+    exec(['SET', key, '1']);
+    return 1;
+  }
+
   function run(op, a) {
     switch (op) {
+      case 'HUELLITA_ASSEMBLE': {
+        const parts = a.slice(1).map((key) => exec(['GET', key]));
+        if (parts.some((p) => p === null)) throw new Error('Falta una parte del recuerdo');
+        exec(['SET', a[0], parts.join('')]);
+        exec(['DEL', ...a.slice(1)]);
+        return 'OK';
+      }
+      case 'EVAL':
+        if (a[0] !== ONCE_SCRIPT || a[1] !== '1') throw new Error('Script no soportado');
+        return once(a[2], JSON.parse(a[3]));
       case 'GET': {
         const e = of(a[0], 's');
         return e ? e.v : null;
@@ -215,6 +233,10 @@ export function createMemoryKv({ file } = {}) {
     },
     async pipeline(cmds) {
       return cmds.map((c) => exec(c));
+    },
+    async once(key, cmds) {
+      // Sin await entre comandos: tiene la misma exclusión que el script de Redis.
+      return once(key, cmds);
     },
     exec,
     flush,

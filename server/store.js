@@ -13,10 +13,12 @@
 //   night:<día> / nco:<día>   INT / SET  velas y países de la noche
 //   jar / jarn       LIST / INT  frasco de gracias
 //   rl:<k>:<min>     INT   límite de envíos por minuto
+//   im:<origen>:<registro> STR recibos del rescate del modo demo (sin vencimiento)
 import { randomBytes, createHash } from 'node:crypto';
 import { FEATURED, FEATURED_IDS } from './seed.js';
 import { GLOW, GIFT_SET, SAYINGS, EMOTES } from './glow.js';
 import { BACKGROUND_IDS } from './plans.js';
+import { createImporter } from './migration.js';
 
 const P = 'hu:';
 export const SLOTS_PER_FLOOR = 90;
@@ -129,9 +131,30 @@ export function createStore(kv) {
     return { h };
   }
 
+  async function claimSlot(wanted, id) {
+    const slots = fromHash(await kv.cmd('HGETALL', `${P}slots`));
+    const previous = Object.keys(slots).find((s) => slots[s] === id);
+    if (previous !== undefined) return Number(previous);
+    if (Number.isInteger(wanted) && wanted >= 0 && wanted < MAX_SLOT) {
+      if (await kv.cmd('HSETNX', `${P}slots`, String(wanted), id)) return wanted;
+      if (await kv.cmd('HGET', `${P}slots`, String(wanted)) === id) return wanted;
+    }
+    for (let tries = 0; tries < 6; tries++) {
+      const rows = fromHash(await kv.cmd('HGETALL', `${P}slots`));
+      const own = Object.keys(rows).find((s) => rows[s] === id);
+      if (own !== undefined) return Number(own);
+      let slot = 0;
+      while (rows[slot]) slot++;
+      if (slot >= MAX_SLOT) break;
+      if (await kv.cmd('HSETNX', `${P}slots`, String(slot), id)) return slot;
+    }
+    throw Object.assign(new Error('El muro está muy concurrido. Probá de nuevo.'), { status: 409 });
+  }
+
   const store = {
     kind: kv.kind,
     owner,
+    importBatch: createImporter(kv, { ensureFeatured, claimSlot, getRaw, toPublic, event }),
 
     async list() {
       await ensureFeatured();
@@ -160,17 +183,7 @@ export function createStore(kv) {
     async create(input, photo, visitor, pendingGlow = 0) {
       const id = newId();
       const token = randomBytes(18).toString('base64url');
-      let slot = null;
-      if (Number.isInteger(input.slot) && input.slot >= 0 && input.slot < MAX_SLOT) {
-        if (await kv.cmd('HSETNX', `${P}slots`, String(input.slot), id)) slot = input.slot;
-      }
-      for (let tries = 0; slot === null && tries < 6; tries++) {
-        const used = new Set(Object.keys(fromHash(await kv.cmd('HGETALL', `${P}slots`))).map(Number));
-        let s = 0;
-        while (used.has(s)) s++;
-        if (await kv.cmd('HSETNX', `${P}slots`, String(s), id)) slot = s;
-      }
-      if (slot === null) throw Object.assign(new Error('El muro está muy concurrido. Probá de nuevo.'), { status: 409 });
+      const slot = await claimSlot(input.slot, id);
       const data = {
         slot,
         name: input.name,
