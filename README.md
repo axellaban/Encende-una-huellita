@@ -165,6 +165,10 @@ tarjeta para historias, farolillo que se va volando y palabras de consuelo.
 
 ## Publicarlo en Vercel
 
+La producción de este repositorio ya está conectada a Upstash y publica desde `main` con Node 22.
+La base está vinculada sólo a Production; las previews conservan el modo demo. Estas instrucciones
+sirven para un proyecto nuevo:
+
 1. En Vercel: **Add New → Project** e importá este repositorio. No hace falta tocar nada:
    `vercel.json` ya configura el build (Vite → `dist/`) y la API (`api/handler.js`).
 2. **Conectá la base de datos** para que las velas, flores y huellitas se compartan entre todos:
@@ -292,5 +296,5 @@ La investigación inicial, hecha con [REA](https://github.com/morluto/rea), est�
 
 ## Pendientes
 
-Lo que falta, priorizado, está en [`PENDIENTES.md`](PENDIENTES.md). Lo más urgente: conectar Upstash en
-Vercel (hoy el sitio publicado está en modo demo), moderación mínima y probarlo en teléfonos reales.
+Lo que falta, priorizado, está en [`PENDIENTES.md`](PENDIENTES.md). Lo más urgente: rescatar los recuerdos
+del modo demo anterior, moderación mínima y probarlo en teléfonos reales. Producción ya usa Upstash.
