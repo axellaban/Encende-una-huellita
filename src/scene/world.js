@@ -393,7 +393,22 @@ export function buildWorld(scene, tier) {
   // ---------- suelo ----------
   const grassTex = grassTexture();
   grassTex.repeat.set(55, 55);
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(220, 64), new THREE.MeshLambertMaterial({ map: grassTex, color: '#c8d6b4' }));
+  const groundMat = new THREE.MeshLambertMaterial({ map: grassTex, color: '#cee0b8' });
+  groundMat.onBeforeCompile = (sh) => {
+    sh.vertexShader = `varying vec3 vGroundW;\n${sh.vertexShader}`.replace(
+      '#include <worldpos_vertex>',
+      '#include <worldpos_vertex>\nvGroundW = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+    );
+    sh.fragmentShader = `varying vec3 vGroundW;\n${sh.fragmentShader}`.replace(
+      '#include <dithering_fragment>',
+      `float gDapple = 0.5 + 0.5 * sin(vGroundW.x * 0.23 + cos(vGroundW.z * 0.19) * 1.6) * cos(vGroundW.z * 0.21 - sin(vGroundW.x * 0.17) * 1.4);
+       float pathGlow = 1.0 - smoothstep(1.5, 9.0, abs(vGroundW.x)) * smoothstep(28.0, 52.0, length(vGroundW.xz));
+       gl_FragColor.rgb *= mix(0.92, 1.1, gDapple);
+       gl_FragColor.rgb += vec3(0.07, 0.045, 0.015) * pathGlow;
+       #include <dithering_fragment>`,
+    );
+  };
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(220, 64), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.name = 'ground';
   groundRoot.add(ground);

@@ -202,7 +202,7 @@ function setupRenderer() {
     setTimeout(() => location.reload(), 1200);
   }, { once: true });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
+  renderer.toneMappingExposure = 1.16;
   adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: tier.maxPixelRatio, min: tierName === 'low' ? 0.7 : 0.85 });
   if (tier.bloom) {
     const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: tierName === 'high' ? 4 : 2 });
@@ -221,7 +221,7 @@ function setupRenderer() {
           gl_FragColor = vec4(clamp(c.rgb, 0.0, 64.0), c.a);
         }`,
     }));
-    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.45, 0.9);
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.52, 0.48, 0.89);
     composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
     // Acuarela: el último pase, en el color final de la pantalla.

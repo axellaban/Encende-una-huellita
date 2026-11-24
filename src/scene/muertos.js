@@ -117,102 +117,133 @@ export function papelPicadoTexture(color, variant = 0) {
 }
 
 let talaTex;
-// Azulejo de talavera.
+// Azulejo de talavera poblana en alta definición.
 export function talaveraTexture() {
   if (talaTex) return talaTex;
-  const [c, g] = canvas(128, 128);
-  g.fillStyle = '#f7f0e2';
-  g.fillRect(0, 0, 128, 128);
-  g.strokeStyle = '#1d4fa8';
-  g.lineWidth = 5;
-  g.strokeRect(2, 2, 124, 124);
-  g.fillStyle = '#1d4fa8';
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    g.beginPath(); g.ellipse(64 + Math.cos(a) * 26, 64 + Math.sin(a) * 26, 18, 9, a, 0, Math.PI * 2); g.fill();
+  const [c, g] = canvas(256, 256);
+  g.fillStyle = '#faf3e4';
+  g.fillRect(0, 0, 256, 256);
+  // Borde azul cobalto doble con guarda punteada.
+  g.strokeStyle = '#1b4a9c';
+  g.lineWidth = 8;
+  g.strokeRect(4, 4, 248, 248);
+  g.lineWidth = 2.5;
+  g.strokeRect(16, 16, 224, 224);
+  // Pétalos diagonales y axiales estilo cerámica artesanal.
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const diag = i % 2 === 1;
+    g.fillStyle = diag ? '#1b4a9c' : '#2a64c2';
+    g.beginPath();
+    g.ellipse(128 + Math.cos(a) * (diag ? 54 : 42), 128 + Math.sin(a) * (diag ? 54 : 42), diag ? 34 : 24, diag ? 15 : 11, a, 0, Math.PI * 2);
+    g.fill();
   }
-  g.fillStyle = '#f2b51a';
-  g.beginPath(); g.arc(64, 64, 12, 0, Math.PI * 2); g.fill();
-  for (const [x, y] of [[8, 8], [120, 8], [8, 120], [120, 120]]) {
-    g.beginPath(); g.arc(x, y, 12, 0, Math.PI * 2); g.fill();
+  // Centro dorado y terracota.
+  g.fillStyle = '#d96b27';
+  g.beginPath(); g.arc(128, 128, 26, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#f5be2b';
+  g.beginPath(); g.arc(128, 128, 17, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#faf3e4';
+  g.beginPath(); g.arc(128, 128, 7, 0, Math.PI * 2); g.fill();
+  // Esquinas florales que se unen al repetir el azulejo.
+  for (const [x, y] of [[16, 16], [240, 16], [16, 240], [240, 240]]) {
+    g.fillStyle = '#f5be2b';
+    g.beginPath(); g.arc(x, y, 22, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#1b4a9c';
+    g.beginPath(); g.arc(x, y, 11, 0, Math.PI * 2); g.fill();
   }
   talaTex = tex(c, [1, 1]);
   return talaTex;
 }
 
 const skullCache = new Map();
-// Cara de calaverita de azúcar (para visitantes y la ofrenda).
+// Cara de calaverita de azúcar en alta definición (para visitantes y la ofrenda).
 export function calaveraTexture(hue = 330) {
   const k = Math.round(hue / 30) * 30;
   if (skullCache.has(k)) return skullCache.get(k);
-  const [c, g] = canvas(256, 256);
-  g.fillStyle = '#fbf3e6';
-  g.fillRect(0, 0, 256, 256);
-  const col = `hsl(${k} 75% 55%)`;
-  const col2 = `hsl(${(k + 140) % 360} 70% 50%)`;
-  // Ojos: círculos con pétalos.
-  for (const x of [88, 168]) {
+  const [c, g] = canvas(512, 512);
+  const bg = g.createRadialGradient(256, 230, 30, 256, 256, 260);
+  bg.addColorStop(0, '#fffaf0');
+  bg.addColorStop(1, '#f4e6d0');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, 512, 512);
+  const col = `hsl(${k} 78% 54%)`;
+  const col2 = `hsl(${(k + 140) % 360} 72% 48%)`;
+  // Ojos: coronas de pétalos festoneados con borde dorado y doble brillo en la pupila.
+  for (const x of [176, 336]) {
     g.fillStyle = col;
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      g.beginPath(); g.ellipse(x + Math.cos(a) * 26, 110 + Math.sin(a) * 26, 11, 7, a, 0, Math.PI * 2); g.fill();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      g.beginPath(); g.ellipse(x + Math.cos(a) * 52, 220 + Math.sin(a) * 52, 21, 13, a, 0, Math.PI * 2); g.fill();
     }
-    g.fillStyle = '#2a1b2e';
-    g.beginPath(); g.arc(x, 110, 20, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#fff';
-    g.beginPath(); g.arc(x - 6, 104, 5, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#e6a832';
+    g.lineWidth = 4;
+    g.beginPath(); g.arc(x, 220, 43, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#231528';
+    g.beginPath(); g.arc(x, 220, 39, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.arc(x - 12, 208, 10, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(x + 11, 231, 4.5, 0, Math.PI * 2); g.fill();
   }
-  // Nariz de corazón.
-  g.fillStyle = '#2a1b2e';
+  // Nariz de corazón invertido.
+  g.fillStyle = '#231528';
   g.beginPath();
-  g.moveTo(128, 162);
-  g.bezierCurveTo(112, 150, 116, 136, 128, 144);
-  g.bezierCurveTo(140, 136, 144, 150, 128, 162);
+  g.moveTo(256, 324);
+  g.bezierCurveTo(224, 300, 232, 272, 256, 288);
+  g.bezierCurveTo(280, 272, 288, 300, 256, 324);
   g.fill();
-  // Sonrisa cosida.
-  g.strokeStyle = '#2a1b2e';
-  g.lineWidth = 4;
-  g.beginPath(); g.arc(128, 160, 42, 0.25 * Math.PI, 0.75 * Math.PI); g.stroke();
+  // Sonrisa bordada con arabescos en las comisuras.
+  g.strokeStyle = '#231528';
+  g.lineWidth = 7.5;
+  g.lineCap = 'round';
+  g.beginPath(); g.arc(256, 320, 84, 0.24 * Math.PI, 0.76 * Math.PI); g.stroke();
   for (let i = -3; i <= 3; i++) {
     const a = Math.PI / 2 + i * 0.11;
-    const x = 128 + Math.cos(a) * 42;
-    const y = 160 + Math.sin(a) * 42;
-    g.beginPath(); g.moveTo(x, y - 7); g.lineTo(x, y + 7); g.stroke();
+    const x = 256 + Math.cos(a) * 84;
+    const y = 320 + Math.sin(a) * 84;
+    g.beginPath(); g.moveTo(x, y - 14); g.lineTo(x, y + 14); g.stroke();
   }
-  // Frente con flor y puntitos.
+  // Flor de cempasúchil y filigrana en la frente.
   g.fillStyle = col2;
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    g.beginPath(); g.arc(128 + Math.cos(a) * 12, 52 + Math.sin(a) * 12, 7, 0, Math.PI * 2); g.fill();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    g.beginPath(); g.arc(256 + Math.cos(a) * 24, 104 + Math.sin(a) * 24, 13, 0, Math.PI * 2); g.fill();
   }
   g.fillStyle = PALETTE.amarillo;
-  g.beginPath(); g.arc(128, 52, 7, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(256, 104, 14, 0, Math.PI * 2); g.fill();
   g.fillStyle = col;
-  for (let i = 0; i < 7; i++) { g.beginPath(); g.arc(70 + i * 19, 196 + Math.sin(i) * 3, 3.5, 0, Math.PI * 2); g.fill(); }
+  for (let i = 0; i < 7; i++) { g.beginPath(); g.arc(140 + i * 38, 392 + Math.sin(i) * 6, 7, 0, Math.PI * 2); g.fill(); }
   const t = tex(c);
   skullCache.set(k, t);
   return t;
 }
 
 const paintCache = new Map();
-// Madera pintada de colores con un friso de talavera abajo.
+// Muro artesanal pintado con textura de estuco cálido, tablones y sombreado vertical.
 export function paintedWallTexture(color) {
   if (paintCache.has(color)) return paintCache.get(color);
-  const [c, g] = canvas(256, 256);
+  const [c, g] = canvas(512, 512);
   g.fillStyle = color;
-  g.fillRect(0, 0, 256, 256);
-  for (let x = 0; x < 256; x += 32) {
-    g.fillStyle = 'rgba(0,0,0,0.12)';
-    g.fillRect(x, 0, 2, 256);
-    for (let i = 0; i < 6; i++) {
+  g.fillRect(0, 0, 512, 512);
+  const shade = g.createLinearGradient(0, 0, 0, 512);
+  shade.addColorStop(0, 'rgba(255,235,200,0.12)');
+  shade.addColorStop(0.5, 'rgba(0,0,0,0)');
+  shade.addColorStop(1, 'rgba(15,5,10,0.24)');
+  g.fillStyle = shade;
+  g.fillRect(0, 0, 512, 512);
+  for (let x = 0; x < 512; x += 64) {
+    g.fillStyle = 'rgba(0,0,0,0.14)';
+    g.fillRect(x, 0, 3, 512);
+    g.fillStyle = 'rgba(255,240,215,0.08)';
+    g.fillRect(x + 3, 0, 2, 512);
+    for (let i = 0; i < 10; i++) {
       g.fillStyle = `rgba(255,255,255,${Math.random() * 0.05})`;
-      g.fillRect(x + 3 + Math.random() * 26, 0, 1 + Math.random() * 2, 256);
+      g.fillRect(x + 5 + Math.random() * 52, 0, 1.5 + Math.random() * 3, 512);
     }
   }
-  // Desgaste suave.
-  for (let i = 0; i < 300; i++) {
-    g.fillStyle = `rgba(255,240,220,${Math.random() * 0.05})`;
-    g.fillRect(Math.random() * 256, Math.random() * 256, 4 + Math.random() * 10, 2);
+  for (let i = 0; i < 550; i++) {
+    g.fillStyle = `rgba(255,240,220,${Math.random() * 0.055})`;
+    g.fillRect(Math.random() * 512, Math.random() * 512, 6 + Math.random() * 18, 2.5);
   }
   const t = tex(c);
   paintCache.set(color, t);
@@ -277,7 +308,17 @@ export function marigoldGeometry(r = 0.1, color = PALETTE.cempasuchil, rnd = Mat
 }
 
 export function marigoldMaterial() {
-  return new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, emissive: '#6a2800', emissiveIntensity: 0.6 });
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, emissive: '#752d00', emissiveIntensity: 0.62 });
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+       float rimM = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);
+       totalEmissiveRadiance += diffuseColor.rgb * (rimM * rimM * 0.45);`,
+    );
+  };
+  mat.customProgramCacheKey = () => 'marigold-velvet-1';
+  return mat;
 }
 
 // Muchas flores en un solo dibujo (para guirnaldas, arcos y macetas).

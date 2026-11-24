@@ -44,6 +44,12 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 - [x] **Camino de chispitas guía al buscar o visitar una huellita (`src/main.js`, `src/scene/spirits.js`)**:
   - Al elegir una huellita desde la lista o el buscador, además de encuadrar su nicho, soltar una estela de pétalos/chispitas desde la boca de su pasillo hasta su marco.
 
+### Etapa 6: Mejora gráfica integral de texturas, iluminación y materiales (`src/scene/textures.js`, `src/scene/muertos.js`, `src/scene/world.js`, `src/main.js`)
+- [x] **Texturas procedurales 2x con filtrado anisotrópico (`anisotropy = 8`)**:
+  - Pasto (`512x512`) con manchones de musgo, rocío y briznas detalladas; madera (`512x512`) con vetas curvas y nudos suaves; lajas de piedra (`512x512`) con sombras de relieve y bisel iluminado; piso de tablones del salón (`512x512`) con vetas y clavitos de bronce; luna (`512x512`) y farolitos de seda (`256x512`) en alta definición.
+- [x] **Arte de Día de Muertos y materiales (`src/scene/muertos.js`, `src/scene/world.js`)**:
+  - Azulejos de Talavera (`256x256`), calaveritas de azúcar (`512x512`) con corona de pétalos y filigrana dorada, muros artesanales (`512x512`), shader aterciopelado en pétalos de cempasúchil y sombreado cálido con claro de luna en el suelo del jardín.
+
 ---
 
 ## 🆕 Última tanda (24/11/2026, noche) — verificada con capturas y recorrido en los 6 dispositivos
