@@ -5,6 +5,7 @@ import { createApp } from './index.js';
 import { parseDataUrl, validateMemorial } from './core.js';
 import { createMemoryKv } from './kv/memory.js';
 import { createStore } from './store.js';
+import { demoRecords } from '../src/migrate.js';
 
 // JPG de 1x1.
 const JPG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
@@ -282,6 +283,62 @@ for (const name of ['local', 'vercel']) {
     assert.equal(full.diaryCount, 1);
     assert.equal((await post('/api/comfort', { text: 'No estás solo', visitor: 'Luz' })).status, 201);
     assert.equal((await (await call('/api/comfort')).json()).notes[0].text, 'No estás solo');
+  });
+
+  test(`[${name}] rescatar el modo demo sin duplicar ni perder el permiso familiar`, async () => {
+    const date = new Date().toISOString().slice(0, 10);
+    const localId = 'recuerdo1';
+    const source = 'a'.repeat(64);
+    const sid = `rescate-${name}`;
+    const snapshot = {
+      memorials: [{ id: localId, name: 'Cira', species: 'gato', slot: 0, photo: PNG, extraPhotos: [PNG], voice: 'data:audio/wav;base64,UklGRg==',
+        candles: 7, flowers: 3, gifts: 1, glow: 90, giftCounts: { '🎾': 1 }, lastGifts: ['🎾'], bg: 'talavera', createdAt: 1700000000000 }],
+      counters: { luca: { candles: 2, flowers: 1, gifts: 1, giftCounts: { '🎾': 1 } } },
+      guestbook: { [localId]: [{ id: 'firma01', name: 'Ana', text: 'Siempre cerca', at: 1700000000000 }], luca: [{ id: 'firma02', name: 'Ana', text: 'Una luz para Luca' }] },
+      diary: { [localId]: [{ id: 'pagina01', text: 'Nuestra tarde favorita', prompt: 'Un recuerdo', at: 1700000000000 }] },
+      dh: { [`${localId}:pagina01`]: 2 },
+      gifts: { [localId]: [{ gift: '🎾 Una pelota', who: 'Ana' }], luca: [{ gift: '🎾 Una pelota', who: 'Ana' }] },
+      jar: [{ text: 'Gracias por acompañarme', who: 'Ana' }],
+      done: { [`c:${localId}:${date}`]: 1, [`${localId}:pagina01:${date}`]: 1 },
+      altar: { [date]: [localId, 'luca'], done: date }, night: { [date]: 1 },
+      events: [{ type: 'hug', memorialId: localId, petName: 'Cira', visitor: 'Ana', at: 1700000000000 }],
+    };
+    const records = demoRecords(snapshot);
+    const before = await (await call('/api/memorials/luca')).json();
+    const jarBefore = await (await call('/api/jar')).json();
+    let mapping;
+    for (let i = 0; i < records.length; i += 20) {
+      const body = { source, sid, records: records.slice(i, i + 20) };
+      const r = await post('/api/import', body);
+      assert.equal(r.status, 200);
+      const result = await r.json();
+      if (result.mapping[localId]) mapping = result.mapping[localId];
+      // Una respuesta perdida y dos pestañas que reintentan no duplican registros.
+      const retries = await Promise.all([post('/api/import', body), post('/api/import', body)]);
+      for (const retry of retries) assert.equal((await retry.json()).imported, 0);
+    }
+    assert.ok(mapping && mapping.id !== localId);
+    assert.notEqual(mapping.editToken, `local-${localId}`);
+    const full = await (await call(`/api/memorials/${mapping.id}`)).json();
+    assert.equal(full.name, 'Cira'); assert.equal(full.candles, 7); assert.equal(full.flowers, 3);
+    assert.equal(full.glow, 90); assert.equal(full.gifts, 1); assert.equal(full.bg, 'talavera');
+    assert.equal(full.extraPhotos.length, 1); assert.equal(full.diaryCount, 1); assert.equal(full.guestbookCount, 1);
+    assert.equal(full.diary[0].hearts, 2); assert.equal(full.diary[0].at, 1700000000000);
+    assert.equal(full.giftList.length, 1); assert.equal(full.giftCounts['🎾'], 1);
+    for (const url of [full.photo, full.extraPhotos[0], full.voice]) assert.equal((await call(url)).status, 200);
+    const luca = await (await call('/api/memorials/luca')).json();
+    assert.equal(luca.candles, before.candles + 2);
+    assert.equal(luca.flowers, before.flowers + 1);
+    assert.equal((await (await call('/api/jar')).json()).count, jarBefore.count + 1);
+    const heartbeat = await (await post('/api/now', { sid, since: 0 })).json();
+    const recovered = heartbeat.events.find((e) => e.memorialId === mapping.id && e.type === 'hug' && e.migrated);
+    assert.ok(recovered); assert.equal(recovered.c, 7); assert.equal(recovered.f, 3);
+    assert.equal((await (await post(`/api/memorials/${mapping.id}/candle`, { sid })).json()).already, true);
+    assert.equal((await (await post(`/api/memorials/${mapping.id}/diary/pagina01/heart`, { sid })).json()).already, true);
+    assert.equal((await post(`/api/memorials/${mapping.id}/edit`, { message: 'x' }, { 'X-Edit-Token': `local-${localId}` })).status, 403);
+    assert.equal((await post(`/api/memorials/${mapping.id}/edit`, { message: 'Recuperada' }, { 'X-Edit-Token': mapping.editToken })).status, 200);
+    assert.equal((await post('/api/import', { source, records: [{ kind: 'memorial', key: 'x', localId: 'luca', value: { name: 'No' } }] })).status, 400);
+    assert.equal((await post('/api/import', { source: 'corto', records: [] })).status, 400);
   });
 
   test(`[${name}] errores`, async () => {

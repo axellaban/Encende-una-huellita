@@ -112,6 +112,8 @@ button.featured-chip:hover { background: rgba(201, 112, 78, .95); }
 .splash-quote { font-family: var(--serif); font-size: clamp(17px, 3.6vw, 22px); line-height: 1.45; margin: 0; opacity: .92; }
 .splash-quote span { font-family: var(--hand); font-size: 1.35em; opacity: .85; display: inline-block; margin-top: 4px; }
 .splash-sub { font-size: 13px; opacity: .6; margin: 0; font-weight: 700; }
+.splash.connection-issue { overflow-y: auto; place-content: start center; gap: 16px; padding-top: calc(var(--safe-t) + 76px); }
+#connection-error { max-width: 34ch; opacity: .95; }
 .candle-css { width: 26px; height: 56px; position: relative; margin-bottom: 6px; }
 .candle-css::after { content: ''; position: absolute; bottom: 0; left: 3px; width: 20px; height: 34px; border-radius: 4px 4px 3px 3px; background: linear-gradient(var(--field), #e8d4b8); }
 .candle-css i { position: absolute; left: 50%; bottom: 34px; width: 14px; height: 24px; margin-left: -7px; border-radius: 50% 50% 45% 45% / 65% 65% 35% 35%; background: radial-gradient(ellipse at 50% 75%, #fff8dc 0 25%, #ffc35c 50%, rgba(255,120,40,0) 75%); filter: drop-shadow(0 0 14px rgba(255,180,80,.9)); transform-origin: 50% 100%; animation: flicker 1.8s ease-in-out infinite; }

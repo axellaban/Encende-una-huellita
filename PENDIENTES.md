@@ -86,9 +86,9 @@ nombres ni imágenes del original: tomar la idea, que es la de un columbario/mem
 **Tareas que requieren usar la computadora** (Vercel, Upstash, teléfonos reales, vistas previas): paso a
 paso en [`docs/tareas-con-computadora.md`](docs/tareas-con-computadora.md).
 
-**Lo que sigue del plan** (abajo, en orden): verificar en teléfonos reales; rescatar los recuerdos del
-modo demo anterior; vistas previas en las apps; moderación; el resto de P1/P2/P3. Upstash y la rama
-de producción `main` ya están configurados y verificados.
+**Lo que sigue del plan** (abajo, en orden): verificar en teléfonos reales; vistas previas en las apps;
+moderación; el resto de P1/P2/P3. Upstash, la rama de producción `main` y el rescate automático de los
+recuerdos del modo demo ya están implementados.
 
 ## 🧭 Plan: lo que falta para mejorarlo todo (en orden)
 
@@ -169,7 +169,7 @@ con capas de profundidad, masas de árboles en flor, y moverse planeando. Etapa 
       original), en lugar de la foto plana de la ficha.
 - [ ] Expresiones del personaje (sonrisa al regalar), más ropa a elegir.
 - [ ] Regalitos con su gracia al llegar (la pelota rebota, el globo tira para arriba).
-- [ ] Lo que sigue abierto de P0 (migración del modo demo, teléfonos reales, moderación), P1, P2 y P3.
+- [ ] Lo que sigue abierto de P0 (teléfonos reales, moderación), P1, P2 y P3.
 
 ## ✅ Ya hecho: lo que pidió el dueño (23/11/2026) — hecho y lo que falta
 
@@ -236,11 +236,14 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       las notas del frasco/consuelo después de 300 y los gestos después de 200. Las lecturas siguen
       acotadas. `server/history.test.js` supera esos límites y vuelve a abrir la base desde disco
       para verificar que los primeros recuerdos, los corazones y el acceso familiar siguen ahí.
-- [ ] **Rescatar los datos del modo demo anterior**: conectar Upstash no
-      importa `huellita.local.v2`; queda guardado en cada navegador, pero la app deja de mostrarlo
-      al pasar a modo servidor. Falta exportar/importar con reintentos sin duplicados (huellitas,
-      fotos, voz, diario, libros, regalitos y notas), conservando el permiso de edición. No borrar
-      el almacenamiento del navegador para probar la conexión.
+- [x] **Rescatar los datos del modo demo anterior**: al volver desde el mismo navegador,
+      `src/migrate.js` → `/api/import` recupera huellitas, fotos, voz, diario, libros, regalos, notas,
+      gestos y marcas del día. Se conserva el original y se actualizan permisos y preferencias.
+      Recibos atómicos de Redis evitan duplicados al perder una respuesta, abrir dos pestañas o
+      reiniciar. Si falta conexión o espacio para guardar el acceso familiar, ofrece reintentar y
+      descargar una copia; no abre otro jardín privado. Ver `server/migration.test.js` y
+      `scripts/rescate.mjs` (interfaz en iPhone SE y Android emulados). Una persona que aún no volvió
+      al sitio conserva sus datos sólo en ese navegador hasta la próxima visita.
 - [x] **Dos clientes independientes de la API**: presencia en ambas direcciones y velas/flores/
       mensajes que llegan por el siguiente latido; una vela repetida no suma dos veces.
 - [ ] **Verificación visual con dos navegadores**: confirmar los personajes 3D y el contador de

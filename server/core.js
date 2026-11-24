@@ -83,6 +83,11 @@ export async function handleApi(req, store) {
 
   if (path === '/api/health') return ok({ ok: true, storage: store.kind });
 
+  if (path === '/api/import' && method === 'POST') {
+    if (await store.limited(`im:${ip}`, 80)) return fail(429, 'Estamos guardando muchos recuerdos. Esperá un minuto y volvé a intentar.');
+    return ok(await store.importBatch(await req.json(), ip));
+  }
+
   if (path === '/api/memorials' && method === 'GET') {
     const memorials = await store.list();
     return ok({

@@ -25,6 +25,12 @@ export function createGame() {
   }
 
   return {
+    remap(ids = {}) {
+      if (!Object.keys(ids).length) return;
+      if (Array.isArray(s.done?.lit)) s.done.lit = s.done.lit.map((id) => ids[id] || id);
+      s.seen = Object.fromEntries(Object.entries(s.seen).map(([id, value]) => [ids[id] || id, value]));
+      save();
+    },
     // Racha: cuántas noches seguidas viniste al jardín.
     visit() {
       const t = day();

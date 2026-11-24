@@ -3,6 +3,7 @@
 import { FEATURED } from '../server/seed.js';
 import { cleanLook } from '../server/looks.js';
 import { GLOW } from '../server/glow.js';
+import { recoverDemo, MIGRATION_KEY, SHARED_KEY } from './migrate.js';
 
 const LS_KEY = 'huellita.local.v2';
 const TOKENS_KEY = 'huellita.tokens';
@@ -288,13 +289,26 @@ function makeLocal() {
   };
 }
 
-export async function connect() {
+export async function connect({ onProgress } = {}) {
+  let connected = false;
+  let timer;
   try {
     const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 5000);
+    timer = setTimeout(() => ctrl.abort(), 10000);
     const r = await fetch('/api/health', { cache: 'no-store', signal: ctrl.signal });
-    clearTimeout(to);
-    if (r.ok && (await r.json()).ok) return remote;
-  } catch { /* sin servidor */ }
+    connected = r.ok && (await r.json()).ok;
+  } catch { /* decide abajo si puede ofrecer demo */ }
+  finally { clearTimeout(timer); }
+  if (connected) {
+    // Un error al recuperar no cambia a demo ni oculta los originales: se puede reintentar.
+    const migration = await recoverDemo({ request: req, onProgress });
+    try { localStorage.setItem(SHARED_KEY, '1'); } catch { /* navegador sin almacenamiento */ }
+    return { ...remote, migration };
+  }
+  let shared = false;
+  try { shared = !!(localStorage.getItem(SHARED_KEY) || localStorage.getItem(MIGRATION_KEY)); } catch { /* sin storage */ }
+  if (shared) {
+    throw new Error('No pudimos conectar con el jardín compartido. Tus recuerdos siguen guardados. Revisá internet y volvé a intentar.');
+  }
   return makeLocal();
 }

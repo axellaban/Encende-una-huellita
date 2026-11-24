@@ -9,8 +9,9 @@ de conectar la base real; las pruebas en teléfonos y apps siguen separadas de l
 `https://encende-una-huellita.vercel.app/api/health` ya responde `{"ok":true,"storage":"upstash"}`.
 Base `encende-una-huellita`, plan Free, región `iad1`, sin eviction ni cambio automático de plan.
 Se verificaron presencia en ambas direcciones con dos clientes independientes, velas, flores,
-libro, regalitos, diario, fotos y voz. Los datos del modo demo anterior siguen en cada navegador;
-su migración está pendiente (ver `PENDIENTES.md`).
+libro, regalitos, diario, fotos y voz. Los datos del modo demo anterior se recuperan automáticamente
+cuando su familia vuelve a entrar desde el navegador que los creó. El original se conserva y los
+reintentos no duplican las huellitas ni los recuerdos.
 
 Pasos de referencia para una instalación nueva:
 

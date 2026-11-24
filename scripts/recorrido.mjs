@@ -16,6 +16,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const URL0 = process.argv[2] || 'http://localhost:8787';
 const ONLY = (process.argv[3] || 'celular,se,acostado,compu,demo,sinwebgl').split(',');
 const GL = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+const CHROME = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {};
 const PHOTO = path.join(ROOT, 'public/huellitas/luca-2.jpg');
 
 let fails = 0;
@@ -113,9 +114,10 @@ async function full(b, tag, dev) {
   await p.evaluate(() => document.querySelector('#s-candle').click());
   await wait(p, 1500);
   check(tag, 'vela (una sola por día)', Number(c1) === c0 + 1 && (await text(p, '#s-candles')) === c1, `velas ${c0} → ${c1} → ${await text(p, '#s-candles')}`);
+  const f0 = Number(await text(p, '#s-flowers'));
   await p.evaluate(() => document.querySelector('#s-flower').click());
   await wait(p, 1500);
-  check(tag, 'flor', (await text(p, '#s-flowers')) === '1');
+  check(tag, 'flor', Number(await text(p, '#s-flowers')) === f0 + 1);
   await p.evaluate(() => document.querySelector('#s-hug').click());
   await wait(p, 1500);
   check(tag, 'abrazo', await toastIs(p, /abrazo/));
@@ -210,14 +212,13 @@ async function full(b, tag, dev) {
   await wait(p, 6000);
   check(tag, 'menú → Prado', await p.evaluate(() => { const P = window.__huellita.controls.player.pos; return Math.hypot(P.x - 24, P.z - 20) < 14; }));
   await p.evaluate(() => { const H = window.__huellita; H.controls.placePlayer(new H.THREE.Vector3(12, 0, 30), new H.THREE.Vector3(30, 0, 30)); H.controls.snapFollow(); });
-  await wait(p, 2500);
+  // Con SwiftShader el reloj de la escena avanza más despacio que el reloj real.
+  await p.waitForFunction(() => !document.body.classList.contains('moving'), null, { timeout: 20000 });
   if ((await p.evaluate(() => document.querySelector('#act-btn').dataset.kind)) === 'gestures') await tap(p, tag, '#act-btn', 'gestos');
   else await tap(p, tag, '#emote-btn', 'gestos');
-  await wait(p, 600);
-  const trayOpen = await visible(p, '#emote-tray');
-  await p.evaluate(() => document.querySelector('#sayings button')?.click());
-  await wait(p, 600);
-  check(tag, 'gestos y frases', trayOpen && (await p.locator('.self-say').count()) >= 1);
+  const trayOpen = await p.waitForSelector('#emote-tray', { state: 'visible', timeout: 10000 }).then(() => true, () => false);
+  const said = await p.evaluate(() => { document.querySelector('#sayings button')?.click(); return !!document.querySelector('.self-say'); });
+  check(tag, 'gestos y frases', trayOpen && said);
 
   // Guía, frasco, farolillo, consuelo, "Así te ven los demás".
   await hub(p, tag, '[data-guide]', 'La sexta etapa');
@@ -297,7 +298,7 @@ async function demo(b) {
 
 async function noGL() {
   const tag = 'sin WebGL';
-  const b = await chromium.launch({ args: ['--disable-webgl', '--disable-webgl2'] });
+  const b = await chromium.launch({ ...CHROME, args: ['--disable-webgl', '--disable-webgl2'] });
   const ctx = await b.newContext({ ...devices['iPhone 13'] });
   await ctx.addInitScript(() => localStorage.setItem('huellita.welcomed', '1'));
   const p = await ctx.newPage();
@@ -314,7 +315,7 @@ async function noGL() {
   await b.close();
 }
 
-const b = await chromium.launch({ args: GL });
+const b = await chromium.launch({ ...CHROME, args: GL });
 if (ONLY.includes('celular')) await full(b, 'celular', 'iPhone 13');
 if (ONLY.includes('se')) await full(b, 'iPhone SE', 'iPhone SE');
 if (ONLY.includes('acostado')) await full(b, 'acostado', 'iPhone 13 landscape');
