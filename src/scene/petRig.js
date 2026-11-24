@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { glowTexture } from './textures.js';
+import { uTime } from './world.js';
 import { FURS } from '../../server/looks.js';
 
 export { FURS };
@@ -66,23 +67,31 @@ const TAU = Math.PI * 2;
 
 function spiritMaterial(rim) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const u = { uRim: { value: new THREE.Color(rim) }, uPulse: { value: 0 }, uInner: { value: 0.24 } };
+  const u = { uRim: { value: new THREE.Color(rim) }, uPulse: { value: 0 }, uInner: { value: 0.26 }, uTime };
   mat.userData.u = u;
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = `attribute float aGlow;\nvarying float vGlow;\n${sh.vertexShader}`.replace('#include <color_vertex>', '#include <color_vertex>\n  vGlow = aGlow;');
-    sh.fragmentShader = `uniform vec3 uRim; uniform float uPulse; uniform float uInner; varying float vGlow;\n${sh.fragmentShader}`.replace(
+    sh.vertexShader = `attribute float aGlow;\nvarying float vGlow;\nvarying vec3 vSpiritPos;\n${sh.vertexShader}`.replace(
+      '#include <color_vertex>',
+      '#include <color_vertex>\n  vGlow = aGlow;\n  vSpiritPos = position;',
+    );
+    sh.fragmentShader = `uniform vec3 uRim; uniform float uPulse; uniform float uInner; uniform float uTime; varying float vGlow; varying vec3 vSpiritPos;\n${sh.fragmentShader}`.replace(
       '#include <emissivemap_fragment>',
       `#include <emissivemap_fragment>
-       float fres = pow(1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0), 2.8);
-       totalEmissiveRadiance += diffuseColor.rgb * (uInner + vGlow) + uRim * fres * (0.95 + uPulse);
-       // Brillo de pelaje: luz suave de arriba y un leve ruido como pelitos.
-       float sheen = pow(max(0.0, normal.y), 3.0) * 0.18;
-       float fuzz = fract(sin(dot(floor(vViewPosition.xy * 220.0), vec2(12.9898, 78.233))) * 43758.5453);
-       totalEmissiveRadiance += diffuseColor.rgb * (sheen + (fuzz - 0.5) * 0.06);`,
+       vec3 N = normalize(normal);
+       vec3 V = normalize(vViewPosition);
+       float ndv = clamp(abs(dot(N, V)), 0.0, 1.0);
+       float fres = pow(1.0 - ndv, 2.5);
+       float rimHalo = pow(1.0 - ndv, 4.2);
+       // Brillo aterciopelado de pelaje con luz cálida desde arriba y destellitos estelares que viajan por el cuerpo.
+       float sheen = pow(max(0.0, N.y), 2.4) * 0.24;
+       float furStrand = sin(vSpiritPos.x * 130.0 + vSpiritPos.y * 90.0) * cos(vSpiritPos.z * 120.0) * 0.045;
+       float starMote = smoothstep(0.84, 0.99, sin(vSpiritPos.x * 26.0 + uTime * 2.1) * cos(vSpiritPos.y * 28.0 - uTime * 1.7) * sin(vSpiritPos.z * 24.0 + uTime * 1.5));
+       totalEmissiveRadiance += diffuseColor.rgb * (uInner + vGlow + sheen + furStrand)
+         + uRim * (fres * (0.92 + uPulse) + rimHalo * 0.45 + starMote * 0.42);`,
     );
   };
-  mat.customProgramCacheKey = () => 'spirit-pet-2';
+  mat.customProgramCacheKey = () => 'spirit-pet-3';
   return mat;
 }
 
@@ -284,6 +293,9 @@ export function createPet(look) {
     add(place(sphere(eyeR * 0.68, cat ? 0.42 : 1, 1.1, 0.6, 10), at(eyes, sd * 0.052, 0, headR * 0.15 + 0.008)), eyes, dark, 0.02);
     add(place(sphere(0.0095, 1, 1, 1, 6), at(eyes, sd * 0.052 + 0.009, 0.012, headR * 0.15 + 0.019)), eyes, white, 1.6);
     add(place(sphere(0.0045, 1, 1, 1, 6), at(eyes, sd * 0.052 - 0.008, -0.009, headR * 0.15 + 0.02)), eyes, white, 1.2);
+    // Cejas expresivas: le dan mirada tierna y viva de cerca.
+    const browCol = pat === 'tuxedo' || pat === 'bicolor' || pat === 'spots' ? S2 : light;
+    add(place(sphere(0.014, 1.45, 0.55, 0.7, 8), at(head, sd * 0.048, 0.066, headR * 0.72), 0.1, 0, -sd * 0.18), head, browCol, 0.08);
   }
   // Bigotes de gato: tres de cada lado.
   if (cat) {
@@ -342,7 +354,12 @@ export function createPet(look) {
     if (L.front) add(place(capsule(thick, legU * 0.75), at(L.up, 0, -legU / 2, 0)), L.up, bellyShade);
     else add(place(sphere(thick * 1.25, 0.9, 1.6, 1.05), at(L.up, 0, -legU * 0.38, 0.0)), L.up, bellyShade);
     add(place(capsule(thick * 0.72, legL * 0.85), at(L.lo, 0, -legL / 2, 0)), L.lo, loCol);
-    add(place(sphere(0.042 * (cat ? 0.85 : 1) * (look.coat === 'curly' ? 1.15 : 1), 1, 0.55, 1.35, 10), at(L.paw, 0, 0.012, 0.016)), L.paw, pawCol, 0.12);
+    const pawR = 0.042 * (cat ? 0.85 : 1) * (look.coat === 'curly' ? 1.15 : 1);
+    add(place(sphere(pawR, 1, 0.55, 1.35, 10), at(L.paw, 0, 0.012, 0.016)), L.paw, pawCol, 0.12);
+    // Deditos esculpidos adelante de cada patita.
+    for (const td of [-1, 0, 1]) {
+      add(place(sphere(pawR * 0.34, 0.85, 0.65, 1.15, 7), at(L.paw, td * pawR * 0.52, 0.008, pawR * 1.12 - Math.abs(td) * 0.005)), L.paw, pawCol, 0.15);
+    }
   }
 
   // Collar de cuero con medallita dorada (los perros; para engancharle la correa).
@@ -725,11 +742,13 @@ function createAnimator(pet) {
       lg.lo.rotation.x = L[i * 3 + 1];
       lg.paw.rotation.x = L[i * 3 + 2];
     }
-    // Cola con retraso entre segmentos.
+    // Cola con retraso suave en onda (como un látigo flexible) entre segmentos.
     B.tail.forEach((b, i) => {
-      const a = P.tailAmp * (0.55 + i * 0.15);
-      b.rotation.x = i === 0 ? P.tailCarry : P.tailCurl;
-      b.rotation.y = Math.sin(t * P.tailFreq - i * 0.75) * a + (st.turn || 0) * -0.12 * (i + 1) * 0.3;
+      const a = P.tailAmp * (0.55 + i * 0.18);
+      const wave = Math.sin(t * P.tailFreq - i * 0.68);
+      b.rotation.x = (i === 0 ? P.tailCarry : P.tailCurl) + Math.cos(t * P.tailFreq * 0.5 - i * 0.5) * 0.04 * P.tailAmp;
+      b.rotation.y = wave * a + (st.turn || 0) * -0.12 * (i + 1) * 0.3;
+      b.rotation.z = wave * a * 0.22;
     });
     // Orejas con resorte (rebotan al trotar y al sacudirse).
     const hy = pet.headWorld(tmp).y;

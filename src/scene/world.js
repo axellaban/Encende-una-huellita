@@ -429,30 +429,62 @@ export function buildWorld(scene, tier) {
     }
   }
 
-  // ---------- pasto con viento ----------
+  // ---------- pasto con viento (matitas de varias hojas curvas con puntas luminosas) ----------
   {
-    const w = 0.055;
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute([-w, 0, 0, w, 0, 0, -w * 0.8, 0.35, 0, w * 0.8, 0.35, 0, -w * 0.45, 0.7, 0, w * 0.45, 0.7, 0, 0, 1, 0], 3));
-    geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(7).fill([0, 1, 0]).flat(), 3));
-    const base = new THREE.Color('#2c4223');
-    const tip = new THREE.Color('#a3bb73');
-    const cols = [];
-    [0, 0, 0.35, 0.35, 0.7, 0.7, 1].forEach((h) => base.clone().lerp(tip, h).toArray(cols, cols.length));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-    geo.setIndex([0, 1, 2, 2, 1, 3, 2, 3, 4, 4, 3, 5, 4, 5, 6]);
-    const mat = withWind(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), 'grass',
+    const makeBlade = (w, hScale, leanX, leanZ, rotY) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([
+        -w, 0, 0, w, 0, 0,
+        -w * 0.78, 0.35 * hScale, leanZ * 0.25, w * 0.78, 0.35 * hScale, leanZ * 0.25,
+        -w * 0.44, 0.72 * hScale, leanZ * 0.65, w * 0.44, 0.72 * hScale, leanZ * 0.65,
+        leanX, 1.05 * hScale, leanZ,
+      ], 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(7).fill([0, 1, 0]).flat(), 3));
+      const base = new THREE.Color('#21361a');
+      const mid = new THREE.Color('#4f7a38');
+      const tip = new THREE.Color('#c2df82');
+      const cols = [];
+      [0, 0, 0.35, 0.35, 0.72, 0.72, 1].forEach((h) => {
+        const c = h < 0.5 ? base.clone().lerp(mid, h * 2) : mid.clone().lerp(tip, (h - 0.5) * 2);
+        c.toArray(cols, cols.length);
+      });
+      g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+      g.setIndex([0, 1, 2, 2, 1, 3, 2, 3, 4, 4, 3, 5, 4, 5, 6]);
+      g.rotateY(rotY);
+      return g.toNonIndexed();
+    };
+    const geo = mergeGeometries([
+      makeBlade(0.052, 1.0, 0.0, 0.08, 0),
+      makeBlade(0.044, 0.84, -0.05, 0.11, 1.15),
+      makeBlade(0.044, 0.88, 0.05, -0.1, -1.05),
+    ]);
+    const mat = withWind(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), 'grass-tuft',
       `vec3 ip = vec3(0.0);
        #ifdef USE_INSTANCING
          ip = instanceMatrix[3].xyz;
        #endif
-       float h = position.y;
-       float bend = (sin(uTime * 1.5 + ip.x * 0.32 + ip.z * 0.21) * 0.55 + sin(uTime * 3.3 + ip.x * 1.3 - ip.z * 0.9) * 0.22 + 0.35) * h * h;
-       transformed.x += bend * 0.22;
-       transformed.z += bend * 0.1;
+       float h = clamp(position.y, 0.0, 1.2);
+       // Ráfagas suaves que viajan por el prado como olas.
+       float gust = sin(uTime * 1.45 + ip.x * 0.26 + ip.z * 0.19) * 0.62
+                  + sin(uTime * 3.1 + ip.x * 1.1 - ip.z * 0.85) * 0.24 + 0.32;
+       float bend = gust * h * h;
+       transformed.x += bend * 0.24;
+       transformed.z += bend * 0.12;
+       transformed.y -= abs(bend) * 0.04 * h;
        // Cerca de la cámara (tercera persona) las hojas se achican para no tapar la vista.
        float camD = distance(ip.xz, cameraPosition.xz);
-       transformed *= mix(0.18, 1.0, smoothstep(1.2, 4.2, camD));`);
+       transformed *= mix(0.22, 1.0, smoothstep(1.1, 4.0, camD));`);
+    const grassWind = mat.onBeforeCompile;
+    mat.onBeforeCompile = (sh) => {
+      grassWind(sh);
+      sh.vertexShader = `varying float vGrassH;\n${sh.vertexShader}`.replace('#include <color_vertex>', '#include <color_vertex>\n  vGrassH = clamp(position.y, 0.0, 1.0);');
+      sh.fragmentShader = `varying float vGrassH;\n${sh.fragmentShader}`.replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+         totalEmissiveRadiance += diffuseColor.rgb * (vGrassH * vGrassH * 0.22);`,
+      );
+    };
+    mat.customProgramCacheKey = () => 'grass-tuft-2';
     const count = tier.grass;
     const grass = new THREE.InstancedMesh(geo, mat, count);
     const m = new THREE.Object3D();
@@ -538,24 +570,34 @@ export function buildWorld(scene, tier) {
       if (inFeature(x, z, 2.5)) continue;
       if (Math.hypot(x, z) > GARDEN_RADIUS - 2.5 || nearCreek(x, z, 1.5)) continue;
       if (colliders.circles.some((c) => Math.hypot(c.x - x, c.z - z) < 4)) continue;
-      const blossom = r() < 0.28;
-      const h = 2.2 + r() * 1.8;
-      const trunk = new THREE.CylinderGeometry(0.14, 0.3, h, 7);
+      const blossom = r() < 0.32;
+      const h = 2.3 + r() * 1.9;
+      const trunk = new THREE.CylinderGeometry(0.13, 0.34, h, 8);
       trunk.translate(x, h / 2, z);
       trunkParts.push(trunk);
-      for (let b = 0; b < 2; b++) {
-        const br = new THREE.CylinderGeometry(0.05, 0.1, 1.3, 5);
+      // Raíces visibles en la base del tronco.
+      for (let rt = 0; rt < 3; rt++) {
+        const ra = (rt / 3) * Math.PI * 2 + r() * 0.5;
+        const rootG = new THREE.CylinderGeometry(0.04, 0.14, 0.65, 5);
+        rootG.rotateZ(0.55);
+        rootG.rotateY(ra);
+        rootG.translate(x + Math.sin(ra) * 0.24, 0.22, z + Math.cos(ra) * 0.24);
+        trunkParts.push(rootG);
+      }
+      for (let b = 0; b < 3; b++) {
+        const br = new THREE.CylinderGeometry(0.045, 0.11, 1.35, 6);
         br.translate(0, 0.65, 0);
-        br.rotateZ((b ? 1 : -1) * (0.6 + r() * 0.3));
-        br.rotateY(r() * Math.PI);
-        br.translate(x, h * 0.7, z);
+        br.rotateZ((b === 0 ? 1 : b === 1 ? -1 : 0.6) * (0.55 + r() * 0.3));
+        br.rotateY((b / 3) * Math.PI * 2 + r() * 0.5);
+        br.translate(x, h * 0.68, z);
         trunkParts.push(br);
       }
-      const blobsN = 4 + Math.floor(r() * 3);
+      const blobsN = 6 + Math.floor(r() * 4);
       for (let k = 0; k < blobsN; k++) {
-        const s = 1.0 + r() * 0.9;
-        const g = lumpy(s, 1, r, 0.16);
-        g.translate(x + (r() - 0.5) * 1.8, h + 0.3 + r() * 1.3, z + (r() - 0.5) * 1.8);
+        const s = 0.95 + r() * 0.95;
+        const g = lumpy(s, 1, r, 0.15);
+        g.scale(1.12, 0.82 + r() * 0.22, 1.12);
+        g.translate(x + (r() - 0.5) * 2.1, h + 0.25 + r() * 1.45, z + (r() - 0.5) * 2.1);
         const pal = blossom ? (placed % 2 ? jacaranda : blossoms) : greens;
         leafParts.push(paint(g, pal[Math.floor(r() * pal.length)]));
       }
@@ -563,23 +605,30 @@ export function buildWorld(scene, tier) {
       addBlob(x, z, 4.2);
       placed++;
     }
-    const trunks = new THREE.Mesh(mergeGeometries(trunkParts.map((g) => g.toNonIndexed())), new THREE.MeshLambertMaterial({ color: '#2e2018', flatShading: true }));
+    const trunks = new THREE.Mesh(mergeGeometries(trunkParts.map((g) => g.toNonIndexed())), new THREE.MeshLambertMaterial({ color: '#38251a', emissive: '#120a06', flatShading: true }));
     groundRoot.add(trunks);
     const leafMat = withWind(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'leaves',
-      `float k = max(0.0, position.y - 2.0);
-       transformed.x += sin(uTime * 0.9 + position.x * 0.25 + position.z * 0.15) * 0.04 * k;
-       transformed.z += cos(uTime * 0.75 + position.z * 0.2) * 0.03 * k;`);
-    // De noche las copas son casi siluetas, con un borde de luz azul (como el agua que brilla).
+      `float k = max(0.0, position.y - 1.8);
+       float sway = sin(uTime * 1.05 + position.x * 0.28 + position.z * 0.18);
+       float flutter = sin(uTime * 2.8 + position.x * 1.4 - position.z * 1.2) * 0.015;
+       transformed.x += (sway * 0.048 + flutter) * k;
+       transformed.z += cos(uTime * 0.85 + position.z * 0.24) * 0.036 * k;
+       transformed.y += sin(uTime * 1.9 + position.x * 0.6) * 0.012 * k;`);
+    // De noche las copas reciben luz azul de luna por arriba y reflejo cálido de los faroles por abajo.
     const wind = leafMat.onBeforeCompile;
     leafMat.onBeforeCompile = (sh) => {
       wind(sh);
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= 0.62;')
+        .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= 0.68;')
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-  float rimK = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);
-  totalEmissiveRadiance += vec3(0.1, 0.36, 0.85) * rimK * rimK * rimK * 0.75;`);
+  vec3 Nl = normalize(normal);
+  float rimK = 1.0 - clamp(abs(dot(Nl, normalize(vViewPosition))), 0.0, 1.0);
+  float warmUnder = clamp(-Nl.y, 0.0, 1.0);
+  totalEmissiveRadiance += vec3(0.14, 0.42, 0.92) * rimK * rimK * 0.72
+                         + diffuseColor.rgb * warmUnder * 0.22
+                         + vec3(0.28, 0.14, 0.05) * warmUnder * 0.24;`);
     };
-    leafMat.customProgramCacheKey = () => 'leaves-silueta-1';
+    leafMat.customProgramCacheKey = () => 'leaves-silueta-2';
     const leaves = new THREE.Mesh(mergeGeometries(leafParts), leafMat);
     groundRoot.add(leaves);
   }

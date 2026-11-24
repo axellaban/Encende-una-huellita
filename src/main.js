@@ -3670,7 +3670,15 @@ function lookPicker(box, value = {}, speciesFn = null) {
   head.append(cv, txt);
   box.append(head);
 
-  const refreshPreview = () => drawPetPreview(cv, readLook(box) || value, getSpecies());
+  const refreshPreview = () => {
+    const cur = readLook(box) || value;
+    const sp = getSpecies();
+    drawPetPreview(cv, cur, sp);
+    const fur2Row = box.querySelector('.look-fur2');
+    if (fur2Row) fur2Row.classList.toggle('is-dimmed', (!cur.pattern || cur.pattern === 'solid') && !cur.fur2);
+    const snoutRow = box.querySelector('.look-snout');
+    if (snoutRow) snoutRow.hidden = sp !== 'perro';
+  };
 
   const make = (title, name, list, swatch, allowEmpty = null) => {
     const fs = document.createElement('fieldset');

@@ -13,47 +13,69 @@ function serapeTexture(hue, outfit = 0) {
   const key = `${k}:${outfit}`;
   if (serapeCache.has(key)) return serapeCache.get(key);
   const c = document.createElement('canvas');
-  c.width = 64;
-  c.height = 128;
+  c.width = 128;
+  c.height = 256;
   const g = c.getContext('2d');
-  const base = `hsl(${k} 55% 46%)`;
+  const base = `hsl(${k} 58% 45%)`;
   if (outfit === 3) {
-    // Chaleco de fiesta sobre camisa clara y faja bordada.
+    // Chaleco de fiesta bordado sobre camisa clara y faja artesanal.
     g.fillStyle = '#fbf1e2';
-    g.fillRect(0, 0, 64, 128);
+    g.fillRect(0, 0, 128, 256);
     g.fillStyle = base;
-    g.fillRect(0, 0, 22, 102);
-    g.fillRect(42, 0, 22, 102);
-    g.fillStyle = '#e0a634';
-    g.fillRect(20, 0, 3, 102);
-    g.fillRect(41, 0, 3, 102);
-    g.fillStyle = `hsl(${(k + 160) % 360} 65% 48%)`;
-    g.fillRect(0, 96, 64, 18);
+    g.fillRect(0, 0, 44, 204);
+    g.fillRect(84, 0, 44, 204);
+    g.fillStyle = '#e6b03c';
+    g.fillRect(40, 0, 6, 204);
+    g.fillRect(82, 0, 6, 204);
+    // Botones dorados y bordado floral en las solapas.
+    for (let y = 32; y < 180; y += 36) {
+      g.fillStyle = '#ffd86b';
+      g.beginPath(); g.arc(22, y, 4.5, 0, Math.PI * 2); g.arc(106, y, 4.5, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = `hsl(${(k + 160) % 360} 68% 48%)`;
+    g.fillRect(0, 192, 128, 36);
+    g.fillStyle = '#ffe082';
+    g.fillRect(0, 192, 128, 4);
+    g.fillRect(0, 224, 128, 4);
   } else {
     g.fillStyle = base;
-    g.fillRect(0, 0, 64, 128);
-    const bands = [[`hsl(${(k + 180) % 360} 60% 55%)`, 6], ['#fbefd9', 3], [`hsl(${(k + 40) % 360} 80% 58%)`, 5], ['#2a1b2e', 2], [`hsl(${(k + 300) % 360} 60% 52%)`, 4]];
-    let y = outfit === 2 ? 36 : 54;
-    for (const [col, h] of bands) { g.fillStyle = col; g.fillRect(0, y, 64, h); y += h + 2; }
+    g.fillRect(0, 0, 128, 256);
+    // Textura de tejido artesanal.
+    g.fillStyle = 'rgba(255,255,255,0.06)';
+    for (let y = 0; y < 256; y += 4) g.fillRect(0, y, 128, 1.5);
+    const bands = [
+      [`hsl(${(k + 180) % 360} 65% 55%)`, 12],
+      ['#fbefd9', 6],
+      [`hsl(${(k + 40) % 360} 85% 58%)`, 10],
+      ['#2a1b2e', 4],
+      [`hsl(${(k + 300) % 360} 65% 52%)`, 8],
+      ['#ffd25a', 5],
+    ];
+    let y = outfit === 2 ? 72 : 108;
+    for (const [col, h] of bands) { g.fillStyle = col; g.fillRect(0, y, 128, h); y += h + 4; }
     if (outfit === 2) {
-      // Poncho con rombos tejidos en el pecho.
+      // Poncho con rombos tejidos y florcitas en el pecho.
       g.fillStyle = '#fbefd9';
-      for (let x = 8; x < 64; x += 16) {
+      for (let x = 16; x < 128; x += 32) {
         g.beginPath();
-        g.moveTo(x, 76); g.lineTo(x + 6, 84); g.lineTo(x, 92); g.lineTo(x - 6, 84);
+        g.moveTo(x, 150); g.lineTo(x + 12, 168); g.lineTo(x, 186); g.lineTo(x - 12, 168);
         g.closePath();
         g.fill();
+        g.fillStyle = '#ff9a1f';
+        g.beginPath(); g.arc(x, 168, 4.5, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#fbefd9';
       }
     }
     // Grecas en zigzag.
     g.strokeStyle = '#fbefd9';
-    g.lineWidth = 2;
+    g.lineWidth = 4;
     g.beginPath();
-    for (let x = 0; x <= 64; x += 8) g.lineTo(x, x % 16 ? 100 : 106);
+    for (let x = 0; x <= 128; x += 16) g.lineTo(x, x % 32 ? 202 : 214);
     g.stroke();
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
   t.wrapS = THREE.RepeatWrapping;
   t.repeat.set(outfit === 3 ? 1 : 3, 1);
   serapeCache.set(key, t);
@@ -109,7 +131,17 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
   const baseHue = ((rawHue % 360) + 360) % 360;
   const outfit = rawHue >= 360 ? Math.floor(rawHue / 360) % 4 : (Math.round(baseHue / 7) % 3 === 0 ? 1 : 0);
   const skin = new THREE.MeshLambertMaterial({ color: '#fbf1e2', emissive: '#4a3434', emissiveIntensity: 0.55 });
-  const clothes = new THREE.MeshLambertMaterial({ map: serapeTexture(baseHue, outfit), emissive: new THREE.Color().setHSL(baseHue / 360, 0.5, 0.12) });
+  const clothes = new THREE.MeshLambertMaterial({ map: serapeTexture(baseHue, outfit), emissive: new THREE.Color().setHSL(baseHue / 360, 0.5, 0.14) });
+  // Luz de borde cálida sobre el sarape para que el personaje tenga relieve de noche.
+  clothes.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+       float rimC = pow(1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0), 2.6);
+       totalEmissiveRadiance += vec3(0.42, 0.26, 0.12) * rimC;`,
+    );
+  };
+  clothes.customProgramCacheKey = () => 'char-clothes-rim-1';
   const pants = new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(((baseHue + 200) % 360) / 360, 0.25, 0.22), emissive: '#140c18' });
   const shoeMat = new THREE.MeshLambertMaterial({ color: '#5a3522', emissive: '#1a0d08' });
   const g = new THREE.Group();
@@ -324,17 +356,23 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
       gk += ((gliding ? 1 : 0) - gk) * Math.min(1, dt * 6);
       const k = Math.min(1, speed / 1.2);
       phase += dt * (speed > 0.05 ? 3.2 + speed * 1.35 : 0);
-      const swing = Math.sin(phase) * (0.35 + 0.35 * Math.min(1, speed / 4)) * k;
+      const swing = Math.sin(phase) * (0.38 + 0.36 * Math.min(1, speed / 4)) * k;
+      const idleSway = Math.sin(t * 1.45) * 0.015 * (1 - k);
       legs[0].rotation.x = swing;
       legs[1].rotation.x = -swing;
-      arms[0].rotation.x = leashing ? -0.55 - swing * 0.2 : -swing * 0.9;
-      arms[1].rotation.x = swing * 0.6 - 0.25 * (1 - k * 0.5);
-      body.position.y = Math.abs(Math.cos(phase)) * 0.045 * k + Math.sin(t * 2) * 0.006 * (1 - k);
+      arms[0].rotation.x = leashing ? -0.55 - swing * 0.22 : -swing * 0.92 + Math.sin(t * 1.7) * 0.03 * (1 - k);
+      arms[1].rotation.x = swing * 0.58 - 0.28 * (1 - k * 0.45);
+      // El farolito se balancea suave como un péndulo con cada paso y en los giros.
+      lantern.rotation.x = -swing * 0.32 + Math.sin(t * 2.4) * 0.04;
+      lantern.rotation.z = THREE.MathUtils.clamp(turn * 0.08, -0.25, 0.25) + Math.cos(t * 1.9) * 0.03;
+      body.position.y = Math.abs(Math.cos(phase)) * 0.048 * k + Math.sin(t * 2.1) * 0.007 * (1 - k);
+      body.position.x = idleSway;
       // Un poquito de aplastar y estirar en cada paso, y la respiración cuando está quieto.
-      const squash = k * (Math.abs(Math.cos(phase)) - 0.5) * 0.05;
+      const squash = k * (Math.abs(Math.cos(phase)) - 0.5) * 0.055;
       body.scale.set(1 - squash * 0.5, 1 + squash, 1 - squash * 0.5);
-      tor.scale.set(1, 1 + Math.sin(t * 2.1) * 0.012 * (1 - k), 1);
-      hips.rotation.y = Math.sin(phase) * 0.08 * k;
+      const breath = 1 + Math.sin(t * 2.2) * 0.014 * (1 - k * 0.5);
+      tor.scale.set(breath, breath, breath);
+      hips.rotation.y = Math.sin(phase) * 0.095 * k + idleSway * 1.5;
       // Parpadeo.
       blinkT -= dt;
       const closed = blinkT < 0.13 ? 1 - Math.abs(blinkT - 0.065) / 0.065 : 0;
