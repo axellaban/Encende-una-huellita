@@ -55,6 +55,7 @@
         <button class="bday" id="bday" hidden></button>
       </div>
       <div class="top-right">
+        <button class="chip desk" id="top-me-chip" title="Cambiar tu nombre y personaje"><span class="avatar" id="top-me-initial">·</span><span id="top-me-name">…</span>&nbsp;✏️</button>
         <button class="btn primary desk" id="add-btn">＋ Sumar a mi mascota</button>
         <button class="btn ghost round" id="music-btn" aria-pressed="false" aria-label="Música">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9 18.5A2.5 2.5 0 1 1 6.5 16c.53 0 1.02.17 1.42.45V5.6l11-2.2v12.1A2.5 2.5 0 1 1 16.5 13c.53 0 1.02.17 1.42.45V6.27L9.92 7.87V18.5H9z"/></svg>
@@ -311,7 +312,7 @@
     <dialog class="modal hub" id="hub" aria-label="Menú">
       <div class="hub-grab" aria-hidden="true"><span></span></div>
       <div class="hub-head">
-        <button class="chip" id="me-chip" title="Así te ven los demás"><span class="avatar" id="me-initial">·</span><span id="me-name">…</span></button>
+        <button class="chip" id="me-chip" title="Cambiar tu nombre y personaje"><span class="avatar" id="me-initial">·</span><span id="me-name">…</span>&nbsp;✏️</button>
         <span class="chip here-chip"><i class="dot"></i><b id="here">1</b>&nbsp;<span>acá ahora</span></span>
         <button class="chip round-chip" id="hub-music" aria-pressed="false" aria-label="Música">🎵</button>
       </div>
@@ -333,6 +334,7 @@
         <button data-then="comfort"><span>💌</span>Consuelo</button>
       </div>
       <div class="hub-links">
+        <button data-then="me">👤 Mi nombre y personaje</button>
         <button data-list="waiting">🌙 Esperando una vela</button>
         <button data-list="birthday">🎂 Cumpleaños</button>
         <button data-then="help">💡 Cómo funciona</button>
@@ -476,9 +478,12 @@
     <!-- ---------- farolillo, consuelo y compartir ---------- -->
     <dialog class="modal small-modal" id="me-dialog">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <p class="eyebrow">Así te ven los demás</p>
+      <p class="eyebrow">Tu personaje</p>
       <h2><span id="me-dialog-name"></span></h2>
-      <p class="sub">Elegí tu ropa, el color, qué llevás en la cabeza y tu peinado. Los demás visitantes te ven así.</p>
+      <p class="sub">Poné tu nombre y elegí tu ropa, color, qué llevás en la cabeza y tu peinado. Así te ven los demás en el jardín.</p>
+      <label class="field">Tu nombre
+        <input type="text" id="me-name-input" maxlength="30" placeholder="Tu nombre o apodo…" autocomplete="nickname" />
+      </label>
       <div class="look">
         <fieldset class="look-row"><legend>Tu color</legend><div id="me-hues" class="look-inline"></div></fieldset>
         <fieldset class="look-row"><legend>Tu ropa</legend>

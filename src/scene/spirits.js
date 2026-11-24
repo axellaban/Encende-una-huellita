@@ -1052,12 +1052,12 @@ export function createSpirits(scene, { blocked, tier }) {
     const seen = new Set();
     for (const o of list) {
       if (!o.pet) continue;
-      const key = `${o.sid}:${o.pet.n}:${o.pet.sp}:${o.pet.fur}:${o.pet.ears}:${o.pet.size}:${o.pet.snout}`;
+      const key = `${o.sid}:${JSON.stringify(o.pet)}`;
       seen.add(o.sid);
       let a = remotes.get(o.sid);
       if (a && a.d.key !== key) { removeAgent(a); remotes.delete(o.sid); a = null; }
       if (!a) {
-        a = spawnAgent(lookFor({ id: `${o.sid}-${o.pet.n}`, name: o.pet.n, species: o.pet.sp, look: { fur: o.pet.fur, ears: o.pet.ears, size: o.pet.size, snout: o.pet.snout } }), { name: o.pet.n }, 'remote');
+        a = spawnAgent(lookFor({ id: `${o.sid}-${o.pet.n}`, name: o.pet.n, species: o.pet.sp, look: o.pet }), { name: o.pet.n }, 'remote');
         a.d.key = key;
         a.owner = { pos: o.pos, heading: 0, moving: false, still: 0, vel: new THREE.Vector3(), last: o.pos.clone() };
         a.pos.set(o.pos.x + 1, 0, o.pos.z);

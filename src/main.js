@@ -22,7 +22,7 @@ import { createCharacter } from './scene/character.js';
 import { createOfferFx } from './scene/gifts3d.js';
 import { createSparkles } from './scene/sparkles.js';
 import { createMist } from './scene/mist.js';
-import { FURS, EARS, SIZES, SNOUTS } from '../server/looks.js';
+import { FURS, PATTERNS, COATS, EARS, TAILS, EYES, SIZES, SNOUTS } from '../server/looks.js';
 import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard, drawKeepsake } from './share.js';
 import { polaroid } from './photo.js';
 // Cómo llegó esta persona (link de una huellita, invitación de alguien). Se lee antes de tocar la URL.
@@ -118,8 +118,15 @@ const visitor = {
   sid: remember('huellita.sid', () => Math.random().toString(36).slice(2) + Date.now().toString(36)),
   name: remember('huellita.name', () => `${pick(NOUN)} ${pick(ADJ)}`),
 };
-$('#me-name').textContent = visitor.name;
-$('#me-initial').textContent = visitor.name[0];
+function syncVisitorChips() {
+  const init = (visitor.name || '·')[0].toUpperCase();
+  if ($('#me-name')) $('#me-name').textContent = visitor.name;
+  if ($('#me-initial')) $('#me-initial').textContent = init;
+  if ($('#top-me-name')) $('#top-me-name').textContent = visitor.name;
+  if ($('#top-me-initial')) $('#top-me-initial').textContent = init;
+  if ($('#me-dialog-name')) $('#me-dialog-name').textContent = visitor.name;
+}
+syncVisitorChips();
 // El color del sarape; si es impar lleva sombrero y si es par, corona de flores (así lo ven los demás).
 let visitorHue = Number(remember('huellita.hue', () => String(Math.floor(Math.random() * 360))));
 const game = createGame();
@@ -1661,6 +1668,7 @@ const THEN = {
   photo: () => photoMode(),
   meadow: () => goMeadow(),
   options: () => openMenu(),
+  me: () => $('#me-chip')?.click(),
 };
 $$('dialog [data-close]').forEach((b) => {
   b.onclick = () => {
@@ -1738,7 +1746,11 @@ function timeAgo(at) {
     spirits?.sparkle(me.group.position.clone().setY(1));
     me.wave();
   };
-  const paintChip = () => { $('#me-initial').style.background = `hsl(${baseOf(visitorHue)} 55% 46%)`; };
+  const paintChip = () => {
+    const col = `hsl(${baseOf(visitorHue)} 55% 46%)`;
+    if ($('#me-initial')) $('#me-initial').style.background = col;
+    if ($('#top-me-initial')) $('#top-me-initial').style.background = col;
+  };
   paintChip();
   const setHue = (h) => {
     visitorHue = h;
@@ -1747,6 +1759,33 @@ function timeAgo(at) {
     if (me) swapCharacter(h);
     heartbeat();
   };
+  const setVisitorName = (raw) => {
+    const clean = String(raw || '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+    if (!clean || clean === visitor.name) return;
+    visitor.name = clean;
+    store.set('huellita.name', clean);
+    store.set('huellita.signName', clean);
+    if ($('#gb-form')?.elements?.name) $('#gb-form').elements.name.value = clean;
+    syncVisitorChips();
+    heartbeat();
+  };
+  const nameIn = $('#me-name-input');
+  if (nameIn) {
+    nameIn.addEventListener('input', (e) => {
+      const clean = e.target.value.replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+      if (clean) {
+        visitor.name = clean;
+        store.set('huellita.name', clean);
+        store.set('huellita.signName', clean);
+        if ($('#gb-form')?.elements?.name) $('#gb-form').elements.name.value = clean;
+        syncVisitorChips();
+      }
+    });
+    nameIn.addEventListener('change', (e) => setVisitorName(e.target.value));
+  }
+  $('#me-dialog')?.addEventListener('close', () => {
+    if (nameIn?.value) setVisitorName(nameIn.value);
+  });
   for (const h of HUES) {
     const l = document.createElement('label');
     const i = document.createElement('input');
@@ -1771,14 +1810,18 @@ function timeAgo(at) {
   $$('input[name="me-hair"]').forEach((i) => {
     i.onchange = () => setHue(withStyle(visitorHue, Number(i.value) * 2 + (hatOf(visitorHue) ? 1 : 0)));
   });
-  $('#me-chip').onclick = () => {
-    $('#me-dialog-name').textContent = visitor.name;
+  const openMeDialog = () => {
+    closeModals();
+    syncVisitorChips();
+    if (nameIn) nameIn.value = visitor.name;
     $$('input[name="me-hue"]').forEach((i) => { i.checked = Math.abs(Number(i.value) - (baseOf(visitorHue) - styleOf(visitorHue))) <= 8; });
     $$('input[name="me-outfit"]').forEach((i) => { i.checked = Number(i.value) === outfitOf(visitorHue); });
     $$('input[name="me-head"]').forEach((i) => { i.checked = (i.value === 'hat') === hatOf(visitorHue); });
     $$('input[name="me-hair"]').forEach((i) => { i.checked = Number(i.value) === hairOf(visitorHue); });
     $('#me-dialog').showModal();
   };
+  $('#me-chip').onclick = openMeDialog;
+  if ($('#top-me-chip')) $('#top-me-chip').onclick = openMeDialog;
 }
 
 function syncMusicBtn() {
@@ -3373,15 +3416,247 @@ function wireSpirits() {
   });
 }
 
-// Cómo era: pelaje, orejas y tamaño (para que su espíritu se le parezca).
-function lookPicker(box, value = {}) {
+// Cómo era: pelaje, combinación de colores, manchitas, tipo de pelo, orejas, colita, ojos y tamaño.
+function drawPetPreview(canvasEl, l = {}, species = 'perro') {
+  if (!canvasEl) return;
+  const g = canvasEl.getContext('2d');
+  const W = canvasEl.width;
+  const H = canvasEl.height;
+  g.clearRect(0, 0, W, H);
+  // Fondo suave con halo de espíritu.
+  const rad = g.createRadialGradient(W * 0.5, H * 0.52, 8, W * 0.5, H * 0.52, W * 0.48);
+  rad.addColorStop(0, 'rgba(255, 224, 155, 0.35)');
+  rad.addColorStop(1, 'rgba(255, 224, 155, 0)');
+  g.fillStyle = rad;
+  g.fillRect(0, 0, W, H);
+
+  const cat = species === 'gato';
+  const bunny = species === 'otro';
+  const furHex = FURS.find((f) => f.id === l.fur)?.hex || (cat ? '#8f8c8a' : '#c98a4b');
+  const pat = l.pattern || 'solid';
+  const fur2Hex = FURS.find((f) => f.id === l.fur2)?.hex
+    || (pat === 'mask' || pat === 'tabby' ? '#2e2520' : (pat === 'spots' || pat === 'patches' || pat === 'eye') && l.fur === 'blanco' ? '#2e2925' : '#fbf6ee');
+  const coat = l.coat || 'normal';
+  const ears = l.ears || (cat ? 'up' : 'down');
+  const tail = l.tail || (cat ? 'thin' : coat === 'fluffy' ? 'fluffy' : 'thin');
+  const snout = l.snout || 'mid';
+  const eyes = l.eyes || (cat ? 'amber' : 'honey');
+  const EYE_HEX = { honey: '#8a5224', dark: '#241815', amber: '#d9a13a', green: '#489e5a', blue: '#46a0e6' };
+
+  g.save();
+  const sc = { xs: 0.84, s: 0.92, m: 1.0, l: 1.08, xl: 1.15 }[l.size] || 1.0;
+  g.translate(W * 0.5, H * 0.58);
+  g.scale(sc, sc);
+
+  // Cola.
+  g.save();
+  g.fillStyle = pat === 'mask' ? fur2Hex : furHex;
+  g.strokeStyle = pat === 'mask' ? fur2Hex : furHex;
+  if (bunny || tail === 'bob') {
+    g.beginPath(); g.arc(-34, 8, 9, 0, Math.PI * 2); g.fill();
+  } else if (tail === 'curl') {
+    g.lineWidth = coat === 'fluffy' ? 11 : 8;
+    g.lineCap = 'round';
+    g.beginPath(); g.arc(-30, -8, 12, 0.3, Math.PI * 1.65); g.stroke();
+  } else {
+    g.lineWidth = (tail === 'fluffy' || coat === 'fluffy') ? 14 : coat === 'short' ? 6 : 9;
+    g.lineCap = 'round';
+    g.beginPath(); g.moveTo(-24, 10); g.quadraticCurveTo(-48, -4, -44, -24); g.stroke();
+    if (['socks', 'tuxedo', 'bicolor', 'patches', 'eye'].includes(pat)) {
+      g.fillStyle = fur2Hex;
+      g.beginPath(); g.arc(-44, -24, g.lineWidth * 0.48, 0, Math.PI * 2); g.fill();
+    }
+  }
+  g.restore();
+
+  // Cuerpo.
+  const bodyRx = coat === 'fluffy' ? 30 : coat === 'short' ? 25 : 27;
+  const bodyRy = coat === 'fluffy' ? 21 : 19;
+  g.save();
+  g.beginPath();
+  g.ellipse(-6, 10, bodyRx, bodyRy, -0.1, 0, Math.PI * 2);
+  g.fillStyle = furHex;
+  g.fill();
+  g.clip();
+  if (['tuxedo', 'bicolor', 'calico', 'patches'].includes(pat)) {
+    g.fillStyle = pat === 'calico' ? '#fbf6ee' : fur2Hex;
+    g.beginPath(); g.ellipse(12, 16, 18, 15, 0.2, 0, Math.PI * 2); g.fill();
+  }
+  if (pat === 'spots') {
+    g.fillStyle = fur2Hex;
+    for (const [sx, sy, sr] of [[-18, 2, 5], [-6, -2, 4.2], [-12, 14, 4.5], [2, 5, 3.8], [-22, 12, 3.5]]) {
+      g.beginPath(); g.arc(sx, sy, sr, 0, Math.PI * 2); g.fill();
+    }
+  } else if (pat === 'patches') {
+    g.fillStyle = fur2Hex;
+    g.beginPath(); g.arc(-16, 1, 12, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(2, 14, 10, 0, Math.PI * 2); g.fill();
+  } else if (pat === 'calico') {
+    g.fillStyle = l.fur2 ? fur2Hex : '#d97534';
+    g.beginPath(); g.arc(-16, 0, 12, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#2b221e';
+    g.beginPath(); g.arc(-2, 4, 10, 0, Math.PI * 2); g.fill();
+  } else if (pat === 'tabby') {
+    g.strokeStyle = fur2Hex;
+    g.lineWidth = 3.5;
+    for (const sx of [-20, -11, -2, 6]) {
+      g.beginPath(); g.moveTo(sx, -12); g.quadraticCurveTo(sx - 3, 4, sx + 1, 18); g.stroke();
+    }
+  }
+  g.restore();
+
+  // Pechera peluda o con rulitos.
+  if (coat === 'fluffy' || coat === 'curly') {
+    g.fillStyle = ['tuxedo', 'bicolor', 'calico'].includes(pat) ? (pat === 'calico' ? '#fbf6ee' : fur2Hex) : furHex;
+    for (const [rx, ry, rr] of [[10, 6, 8], [14, 12, 7.5], [8, 16, 7]]) {
+      g.beginPath(); g.arc(rx, ry, rr, 0, Math.PI * 2); g.fill();
+    }
+  }
+
+  // Patitas.
+  const sock = ['socks', 'tuxedo', 'bicolor', 'calico', 'patches', 'eye'].includes(pat);
+  const pawCol = pat === 'mask' ? fur2Hex : pat === 'calico' ? '#fbf6ee' : sock ? fur2Hex : furHex;
+  for (const px of [-20, -10, 6, 15]) {
+    g.fillStyle = furHex;
+    g.fillRect(px - 3.5, 20, 7, 13);
+    g.fillStyle = pawCol;
+    g.beginPath(); g.ellipse(px + 1, 33, 5.2, 3.6, 0, 0, Math.PI * 2); g.fill();
+  }
+
+  // Cabeza y orejas.
+  const hx = 14;
+  const hy = -12;
+  const hr = cat ? 16 : 17.5;
+  // Oreja trasera.
+  const drawEar = (side, front) => {
+    const earCol = (pat === 'mask' || (pat === 'eye' && side > 0) || (pat === 'patches' && side < 0) || (pat === 'calico' && side > 0))
+      ? (pat === 'calico' ? '#d97534' : fur2Hex)
+      : furHex;
+    g.fillStyle = earCol;
+    g.beginPath();
+    if (bunny) {
+      g.ellipse(hx + side * 6, hy - 22, 4.5, 14, side * 0.15, 0, Math.PI * 2);
+    } else if (ears === 'down') {
+      g.ellipse(hx + side * 12, hy + 2, 6, 13, side * 0.25, 0, Math.PI * 2);
+    } else {
+      const big = ears === 'big' ? 1.35 : 1;
+      const ex = hx + side * 10;
+      const ey = hy - 10;
+      g.moveTo(ex - 6 * big, ey + 4);
+      g.lineTo(ex + side * (ears === 'tip' ? 6 : 2) * big, ey - 13 * big);
+      g.lineTo(ex + 6 * big, ey + 4);
+      g.closePath();
+    }
+    g.fill();
+    void front;
+  };
+  drawEar(-1, false);
+
+  // Cabeza.
+  g.save();
+  g.beginPath();
+  g.arc(hx, hy, hr, 0, Math.PI * 2);
+  g.fillStyle = furHex;
+  g.fill();
+  g.clip();
+  if (pat === 'bicolor') {
+    g.fillStyle = fur2Hex;
+    g.fillRect(hx - 20, hy + 3, 40, 20);
+    g.fillRect(hx - 2.5, hy - 20, 6, 30);
+  } else if (pat === 'mask') {
+    g.fillStyle = fur2Hex;
+    g.beginPath(); g.ellipse(hx + 5, hy + 2, 13, 10, 0, 0, Math.PI * 2); g.fill();
+  } else if (pat === 'eye') {
+    g.fillStyle = fur2Hex;
+    g.beginPath(); g.arc(hx + 6, hy - 2, 7.2, 0, Math.PI * 2); g.fill();
+  } else if (pat === 'calico') {
+    g.fillStyle = '#d97534';
+    g.beginPath(); g.arc(hx - 7, hy - 8, 9, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#2b221e';
+    g.beginPath(); g.arc(hx + 8, hy - 9, 8, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+
+  // Rulitos en la cabeza.
+  if (coat === 'curly') {
+    g.fillStyle = furHex;
+    for (const [cx, cy, cr] of [[hx - 5, hy - 15, 5.5], [hx + 1, hy - 17, 6], [hx + 7, hy - 15, 5.5]]) {
+      g.beginPath(); g.arc(cx, cy, cr, 0, Math.PI * 2); g.fill();
+    }
+  } else if (coat === 'fluffy') {
+    g.fillStyle = pat === 'mask' ? fur2Hex : furHex;
+    g.beginPath(); g.arc(hx - 12, hy + 4, 6, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(hx + 12, hy + 4, 6, 0, Math.PI * 2); g.fill();
+  }
+
+  drawEar(1, true);
+
+  // Hocico.
+  const snW = cat || bunny ? 7 : snout === 'long' ? 13 : snout === 'flat' ? 6 : 9.5;
+  g.fillStyle = pat === 'mask' ? fur2Hex : ['tuxedo', 'bicolor', 'calico'].includes(pat) ? '#fbf6ee' : furHex;
+  g.beginPath();
+  g.ellipse(hx + 11 + (snW - 7) * 0.45, hy + 4, snW, 6.2, 0, 0, Math.PI * 2);
+  g.fill();
+  // Nariz.
+  g.fillStyle = cat || bunny ? '#f08aa0' : '#1c1512';
+  g.beginPath();
+  g.arc(hx + 11 + snW * 1.15, hy + 2, cat ? 2.4 : 3.2, 0, Math.PI * 2);
+  g.fill();
+
+  // Ojos (dos ojos en vista 3/4 para que se vea "uno y uno").
+  for (const [idx, ox] of [[0, hx + 1], [1, hx + 9.5]]) {
+    const eCol = bunny ? '#3a2a2a' : eyes === 'odd' ? (idx === 0 ? '#46a0e6' : '#d9a13a') : (EYE_HEX[eyes] || '#8a5224');
+    g.fillStyle = eCol;
+    g.beginPath(); g.arc(ox, hy - 2, 3.7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#181210';
+    g.beginPath(); g.ellipse(ox + 0.4, hy - 2, cat ? 1.2 : 2.1, 2.3, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.arc(ox - 0.8, hy - 3.1, 1.1, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+}
+
+function lookPicker(box, value = {}, speciesFn = null) {
+  if (!box) return;
   box.innerHTML = '';
-  const make = (title, name, list, swatch) => {
+  const getSpecies = speciesFn || (() => {
+    const form = box.closest('form');
+    return form?.querySelector('input[name="species"]:checked')?.value || current?.species || 'perro';
+  });
+
+  // Tarjeta con vista previa en vivo mientras combinás colores y manchitas.
+  const head = document.createElement('div');
+  head.className = 'look-preview-card';
+  const cv = document.createElement('canvas');
+  cv.width = 168;
+  cv.height = 112;
+  cv.className = 'look-canvas';
+  const txt = document.createElement('div');
+  txt.innerHTML = '<b>Así se ve su espíritu</b><small>Combiná colores, manchitas, tipo de pelo, orejas, colita y ojos.</small>';
+  head.append(cv, txt);
+  box.append(head);
+
+  const refreshPreview = () => drawPetPreview(cv, readLook(box) || value, getSpecies());
+
+  const make = (title, name, list, swatch, allowEmpty = null) => {
     const fs = document.createElement('fieldset');
     fs.className = `look-row look-${name}`;
     const lg = document.createElement('legend');
     lg.textContent = title;
     fs.append(lg);
+    if (allowEmpty) {
+      const l = document.createElement('label');
+      const i = document.createElement('input');
+      i.type = 'radio';
+      i.name = `look-${name}`;
+      i.value = '';
+      i.checked = !value[name];
+      i.onchange = refreshPreview;
+      const sp = document.createElement('span');
+      sp.textContent = allowEmpty;
+      l.append(i, sp);
+      fs.append(l);
+    }
     for (const it of list) {
       const l = document.createElement('label');
       const i = document.createElement('input');
@@ -3389,6 +3664,7 @@ function lookPicker(box, value = {}) {
       i.name = `look-${name}`;
       i.value = it.id;
       i.checked = value[name] === it.id;
+      i.onchange = refreshPreview;
       const sp = document.createElement('span');
       if (swatch) { sp.className = 'swatch'; sp.style.setProperty('--c', it.hex); sp.title = it.name; sp.setAttribute('aria-label', it.name); } else sp.textContent = it.name;
       l.append(i, sp);
@@ -3396,14 +3672,38 @@ function lookPicker(box, value = {}) {
     }
     box.append(fs);
   };
-  make('Su pelaje', 'fur', FURS, true);
+  make('Color principal', 'fur', FURS, true);
+  make('Manchitas y dibujo', 'pattern', PATTERNS);
+  make('Segundo color (manchas / pecho / patitas)', 'fur2', FURS, true, 'Automático');
+  make('Su pelo', 'coat', COATS);
   make('Sus orejas', 'ears', EARS);
+  make('Su colita', 'tail', TAILS);
+  make('Sus ojos', 'eyes', EYES);
   make('Su tamaño', 'size', SIZES);
   make('Su hocico (perros)', 'snout', SNOUTS);
+
+  const form = box.closest('form');
+  if (form) {
+    form.querySelectorAll('input[name="species"]').forEach((r) => {
+      r.addEventListener('change', refreshPreview);
+    });
+  }
+  refreshPreview();
 }
 function readLook(box) {
-  const v = (n) => box.querySelector(`input[name="look-${n}"]:checked`)?.value;
-  const out = { fur: v('fur'), ears: v('ears'), size: v('size'), snout: v('snout') };
+  if (!box) return null;
+  const v = (n) => box.querySelector(`input[name="look-${n}"]:checked`)?.value || undefined;
+  const out = {
+    fur: v('fur'),
+    fur2: v('fur2'),
+    pattern: v('pattern'),
+    coat: v('coat'),
+    ears: v('ears'),
+    tail: v('tail'),
+    eyes: v('eyes'),
+    size: v('size'),
+    snout: v('snout'),
+  };
   return Object.values(out).some(Boolean) ? out : null;
 }
 lookPicker($('#add-look'));

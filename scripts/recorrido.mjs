@@ -154,7 +154,14 @@ async function full(b, tag, dev) {
   await p.setInputFiles('#photo-input', PHOTO);
   await wait(p, 1500);
   await p.fill('#add-form input[name="name"]', 'Nieve');
-  await p.evaluate(() => { document.querySelector('#add-form input[name="species"][value="gato"]').click(); const r = document.querySelectorAll('#add-look input[type="radio"]'); r[r.length - 1]?.click(); });
+  await p.evaluate(() => {
+    document.querySelector('#add-form input[name="species"][value="gato"]').click();
+    document.querySelector('#add-look input[name="look-fur"][value="blanco"]')?.click();
+    document.querySelector('#add-look input[name="look-pattern"][value="spots"]')?.click();
+    document.querySelector('#add-look input[name="look-fur2"][value="negro"]')?.click();
+    document.querySelector('#add-look input[name="look-coat"][value="fluffy"]')?.click();
+    document.querySelector('#add-look input[name="look-eyes"][value="odd"]')?.click();
+  });
   await p.evaluate(() => document.querySelector('#add-form').requestSubmit());
   await wait(p, 8000);
   check(tag, 'sumar mascota con foto', (await visible(p, '#sheet')) && (await text(p, '#s-name')) === 'Nieve', await text(p, '#s-name'));
@@ -263,9 +270,10 @@ async function full(b, tag, dev) {
   await closeTop(p);
   await hub(p, tag, '#me-chip', 'Así te ven los demás');
   await wait(p, 700);
+  await p.fill('#me-name-input', 'Valentina');
   await p.evaluate(() => document.querySelector('input[name="me-outfit"][value="2"]')?.click());
   await wait(p, 300);
-  check(tag, '"Así te ven los demás" y cambio de ropa', (await isOpen(p, '#me-dialog')) && (await p.evaluate(() => Math.floor(Number(localStorage.getItem('huellita.hue')) / 360) === 2)));
+  check(tag, '"Así te ven los demás": nombre y ropa', (await isOpen(p, '#me-dialog')) && (await text(p, '#me-name')) === 'Valentina' && (await p.evaluate(() => Math.floor(Number(localStorage.getItem('huellita.hue')) / 360) === 2)));
   await closeTop(p);
   await hub(p, tag, '[data-then="photo"]', 'Foto');
   await p.waitForFunction(() => document.querySelector('#photo-dialog')?.open, null, { timeout: 25000 }).catch(() => {});

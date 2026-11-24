@@ -203,13 +203,11 @@ quedó hecho en la tanda del 23/11; abajo, qué se hizo y qué se puede seguir m
       Láctea, nebulosas, polvo de estrellas, 3 cometas lentos, estrellas fugaces; arriba cirros, halo
       del sol, bancos de nubes gigantes, islas flotantes (con casitas y farolitos) y pájaros de luz;
       auroras en los pisos del medio.
-- [x] **Personajes**: parpadean, cachetes, sarape con flecos, rebozo, respiración, aplastar/estirar,
-      miran el cielo, y peinado a elegir (corto, trenzas, chongo, colita; va codificado en `hue % 8`,
-      ver `character.js`). Al cruzarse con otro visitante, se saludan (`avatars.greetNear`). Falta:
-      expresiones (sonrisa al regalar).
-- [x] **Mascotas**: 5 tamaños bien distintos (se pueden cambiar al editar), ojos con iris y
-      brillos, bigotes, pechera, nariz que brilla, orejas grandotas y hocico largo/mediano/chato.
-      Los espíritus de otros visitantes llevan el mismo pelaje, orejas, tamaño y hocico.
+- [x] **Personajes**: nombre propio editable en el jardín (`#me-name-input` en `#me-dialog`, accesible desde la barra superior en compu y desde el menú en celular), 4 estilos de ropa (Sarape, Con rebozo, Poncho, Chaleco), parpadean, cachetes, respiración, aplastar/estirar,
+      miran el cielo, y peinado a elegir (corto, trenzas, chongo, colita; va codificado en `hue`,
+      ver `character.js`). Al cruzarse con otro visitante, se saludan (`avatars.greetNear`) y sonríen al regalar o abrazar.
+- [x] **Mascotas**: 12 colores principales, segundo color combinable (`fur2`), 10 dibujos/manchitas (`Liso`, `Pechera`, `Botitas`, `Manchitas`, `Vaquita / Parches`, `Manto`, `Tricolor / Carey`, `Rayitas / Atigrado`, `Antifaz / Siamés`, `Parche en el ojo`), 4 tipos de pelo (`Poquito pelo`, `Normal`, `Peludo`, `Con rulitos`), 4 tipos de orejas, 4 tipos de colita (`Finita`, `Peluda`, `Enrulada`, `Cortita`), 6 colores de ojos (incluyendo heterocromía `Uno y uno`), 3 hocicos, 5 tamaños bien distintos y tarjeta de vista previa en vivo mientras elegís.
+      Los espíritus de otros visitantes llevan todas estas opciones.
 - [x] **Hall con pasillos y pisos con nombre** (`src/floors.js`, propios, no los del original):
       cartel colgado por muro con el contador, 99 nombres de piso.
 - [x] **Ventanitas en la pared**: cada lugar ocupado es un marco hondo con postigos pintados que se
