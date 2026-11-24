@@ -96,9 +96,25 @@ export function openPondAt(cx, cz) {
   const r = 3.2 + ((h >>> 20) & 15) * 0.14;
   return { x: px, z: pz, r, h };
 }
+// Puentes de madera cada 64 m sobre los arroyos del mundo abierto.
+export function openBridgeInfo(x, z) {
+  if (Math.hypot(x, z) < GARDEN_RADIUS + 4) return null;
+  const kz = Math.round((z - 16) / 64) * 64 + 16;
+  if (Math.abs(z - kz) < 1.15) {
+    const sx = openStreamX(kz);
+    if (Math.abs(x - sx) < 3.1) return { k: (x - (sx - 3.1)) / 6.2 };
+  }
+  const kx = Math.round((x - 16) / 64) * 64 + 16;
+  if (Math.abs(x - kx) < 1.15) {
+    const sz = openStreamZ(kx);
+    if (Math.abs(z - sz) < 3.1) return { k: (z - (sz - 3.1)) / 6.2 };
+  }
+  return null;
+}
 export function inOpenWater(x, z) {
   const d0 = Math.hypot(x, z);
   if (d0 < GARDEN_RADIUS - 2) return false;
+  if (openBridgeInfo(x, z)) return false;
   if (Math.abs(x) > 54 && Math.abs(z - creekZ(x)) < CREEK_HALF) return true;
   if (d0 > GARDEN_RADIUS + 6) {
     if (Math.abs(x - openStreamX(z)) < 2.2) return true;
@@ -117,6 +133,10 @@ export function groundY(x, z, up = false) {
   if (!up && onBridge(x, z, 0.15)) {
     const k = (z - (BRIDGE.z - BRIDGE.halfL)) / (BRIDGE.halfL * 2);
     return Math.sin(Math.min(1, Math.max(0, k)) * Math.PI) * BRIDGE.arch + 0.13;
+  }
+  if (!up) {
+    const ob = openBridgeInfo(x, z);
+    if (ob) return Math.sin(Math.min(1, Math.max(0, ob.k)) * Math.PI) * 0.42 + 0.08;
   }
   if (insideHall(x, z)) return 0.16;
   if (!up && inWater(x, z)) return -0.06;
@@ -1138,7 +1158,48 @@ export function buildWorld(scene, tier) {
     openLamps.frustumCulled = false;
     openLampHeads.frustumCulled = false;
 
-    groundRoot.add(openTrunks, openCrowns, openGrass, openFlowers, openWater, openStones, openLamps, openLampHeads);
+    // Puentes rústicos de madera sobre los arroyos y fogatas de descanso en los claros.
+    const MAX_BRIDGES = 16;
+    const bridgeParts = [];
+    for (let i = 0; i < 11; i++) {
+      const k = i / 10;
+      const x = (k - 0.5) * 5.8;
+      const y = Math.sin(k * Math.PI) * 0.42 + 0.08;
+      bridgeParts.push(new THREE.BoxGeometry(0.46, 0.08, 2.1).translate(x, y, 0));
+    }
+    for (const sz of [-0.96, 0.96]) {
+      for (const sx of [-2.6, 0, 2.6]) {
+        const k = (sx + 2.9) / 5.8;
+        const y = Math.sin(k * Math.PI) * 0.42 + 0.42;
+        bridgeParts.push(new THREE.BoxGeometry(0.1, 0.65, 0.1).translate(sx, y, sz));
+      }
+      bridgeParts.push(new THREE.BoxGeometry(5.6, 0.07, 0.07).translate(0, 0.68, sz));
+    }
+    const openBridges = new THREE.InstancedMesh(
+      mergeGeometries(bridgeParts.map((g) => g.toNonIndexed())),
+      new THREE.MeshLambertMaterial({ map: woodTexture('#6e472b'), emissive: '#1a0e06' }),
+      MAX_BRIDGES,
+    );
+    openBridges.frustumCulled = false;
+
+    const MAX_CAMPS = 16;
+    const campWoodGeo = mergeGeometries([
+      new THREE.CylinderGeometry(0.18, 0.2, 1.9, 8).rotateZ(Math.PI / 2).translate(0, 0.18, 1.45),
+      new THREE.CylinderGeometry(0.18, 0.2, 1.9, 8).rotateZ(Math.PI / 2).rotateY(0.5).translate(-1.2, 0.18, -0.9),
+      new THREE.CylinderGeometry(0.07, 0.09, 0.7, 6).rotateZ(0.9).translate(0, 0.15, 0),
+      new THREE.CylinderGeometry(0.07, 0.09, 0.7, 6).rotateZ(-0.9).rotateY(1.1).translate(0, 0.15, 0),
+    ].map((g) => g.toNonIndexed()));
+    const openCamps = new THREE.InstancedMesh(campWoodGeo, new THREE.MeshLambertMaterial({ color: '#5c3a22', emissive: '#1c0e06', flatShading: true }), MAX_CAMPS);
+    const fireCoreGeo = mergeGeometries([
+      new THREE.ConeGeometry(0.24, 0.55, 7).translate(0, 0.32, 0),
+      new THREE.ConeGeometry(0.16, 0.42, 6).translate(0.08, 0.26, 0.06),
+      new THREE.ConeGeometry(0.16, 0.42, 6).translate(-0.08, 0.26, -0.05),
+    ].map((g) => g.toNonIndexed()));
+    const openFires = new THREE.InstancedMesh(fireCoreGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.35, 0.45) }), MAX_CAMPS);
+    openCamps.frustumCulled = false;
+    openFires.frustumCulled = false;
+
+    groundRoot.add(openTrunks, openCrowns, openGrass, openFlowers, openWater, openStones, openLamps, openLampHeads, openBridges, openCamps, openFires);
 
     const dummy = new THREE.Object3D();
     const colTmp = new THREE.Color();
@@ -1155,13 +1216,35 @@ export function buildWorld(scene, tier) {
       let nW = 0;
       let nS = 0;
       let nL = 0;
+      let nB = 0;
+      let nCp = 0;
       colliders.openCircles.length = 0;
 
-      // Arroyos continuos dentro de la ventana de 160x160 m.
+      // Arroyos continuos y puentes rústicos dentro de la ventana de 160x160 m.
       const minX = (cx0 - RAD) * CHUNK;
       const maxX = (cx0 + RAD + 1) * CHUNK;
       const minZ = (cz0 - RAD) * CHUNK;
       const maxZ = (cz0 + RAD + 1) * CHUNK;
+      for (let kz = Math.floor(minZ / 64) * 64 + 16; kz <= maxZ && nB < MAX_BRIDGES; kz += 64) {
+        const sx = openStreamX(kz);
+        if (sx >= minX - 4 && sx <= maxX + 4 && Math.hypot(sx, kz) > GARDEN_RADIUS + 4) {
+          dummy.position.set(sx, 0, kz);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.setScalar(1);
+          dummy.updateMatrix();
+          openBridges.setMatrixAt(nB++, dummy.matrix);
+        }
+      }
+      for (let kx = Math.floor(minX / 64) * 64 + 16; kx <= maxX && nB < MAX_BRIDGES; kx += 64) {
+        const sz = openStreamZ(kx);
+        if (sz >= minZ - 4 && sz <= maxZ + 4 && Math.hypot(kx, sz) > GARDEN_RADIUS + 4) {
+          dummy.position.set(kx, 0, sz);
+          dummy.rotation.set(0, Math.PI / 2, 0);
+          dummy.scale.setScalar(1);
+          dummy.updateMatrix();
+          openBridges.setMatrixAt(nB++, dummy.matrix);
+        }
+      }
       for (let z = minZ; z <= maxZ && nW < MAX_WATER - 30; z += 1.85) {
         const sx = openStreamX(z);
         if (sx >= minX - 4 && sx <= maxX + 4 && Math.hypot(sx, z) > GARDEN_RADIUS + 4) {
@@ -1243,6 +1326,17 @@ export function buildWorld(scene, tier) {
               openLampHeads.setMatrixAt(nL, dummy.matrix);
               nL++;
               colliders.openCircles.push({ x: lx, z: lz, r: 0.25 });
+              // Fogata / altar de descanso junto al farol del claro.
+              if (nCp < MAX_CAMPS && ((cx ^ cz) & 1) === 0 && !inWater(lx + 1.8, lz + 1.2)) {
+                dummy.position.set(lx + 1.8, 0, lz + 1.2);
+                dummy.rotation.set(0, cr() * Math.PI * 2, 0);
+                dummy.scale.setScalar(1);
+                dummy.updateMatrix();
+                openCamps.setMatrixAt(nCp, dummy.matrix);
+                openFires.setMatrixAt(nCp, dummy.matrix);
+                nCp++;
+                colliders.openCircles.push({ x: lx + 1.8, z: lz + 1.2, r: 0.45 });
+              }
             }
           }
 
@@ -1317,6 +1411,9 @@ export function buildWorld(scene, tier) {
       openStones.count = nS;
       openLamps.count = nL;
       openLampHeads.count = nL;
+      openBridges.count = nB;
+      openCamps.count = nCp;
+      openFires.count = nCp;
       openTrunks.instanceMatrix.needsUpdate = true;
       openCrowns.instanceMatrix.needsUpdate = true;
       if (openCrowns.instanceColor) openCrowns.instanceColor.needsUpdate = true;
@@ -1328,6 +1425,9 @@ export function buildWorld(scene, tier) {
       openStones.instanceMatrix.needsUpdate = true;
       openLamps.instanceMatrix.needsUpdate = true;
       openLampHeads.instanceMatrix.needsUpdate = true;
+      openBridges.instanceMatrix.needsUpdate = true;
+      openCamps.instanceMatrix.needsUpdate = true;
+      openFires.instanceMatrix.needsUpdate = true;
     }
 
     updateOpen = (px, pz) => {

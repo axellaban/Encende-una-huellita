@@ -463,6 +463,20 @@ export function createSpirits(scene, { blocked, tier }) {
       else a.speed *= 0.3;
     }
     a.pos.y = groundY(a.pos.x, a.pos.z, up);
+    // Si estuvo chapoteando en el agua y acaba de salir a la orilla, se sacude solito salpicando gotitas.
+    const wetNow = !up && inWater(a.pos.x, a.pos.z);
+    if (wetNow) {
+      a.d.wetT = (a.d.wetT || 0) + dt;
+    } else if ((a.d.wetT || 0) > 0.45) {
+      a.d.wetT = 0;
+      if (!a.pet.anim.busy) {
+        a.pet.anim.trigger('shake');
+        fx.splash(a.pos.x, a.pos.z, 0.75 * a.s);
+        if (a.pos.distanceTo(camPos) < 14) say('splash', a);
+      }
+    } else {
+      a.d.wetT = 0;
+    }
   }
 
   function animate(a, dt) {
@@ -941,6 +955,17 @@ export function createSpirits(scene, { blocked, tier }) {
           const nearDist = a.vibe === 'mimoso' ? 0.92 : 1.1;
           if (d > 1.6 || still < 0.6) a.goal = { x: o.pos.x + (a.pos.x - o.pos.x) / Math.max(d, 0.01) * nearDist, z: o.pos.z + (a.pos.z - o.pos.z) / Math.max(d, 0.01) * nearDist, speed: 2.2 * a.s, stop: 0.15, face: o.pos };
           else a.goal = { x: a.pos.x, z: a.pos.z, stop: 1, face: o.pos };
+          // Si frenás en la orilla del agua, tu mascota baja la cabecita a tomar agüita haciendo ondas.
+          const aheadW = !up && !inWater(a.pos.x, a.pos.z) && (
+            inWater(a.pos.x + Math.sin(a.heading) * 0.9, a.pos.z + Math.cos(a.heading) * 0.9)
+            || inWater(a.pos.x - Math.sin(a.heading) * 0.9, a.pos.z - Math.cos(a.heading) * 0.9)
+          );
+          if (aheadW && still > 1.6 && still < 9) {
+            a.want = { sniff: true };
+            a.look = null;
+            if (R() < dt * 1.8) fx.splash(a.pos.x + Math.sin(a.heading) * 0.42, a.pos.z + Math.cos(a.heading) * 0.42, 0.35);
+            return false;
+          }
           a.look = still < 10 ? tmp.copy(o.pos).setY(1.25) : null;
           const lieAt = a.vibe === 'tranquilo' ? 7 : 16;
           a.want = { sit: still > 1.1 && still < lieAt, lie: still >= lieAt, tilt: (a.vibe === 'curioso' || a.vibe === 'mimoso') ? still > 1.8 && still < 7 : still > 3 && still < 5 };
@@ -1396,6 +1421,13 @@ export function createSpirits(scene, { blocked, tier }) {
       companion.role = 'companion';
       if (ball.held === companion) dropBall(companion, 0);
       go(companion, 'called');
+    },
+    treat() {
+      if (!companion) return;
+      companion.role = 'companion';
+      if (ball.held === companion) dropBall(companion, 0);
+      go(companion, 'poked');
+      fx.emit(tmp.copy(companion.pos).setY(companion.pos.y + 0.55 * companion.s), new THREE.Color(1.9, 1.35, 0.7), 24, { spread: 0.45, up: 1.15, speed: 0.85, sz: 0.065 });
     },
     // El personaje: posición, rumbo y si se está moviendo (para que el acompañante lo siga).
     // De dónde sale la correa (la mano de tu personaje).

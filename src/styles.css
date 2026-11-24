@@ -599,6 +599,15 @@ body.photo-mode::after { content: ''; position: fixed; inset: 0; pointer-events:
 .walk-act:active { transform: scale(.88); }
 .walk-act.x-act { font-size: 15px; opacity: .8; }
 body.sheet-open .walk-hud, body.intro .walk-hud { opacity: 0; pointer-events: none; transform: translate(-50%, 30px); }
+.return-hall { position: fixed; left: 16px; bottom: calc(var(--safe-b) + 64px); z-index: 5; display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; border-radius: 999px; background: rgba(34, 14, 44, .88); border: 1.5px solid rgba(255, 214, 150, .45); color: #fff3dc; font-weight: 800; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.38); transition: transform .18s var(--ease), opacity .3s; }
+.return-hall:active { transform: scale(.94); }
+.return-hall b { color: #ffd27a; font-weight: 900; }
+.return-hall[hidden] { display: none !important; }
+body.sheet-open .return-hall, body.intro .return-hall, body.riding .return-hall { opacity: 0; pointer-events: none; }
+@media (max-width: 760px), (pointer: coarse) and (max-height: 540px) {
+  .return-hall { left: 50%; transform: translateX(-50%); top: calc(var(--safe-t) + 64px); bottom: auto; padding: 7px 13px; font-size: 12.5px; }
+  .return-hall:active { transform: translateX(-50%) scale(.94); }
+}
 .toast.has-action { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 18px; text-align: left; }
 .toast button { flex-shrink: 0; padding: 8px 14px; border-radius: 999px; background: var(--ink); color: var(--cream); font-weight: 800; font-size: 13.5px; }
 

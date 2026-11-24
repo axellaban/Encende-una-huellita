@@ -14,18 +14,18 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 - [x] Documentar el Plan Maestro completo en `PENDIENTES.md`.
 
 ### Etapa 2: Mundo abierto infinito con hitos, puentes, fogatas y botón "Volver al salón"
-- [ ] **Hitos mágicos en el mundo abierto (`src/scene/world.js`)**:
+- [x] **Hitos mágicos en el mundo abierto (`src/scene/world.js`)**:
   - **Puentes de madera rústicos y piedras de paso** sobre los arroyos (`openStreamX`, `openStreamZ`) para cruzarlos también por arriba.
   - **Fogatas / altares de descanso** en los claros del valle (troncos para sentarse, fueguito cálido o veladoras y faroles) y **Árboles de los Deseos** más grandes con farolitos colgantes.
-- [ ] **Brújula / botón discreto `🏛️ Volver al salón` (`index.html`, `src/main.js`, `src/styles.css`)**:
+- [x] **Brújula / botón discreto `🏛️ Volver al salón` (`index.html`, `src/main.js`, `src/styles.css`)**:
   - Cuando tu personaje se aleja más allá del jardín central (`r > 64 m`), mostrar una pastilla suave arriba o abajo (`🏛️ Volver al salón · N m`) que con un toque te trae de regreso a la entrada del salón junto a tu mascota.
 
 ### Etapa 3: Paseo vivo y nuevas interacciones con los perritos y gatitos
-- [ ] **Sacudirse el agua (`shake`) al salir del arroyo o lagunita (`src/scene/spirits.js`)**:
+- [x] **Sacudirse el agua (`shake`) al salir del arroyo o lagunita (`src/scene/spirits.js`)**:
   - Cuando un espíritu estuvo chapoteando en el agua (`inWater`) y sale a tierra firme, dispara automáticamente `a.pet.anim.trigger('shake')` salpicando gotitas brillantes (`fx.splash`).
-- [ ] **Tomar agüita en la orilla (`src/scene/spirits.js`)**:
+- [x] **Tomar agüita en la orilla (`src/scene/spirits.js`)**:
   - Si te detenés cerca del borde de un arroyo o lagunita, tu mascota de paseo se acerca a la orilla, agacha la cabecita (`want.bow` / `want.sniff`) y toma agüita generando ondas suaves en el agua.
-- [ ] **Botón de Mimo / Premio (`🦴` / `🤍`) en la barra de paseo (`index.html`, `src/main.js`, `src/scene/spirits.js`)**:
+- [x] **Botón de Mimo / Premio (`🦴` / `🤍`) en la barra de paseo (`index.html`, `src/main.js`, `src/scene/spirits.js`)**:
   - Sumar en `#walk-hud` un botón `#walk-treat` (`🦴 Darle un mimo`) para que tu personaje se agache o le ofrezca un premio luminoso y tu mascota haga una pirueta feliz (salto, vueltita o reverencia con corazones y chispitas).
 
 ### Etapa 4: Atmósfera, pétalos en flor, reflejos del agua y clima nocturno

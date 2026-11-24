@@ -9,7 +9,7 @@ import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
 import { downloadDemoBackup } from './migrate.js';
-import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF, onPath, insideHall, inCorridor, onBridge, inWater } from './scene/world.js';
+import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF, onPath, insideHall, inCorridor, onBridge, inWater, groundY } from './scene/world.js';
 import { buildHall, SLOTS_PER_FLOOR, EASEL_POS } from './scene/hall.js';
 import { createControls } from './scene/controls.js';
 import { createLanterns } from './scene/lanterns.js';
@@ -419,7 +419,17 @@ async function buildScene() {
     // vuela la cámara (vuelve medio segundo después de frenar).
     stillFor = P.moving ? 0 : stillFor + dt;
     actT -= dt;
-    if (actT < 0) { actT = 0.3; updateAction(); }
+    if (actT < 0) {
+      actT = 0.3;
+      updateAction();
+      const retBtn = $('#return-hall');
+      if (retBtn) {
+        const distHall = Math.round(Math.hypot(P.pos.x - HALL_CENTER.x, P.pos.z - HALL_CENTER.z));
+        const farOut = !world.colliders.up && Math.hypot(P.pos.x, P.pos.z) > 62;
+        retBtn.hidden = !farOut;
+        if (farOut && $('#return-dist')) $('#return-dist').textContent = `· ${distHall} m`;
+      }
+    }
     const busy = introDone && (P.moving || controls.sticking || controls.flying);
     calmT = busy ? 0.6 : calmT - dt;
     if ((calmT > 0) !== hudAway) { hudAway = calmT > 0; document.body.classList.toggle('moving', hudAway); }
@@ -3383,6 +3393,27 @@ function throwBall() {
   setTimeout(() => spirits.throwBall(me.handWorld(), P.heading), 230);
 }
 $('#walk-call').onclick = () => { spirits?.call(); haptic(8); if (walking) toast(`📣 ¡${walking.name}, vení!`); };
+$('#walk-treat').onclick = () => {
+  if (!spirits || !walking) return;
+  me?.pet();
+  spirits.treat();
+  boop();
+  petVoice(walking.species);
+  avatars?.floatAt('🦴', (spirits.companion?.pos || controls.player.pos).clone().setY(1.0));
+  haptic([10, 35, 10]);
+  toast(`🦴 ¡Qué rico! ${walking.name} da un saltito de felicidad 🤍`);
+};
+$('#return-hall').onclick = () => {
+  if (!controls) return;
+  const spot = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 15.5);
+  teleportPlayer(spot, ENTRY_LOOK);
+  if (spirits?.companion) {
+    spirits.companion.pos.set(spot.x + 1.1, groundY(spot.x + 1.1, spot.z - 1.2, false), spot.z - 1.2);
+  }
+  controls.follow();
+  $('#return-hall').hidden = true;
+  toast('🏛️ Volviste a la entrada del salón');
+};
 $('#walk-stop').onclick = stopWalk;
 $('#walk-who').onclick = () => { if (walking) visit(memorials.find((m) => m.id === walking.id) || walking); };
 $('#s-walk-act').onclick = () => $('#s-walk').click();
