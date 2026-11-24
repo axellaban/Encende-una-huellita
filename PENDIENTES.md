@@ -29,19 +29,19 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
   - Sumar en `#walk-hud` un botón `#walk-treat` (`🦴 Darle un mimo`) para que tu personaje se agache o le ofrezca un premio luminoso y tu mascota haga una pirueta feliz (salto, vueltita o reverencia con corazones y chispitas).
 
 ### Etapa 4: Atmósfera, pétalos en flor, reflejos del agua y clima nocturno
-- [ ] **Pétalos que caen debajo de los jacarandás y árboles en flor (`src/scene/world.js`)**:
+- [x] **Pétalos que caen debajo de los jacarandás y árboles en flor (`src/scene/world.js`)**:
   - Partículas suaves lilas, rosadas y doradas que flotan y caen despacio alrededor de las copas de los árboles en flor en el jardín y el mundo abierto.
-- [ ] **Reflejos bioluminiscentes del agua en las orillas (`src/scene/world.js`, `src/scene/river.js`)**:
+- [x] **Reflejos bioluminiscentes del agua en las orillas (`src/scene/world.js`, `src/scene/river.js`)**:
   - Halo turquesa suave en las piedras y orillas junto a los arroyos y lagunitas.
-- [ ] **Selector de atmósfera / cielo en Opciones (`index.html`, `src/main.js`, `src/scene/world.js`, `src/scene/skymagic.js`)**:
+- [x] **Selector de atmósfera / cielo en Opciones (`index.html`, `src/main.js`, `src/scene/world.js`, `src/scene/skymagic.js`)**:
   - Permitir elegir en `#menu` (*Opciones*) el clima del cielo: **Noche estrellada** (por defecto), **Atardecer dorado** o **Lluvia de estrellas fugaces**.
 
 ### Etapa 5: Nichos vivos, estilos de marco y guía luminosa al pasillo
-- [ ] **Luz cálida interior en los nichos ocupados (`src/scene/hall.js`)**:
+- [x] **Luz cálida interior en los nichos ocupados (`src/scene/hall.js`)**:
   - Que las velas encendidas de cada nicho iluminen con más calidez el interior de la caja de madera, las repisas laterales y los regalitos.
-- [ ] **Estilos de marco para la foto (`index.html`, `src/main.js`, `src/scene/hall.js`, `server/store.js`)**:
+- [x] **Estilos de marco para la foto (`index.html`, `src/main.js`, `src/scene/hall.js`, `server/store.js`)**:
   - Permitir elegir o lucir marcos especiales en el nicho (madera clásica, dorado luminoso, talavera y cempasúchil).
-- [ ] **Camino de chispitas guía al buscar o visitar una huellita (`src/main.js`, `src/scene/spirits.js`)**:
+- [x] **Camino de chispitas guía al buscar o visitar una huellita (`src/main.js`, `src/scene/spirits.js`)**:
   - Al elegir una huellita desde la lista o el buscador, además de encuadrar su nicho, soltar una estela de pétalos/chispitas desde la boca de su pasillo hasta su marco.
 
 ---

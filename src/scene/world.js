@@ -1144,8 +1144,67 @@ export function buildWorld(scene, tier) {
 
     const stoneUnitGeo = new THREE.DodecahedronGeometry(0.24, 0);
     stoneUnitGeo.scale(1.3, 0.55, 1.1);
-    const openStones = new THREE.InstancedMesh(stoneUnitGeo, new THREE.MeshLambertMaterial({ color: '#7a7480', flatShading: true }), MAX_STONES);
+    const stoneReflectionMat = new THREE.MeshLambertMaterial({ color: '#7a7480', flatShading: true });
+    stoneReflectionMat.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = uTime;
+      sh.vertexShader = `varying vec3 vStPos;\n${sh.vertexShader}`.replace('#include <project_vertex>', 'vec4 sp = modelMatrix * vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\n  sp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);\n#endif\n  vStPos = sp.xyz;\n#include <project_vertex>');
+      sh.fragmentShader = `uniform float uTime;\nvarying vec3 vStPos;\n${sh.fragmentShader}`.replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+         float caust = 0.5 + 0.5 * sin(uTime * 2.4 + vStPos.x * 3.8 - vStPos.z * 3.1);
+         totalEmissiveRadiance += vec3(0.08, 0.58, 0.92) * caust * 0.25;`,
+      );
+    };
+    stoneReflectionMat.customProgramCacheKey = () => 'stone-caustic-1';
+    const openStones = new THREE.InstancedMesh(stoneUnitGeo, stoneReflectionMat, MAX_STONES);
     openStones.frustumCulled = false;
+
+    // Pétalos en flor (jacarandá lila, cerezo rosado y cempasúchil dorado) que caen suavemente alrededor tuyo.
+    const PETAL_N = 220;
+    const petalPos = new Float32Array(PETAL_N * 3);
+    const petalCol = new Float32Array(PETAL_N * 3);
+    const petalSeed = new Float32Array(PETAL_N);
+    const petalPalette = [new THREE.Color('#c8a2ff'), new THREE.Color('#ffb5d8'), new THREE.Color('#ffbe45')];
+    for (let i = 0; i < PETAL_N; i++) {
+      const a = r() * Math.PI * 2;
+      const d = 1.5 + Math.sqrt(r()) * 34;
+      petalPos.set([Math.sin(a) * d, r() * 4.6, Math.cos(a) * d], i * 3);
+      petalPalette[i % 3].toArray(petalCol, i * 3);
+      petalSeed[i] = r();
+    }
+    const petalGeo = new THREE.BufferGeometry();
+    petalGeo.setAttribute('position', new THREE.BufferAttribute(petalPos, 3));
+    petalGeo.setAttribute('aCol', new THREE.BufferAttribute(petalCol, 3));
+    petalGeo.setAttribute('aSeed', new THREE.BufferAttribute(petalSeed, 1));
+    const blossomPetals = new THREE.Points(petalGeo, new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { uTime },
+      vertexShader: `attribute vec3 aCol; attribute float aSeed; uniform float uTime; varying vec3 vC; varying float vA;
+        void main(){
+          vC = aCol;
+          vec3 p = position;
+          float fall = fract((p.y / 4.6) - uTime * (0.065 + aSeed * 0.045));
+          p.y = 0.2 + fall * 4.4;
+          float sw = uTime * (0.9 + aSeed * 0.6) + aSeed * 30.0;
+          p.x += sin(sw) * 0.65;
+          p.z += cos(sw * 0.85) * 0.65;
+          vA = smoothstep(0.0, 0.15, fall) * (1.0 - smoothstep(0.82, 1.0, fall)) * 0.78;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_PointSize = clamp(32.0 / max(-mv.z, 0.5), 1.5, 9.0);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `varying vec3 vC; varying float vA;
+        void main(){
+          vec2 uv = gl_PointCoord - 0.5;
+          float d = length(vec2(uv.x * 1.35, uv.y));
+          float a = (1.0 - smoothstep(0.15, 0.5, d)) * vA;
+          gl_FragColor = vec4(vC * 1.35, a);
+        }`,
+    }));
+    blossomPetals.frustumCulled = false;
+    groundRoot.add(blossomPetals);
 
     // Faroles de camino junto a las lagunitas y claros.
     const lampUnitGeo = mergeGeometries([
@@ -1431,10 +1490,11 @@ export function buildWorld(scene, tier) {
     }
 
     updateOpen = (px, pz) => {
-      // El piso, el horizonte, el cielo y las luciérnagas acompañan tu caminata hasta el infinito.
+      // El piso, el horizonte, el cielo, los pétalos y las luciérnagas acompañan tu caminata hasta el infinito.
       ground.position.set(Math.round(px / 8) * 8, 0, Math.round(pz / 8) * 8);
       horizon.position.set(px, 0, pz);
       sky.position.set(px, 0, pz);
+      blossomPetals.position.set(px, 0, pz);
       if (sky.userData.flies) sky.userData.flies.position.set(px, 0, pz);
       const cx = Math.floor(px / CHUNK);
       const cz = Math.floor(pz / CHUNK);
@@ -1447,5 +1507,28 @@ export function buildWorld(scene, tier) {
     updateOpen(SPAWN.x, SPAWN.z);
   }
 
-  return { colliders, animated, walkable, ground: groundRoot, deck, sky, stars: sky.userData.stars, moon, hemi, moonLight, warmFill, fog, flies: sky.userData.flies, updateOpen };
+  function setSkyMood(mode = 'night') {
+    const U = sky.material.uniforms;
+    if (mode === 'sunset') {
+      U.top.value.set('#1b1038');
+      U.mid.value.set('#5e2366');
+      U.low.value.set('#d4486a');
+      U.horizon.value.set('#ffb347');
+      warmFill.intensity = 1.65;
+    } else if (mode === 'meteors') {
+      U.top.value.set('#050418');
+      U.mid.value.set('#1f1246');
+      U.low.value.set('#7a2868');
+      U.horizon.value.set('#e87838');
+      warmFill.intensity = 1.25;
+    } else {
+      U.top.value.set('#0c0824');
+      U.mid.value.set('#34195e');
+      U.low.value.set('#a3337a');
+      U.horizon.value.set('#ff8a3d');
+      warmFill.intensity = 1.2;
+    }
+  }
+
+  return { colliders, animated, walkable, ground: groundRoot, deck, sky, stars: sky.userData.stars, moon, hemi, moonLight, warmFill, fog, flies: sky.userData.flies, updateOpen, setSkyMood };
 }

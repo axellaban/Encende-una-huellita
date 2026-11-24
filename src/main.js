@@ -297,6 +297,8 @@ async function buildScene() {
   ]);
   setupRenderer();
   world = buildWorld(scene, tier);
+  const savedSky = store.get('huellita.sky') || 'night';
+  world.setSkyMood?.(savedSky);
   hall = buildHall(scene, world.colliders, tier);
   lanterns = createLanterns(scene, tier);
   offerFx = createOfferFx(scene);
@@ -882,7 +884,17 @@ function visit(m) {
     }
     hideHint();
     if (key === 'featured') placeNear(stand, frame, 1.6, 5.4);
-    else placeNear(stand, frame, 0.85);
+    else {
+      placeNear(stand, frame, 0.85);
+      // Camino de chispitas doradas desde el salón hasta su nicho.
+      if (spirits) {
+        const mouth = new THREE.Vector3().lerpVectors(HALL_CENTER, frame, 0.45).setY(0.45);
+        for (let i = 1; i <= 5; i++) {
+          const pt = new THREE.Vector3().lerpVectors(mouth, frame, i / 5);
+          setTimeout(() => spirits?.sparkle(pt, new THREE.Color(1.9, 1.45, 0.65), 8), i * 110);
+        }
+      }
+    }
     controls.flyTo(stand, target, () => hall.pulse(key));
   }
   openSheet(m);
@@ -1665,8 +1677,19 @@ function openMenu() {
   $('#opt-watercolor').disabled = !watercolor;
   const q = savedQuality();
   $$('#opt-quality button').forEach((b) => b.classList.toggle('on', b.dataset.q === q));
+  const skyMood = store.get('huellita.sky') || 'night';
+  $$('#opt-sky button').forEach((b) => b.classList.toggle('on', b.dataset.sky === skyMood));
   $('#menu').showModal();
 }
+$$('#opt-sky button').forEach((b) => {
+  b.onclick = () => {
+    const mood = b.dataset.sky || 'night';
+    store.set('huellita.sky', mood);
+    world?.setSkyMood?.(mood);
+    $$('#opt-sky button').forEach((x) => x.classList.toggle('on', x.dataset.sky === mood));
+    toast(mood === 'sunset' ? '🌅 Cielo de atardecer dorado' : mood === 'meteors' ? '🌠 Noche de estrellas brillantes' : '🌙 Noche estrellada del jardín');
+  };
+});
 $('#opt-music').onchange = (e) => { setMusic(e.target.checked); syncMusicBtn(); store.set('huellita.music', e.target.checked ? '1' : '0'); };
 $('#opt-watercolor').onchange = (e) => {
   store.set('huellita.watercolor', e.target.checked ? '1' : '0');

@@ -486,6 +486,9 @@ export function buildHall(scene, colliders, tier) {
   const r = rand(11);
   const frameMat = new THREE.MeshLambertMaterial({ color: '#efe2c8', emissive: '#3a2a1a', emissiveIntensity: 0.5 });
   const goldMat = new THREE.MeshStandardMaterial({ color: '#d9a748', roughness: 0.35, metalness: 0.8, emissive: '#6b4300', emissiveIntensity: 0.55 });
+  const talaveraFrameMat = new THREE.MeshLambertMaterial({ color: '#2ea8a5', emissive: '#103c42', emissiveIntensity: 0.55 });
+  const marigoldFrameMat = new THREE.MeshLambertMaterial({ color: '#f09426', emissive: '#5c2808', emissiveIntensity: 0.55 });
+  const innerWarmMat = new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.24, color: new THREE.Color(1.4, 0.95, 0.48) });
   const matMat = new THREE.MeshLambertMaterial({ color: '#f1e6d4' });
   const waxMat = new THREE.MeshLambertMaterial({ color: '#fff3e0', emissive: '#7a5226', emissiveIntensity: 0.45 });
   const postMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture('#b5307a') });
@@ -919,10 +922,14 @@ export function buildHall(scene, colliders, tier) {
     });
     const fx = makeGlowFx(glowFx, 0.72);
     fx.group.position.set(0, 0.04, 0.02);
-    inside.add(mat, border, photo, cloth, sideShelves, glass, name, shelf, fx.group);
+    const warmHalo = new THREE.Sprite(innerWarmMat);
+    warmHalo.scale.set(0.95, 0.88, 1);
+    warmHalo.position.set(0, -0.04, -DEPTH * 0.45);
+    warmHalo.visible = false;
+    inside.add(mat, border, photo, cloth, sideShelves, glass, name, shelf, warmHalo, fx.group);
     inside.visible = false;
     g.add(inside, pick);
-    return { group: g, inside, border, mat, photo, name, shelf, candles, jar, flowers, gifts, fx, memorial: null, textures: [], open: 0, openTarget: 0, openDelay: 0, local };
+    return { group: g, inside, border, mat, photo, name, shelf, candles, jar, flowers, gifts, warmHalo, fx, memorial: null, textures: [], open: 0, openTarget: 0, openDelay: 0, local };
   }
 
   // ---------- puertitas de los nichos (todas en un solo dibujo) ----------
@@ -1473,15 +1480,23 @@ export function buildHall(scene, colliders, tier) {
     }
     s.memorial = m;
     s.name.visible = true;
-    s.border.material = m.candles >= 20 || m.eternal ? goldMat : frameMat;
+    s.border.material = (m.candles >= 12 || m.eternal || m.bg === 'estrellas')
+      ? goldMat
+      : (m.bg === 'talavera' || m.bg === 'cielo')
+        ? talaveraFrameMat
+        : (m.bg === 'cempasuchil' || m.bg === 'atardecer')
+          ? marigoldFrameMat
+          : frameMat;
     if (s.bg !== m.bg) {
       s.mat.material.map = backgroundTexture(m.bg || 'crema');
       s.mat.material.needsUpdate = true;
       s.bg = m.bg;
     }
+    s.mat.material.emissiveIntensity = 0.35 + Math.min(0.28, (m.candles || 0) * 0.03) + (m.eternal ? 0.15 : 0);
     s.shelf.visible = true;
     const lvl = candleLevel(m.candles);
     s.candles.forEach((c, i) => { c.visible = i < lvl; });
+    if (s.warmHalo) s.warmHalo.visible = lvl > 0 || !!m.eternal;
     const fl = Math.min(BOUQUET.length, Math.ceil(m.flowers / 2));
     s.jar.visible = fl > 0;
     s.flowers.forEach((f, i) => { f.visible = i < fl; });
