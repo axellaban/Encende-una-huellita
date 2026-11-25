@@ -5,7 +5,8 @@
 import * as THREE from 'three';
 import { createPet, lookFor } from './petRig.js';
 import { glowTexture, bubbleTexture } from './textures.js';
-import { HALL_CENTER, HALL_RADIUS, GARDEN_RADIUS, MEADOW, MEADOW_R, groundY } from './world.js';
+import { HALL_CENTER, HALL_RADIUS, ROOM_R, GARDEN_RADIUS, MEADOW, MEADOW_R, BRIDGE, onBridge, inWater, groundY } from './world.js';
+import { SLOTS_PER_FLOOR } from './hall.js';
 
 export { MEADOW, MEADOW_R };
 
@@ -92,11 +93,61 @@ function createFx(scene) {
   addEventListener('resize', () => { pts.material.uniforms.uScale.value = innerHeight; });
   let pnext = 0;
 
+  // Anillos de agua que se abren al chapotear en el río o el estanque.
+  const RN = 48;
+  const ripples = new THREE.InstancedMesh(
+    new THREE.RingGeometry(0.18, 0.25, 32).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide }),
+    RN,
+  );
+  ripples.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(RN * 3), 3);
+  ripples.frustumCulled = false;
+  ripples.renderOrder = 3;
+  const rAge = new Float32Array(RN).fill(9);
+  const rMax = new Float32Array(RN).fill(1);
+  const rX = new Float32Array(RN);
+  const rZ = new Float32Array(RN);
+  const rStr = new Float32Array(RN);
+  for (let i = 0; i < RN; i++) ripples.setMatrixAt(i, m.matrix);
+  scene.add(ripples);
+  let rnext = 0;
+  const splashCol = new THREE.Color(0.55, 1.85, 2.45);
+  const dropCol = new THREE.Color(1.2, 2.0, 2.5);
+
   return {
-    print(x, z, heading, color, s = 1) {
+    splash(x, z, strength = 1) {
+      for (let k = 0; k < 2; k++) {
+        const i = rnext;
+        rnext = (rnext + 1) % RN;
+        rX[i] = x + (k ? (R() - 0.5) * 0.12 : 0);
+        rZ[i] = z + (k ? (R() - 0.5) * 0.12 : 0);
+        rStr[i] = strength * (k === 0 ? 1 : 0.68);
+        rAge[i] = -k * 0.12;
+        rMax[i] = 0.95 + k * 0.25;
+      }
+      const n = Math.max(5, Math.round(11 * strength));
+      for (let k = 0; k < n; k++) {
+        const i = pnext;
+        pnext = (pnext + 1) % M;
+        const a = R() * TAU;
+        const rad = 0.04 + R() * 0.16;
+        pos[i * 3] = x + Math.cos(a) * rad;
+        pos[i * 3 + 1] = 0.06 + R() * 0.05;
+        pos[i * 3 + 2] = z + Math.sin(a) * rad;
+        const sp = (0.35 + R() * 0.75) * strength;
+        vel[i * 3] = Math.cos(a) * sp;
+        vel[i * 3 + 1] = (0.75 + R() * 0.95) * strength;
+        vel[i * 3 + 2] = Math.sin(a) * sp;
+        (k % 2 ? splashCol : dropCol).toArray(col, i * 3);
+        size[i] = 0.038 * (0.65 + R() * 0.7);
+        age[i] = 0;
+        maxAge[i] = 0.55 + R() * 0.35;
+      }
+    },
+    print(x, z, heading, color, s = 1, baseY = 0) {
       const i = next;
       next = (next + 1) % N;
-      m.position.set(x, 0.024 + i * 0.00002, z);
+      m.position.set(x, baseY + 0.02 + i * 0.00002, z);
       m.rotation.set(0, heading, 0);
       m.scale.setScalar(s);
       m.updateMatrix();
@@ -135,7 +186,7 @@ function createFx(scene) {
         if (age[i] >= maxAge[i]) { alpha[i] = 0; continue; }
         age[i] += dt;
         const k = age[i] / maxAge[i];
-        vel[i * 3 + 1] -= dt * 0.15;
+        vel[i * 3 + 1] -= dt * (maxAge[i] < 0.95 ? 2.6 : 0.15);
         pos[i * 3] += vel[i * 3] * dt;
         pos[i * 3 + 1] += vel[i * 3 + 1] * dt;
         pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
@@ -145,6 +196,27 @@ function createFx(scene) {
       geo.attributes.aAlpha.needsUpdate = true;
       geo.attributes.aColor.needsUpdate = true;
       geo.attributes.aSize.needsUpdate = true;
+      for (let i = 0; i < RN; i++) {
+        if (rAge[i] >= rMax[i]) continue;
+        rAge[i] += dt;
+        if (rAge[i] < 0) continue;
+        const k = Math.min(1, rAge[i] / rMax[i]);
+        const sc = (0.35 + k * 2.8) * rStr[i];
+        m.position.set(rX[i], 0.052 + i * 0.00002, rZ[i]);
+        m.rotation.set(0, 0, 0);
+        m.scale.setScalar(sc);
+        m.updateMatrix();
+        ripples.setMatrixAt(i, m.matrix);
+        const fade = (1 - k) * (1 - k);
+        ripples.instanceColor.setXYZ(i, 0.38 * fade, 1.55 * fade, 2.25 * fade);
+        if (k >= 1) {
+          m.scale.setScalar(0);
+          m.updateMatrix();
+          ripples.setMatrixAt(i, m.matrix);
+        }
+      }
+      ripples.instanceMatrix.needsUpdate = true;
+      ripples.instanceColor.needsUpdate = true;
     },
   };
 }
@@ -172,14 +244,15 @@ function createBall(scene) {
     idle: 0,
     bounced: 0,
     get free() { return !this.held; },
-    get inAir() { return this.pos.y > r + 0.03 || Math.abs(this.vel.y) > 0.3; },
+    get inAir() { return this.pos.y > groundY(this.pos.x, this.pos.z) + r + 0.03 || Math.abs(this.vel.y) > 0.3; },
     // Dónde va a tocar el piso (para correr hacia ahí y no hacia donde está ahora).
     landing(out = new THREE.Vector3()) {
+      const fy = groundY(this.pos.x, this.pos.z) + r;
       if (!this.inAir) return out.copy(this.pos);
       const vy = this.vel.y;
-      const h = this.pos.y - r;
+      const h = this.pos.y - fy;
       const tl = (vy + Math.sqrt(vy * vy + 2 * 9.8 * Math.max(0, h))) / 9.8;
-      return out.set(this.pos.x + this.vel.x * tl, r, this.pos.z + this.vel.z * tl);
+      return out.set(this.pos.x + this.vel.x * tl, fy, this.pos.z + this.vel.z * tl);
     },
   };
 }
@@ -188,7 +261,11 @@ function createBall(scene) {
 function makeAgent(look, info) {
   const pet = createPet(look);
   const a = {
-    pet, look, s: pet.s,
+    pet,
+    petLook: look,
+    vibe: look.vibe || 'jugueton',
+    zone: info.zone || 'meadow',
+    s: pet.s,
     pos: pet.group.position,
     heading: R() * TAU,
     speed: 0,
@@ -222,6 +299,12 @@ function makeAgent(look, info) {
   return a;
 }
 
+const LAWN = new THREE.Vector3(-11, 0, 15);
+const LAWN_R = 4.6;
+const SKY_TERRACE = new THREE.Vector3(0, 0, 5.2);
+const SKY_TERRACE_R = 5.8;
+const FOUNTAIN_POS = { x: HALL_CENTER.x, z: HALL_CENTER.z + 5.2 };
+
 export function createSpirits(scene, { blocked, tier }) {
   const fx = createFx(scene);
   const ball = createBall(scene);
@@ -235,16 +318,75 @@ export function createSpirits(scene, { blocked, tier }) {
   const player = { pos: new THREE.Vector3(0, 0, 24), heading: Math.PI, moving: false, still: 0, vel: new THREE.Vector3() };
   const listeners = { fetch: [], event: [] };
   let camPos = new THREE.Vector3();
-  const maxPack = tier?.grass >= 20000 ? 5 : tier?.grass >= 10000 ? 4 : 3;
+  const maxPack = tier?.grass >= 20000 ? 10 : tier?.grass >= 10000 ? 8 : 6;
+  let currentFl = 0;
 
   const meadowPoint = (rad = MEADOW_R - 1) => {
     const a = R() * TAU;
     const d = Math.sqrt(R()) * rad;
     return new THREE.Vector3(MEADOW.x + Math.sin(a) * d, 0, MEADOW.z + Math.cos(a) * d);
   };
-  const others = (a) => [...pack, ...(companion?.role === 'joined' ? [companion] : [])].filter((b) => b !== a);
+  const wildCenter = new THREE.Vector3(MEADOW.x, 0, MEADOW.z);
+  const zoneCenter = (a) => {
+    const z = a?.zone || (up ? 'sky' : 'meadow');
+    if (z === 'hall') return new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z - 3.6);
+    if (z === 'sky') return SKY_TERRACE;
+    if (z === 'wild') return wildCenter;
+    if (z === 'lawn') return Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 6 ? wildCenter : LAWN;
+    return MEADOW;
+  };
+  const zonePoint = (a, radScale = 1) => {
+    const z = a?.zone || (up ? 'sky' : 'meadow');
+    const shy = a?.vibe === 'timido';
+    const radial = () => (shy ? 0.62 + 0.38 * R() : Math.sqrt(R())) * radScale;
+    if (z === 'hall') {
+      for (let k = 0; k < 14; k++) {
+        const ang = R() * TAU;
+        const d = 3.8 + radial() * 4.8;
+        const px = HALL_CENTER.x + Math.sin(ang) * d;
+        const pz = HALL_CENTER.z + Math.cos(ang) * d;
+        if (Math.hypot(px - FOUNTAIN_POS.x, pz - FOUNTAIN_POS.z) < 2.95) continue;
+        if (!blocked(px, pz, 0.28)) return new THREE.Vector3(px, 0, pz);
+      }
+      return new THREE.Vector3(HALL_CENTER.x + (R() < 0.5 ? -5.6 : 5.6), 0, HALL_CENTER.z - 2.2);
+    }
+    const useWild = z === 'wild' || (z === 'lawn' && !up && Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 6);
+    const c = z === 'sky' ? SKY_TERRACE : useWild ? wildCenter : z === 'lawn' ? LAWN : MEADOW;
+    const maxR = z === 'sky' ? SKY_TERRACE_R : useWild ? 11 : z === 'lawn' ? LAWN_R : (MEADOW_R - 1);
+    const ang = R() * TAU;
+    const d = radial() * maxR;
+    return new THREE.Vector3(c.x + Math.sin(ang) * d, 0, c.z + Math.cos(ang) * d);
+  };
+  const isMeadowRole = (role) => role === 'pack' || role === 'joined' || role === 'remote-joined';
+  const others = (a) => [
+    ...pack,
+    ...(companion?.role === 'joined' ? [companion] : []),
+    ...[...remotes.values()].filter((r) => r.role === 'remote-joined' || dist2(r.pos, a.pos) < 8),
+  ].filter((b) => b !== a);
   const free = (b) => ['idle', 'wander', 'sniff', 'watch'].includes(b.state);
   const say = (type, a, extra) => listeners.event.forEach((fn) => fn(type, a, extra));
+
+  // Mariposa de luz y soga para jugar entre dos en el Prado.
+  const bFly = new THREE.Group();
+  {
+    const wMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.9, 1.15, 1.55), side: THREE.DoubleSide });
+    for (const s of [-1, 1]) {
+      const w = new THREE.Mesh(new THREE.CircleGeometry(0.065, 8).translate(s * 0.055, 0, 0), wMat);
+      w.rotation.x = Math.PI / 2;
+      bFly.add(w);
+    }
+    const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: new THREE.Color(1.4, 0.9, 1.2), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.65 }));
+    gl.scale.setScalar(0.32);
+    bFly.add(gl);
+    bFly.visible = false;
+    scene.add(bFly);
+  }
+  const tugRope = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.018, 0.018, 1, 8).rotateX(Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.85, 0.35) }),
+  );
+  tugRope.visible = false;
+  scene.add(tugRope);
 
   // ---------- moverse ----------
   function move(a, dt) {
@@ -270,24 +412,36 @@ export function createSpirits(scene, { blocked, tier }) {
     if (dSpeed > 0.05) {
       let vx = Math.sin(dHead);
       let vz = Math.cos(dHead);
-      // Esquivar a los otros espíritus.
+      // Esquivar a los otros espíritus (los tímidos guardan un poquito más de distancia).
       for (const b of [...pack, companion, ...remotes.values()]) {
         if (!b || b === a || b === a.d.partner) continue;
         const ox = a.pos.x - b.pos.x;
         const oz = a.pos.z - b.pos.z;
         const od = Math.hypot(ox, oz);
-        const min = 0.55 * (a.s + b.s);
+        const min = (a.vibe === 'timido' ? 0.92 : 0.55) * (a.s + b.s);
         if (od < min && od > 1e-3) { vx += (ox / od) * (1 - od / min) * 1.6; vz += (oz / od) * (1 - od / min) * 1.6; }
       }
-      // Los del Prado no entran al salón ni se van contra el cerco.
-      if (a.role === 'pack' || a.role === 'joined') {
+      // Límites según la zona donde juega cada espíritu.
+      if (isMeadowRole(a.role)) {
         const hx = a.pos.x - HALL_CENTER.x;
         const hz = a.pos.z - HALL_CENTER.z;
-        const hd = Math.hypot(hx, hz);
-        if (hd < HALL_RADIUS + 3) { vx += (hx / hd) * 1.5; vz += (hz / hd) * 1.5; }
+        const hd = Math.hypot(hx, hz) || 1;
+        if (a.zone === 'hall') {
+          if (hd > 9.6) { vx -= (hx / hd) * 1.6; vz -= (hz / hd) * 1.6; }
+          if (hd < 3.5) { vx += (hx / hd) * 1.8; vz += (hz / hd) * 1.8; }
+          const fx2 = a.pos.x - FOUNTAIN_POS.x;
+          const fz2 = a.pos.z - FOUNTAIN_POS.z;
+          const fd = Math.hypot(fx2, fz2) || 1;
+          if (fd < 2.95) { vx += (fx2 / fd) * 1.8; vz += (fz2 / fd) * 1.8; }
+        } else if (a.zone === 'sky') {
+          if (hd < ROOM_R + 2) { vx += (hx / hd) * 1.4; vz += (hz / hd) * 1.4; }
+        } else if (hd < HALL_RADIUS + 3) {
+          vx += (hx / hd) * 1.5;
+          vz += (hz / hd) * 1.5;
+        }
       }
       const rd = Math.hypot(a.pos.x, a.pos.z);
-      if (rd > GARDEN_RADIUS - 3) { vx -= (a.pos.x / rd) * 1.2; vz -= (a.pos.z / rd) * 1.2; }
+      if (up && rd > GARDEN_RADIUS - 3) { vx -= (a.pos.x / rd) * 1.2; vz -= (a.pos.z / rd) * 1.2; }
       dHead = Math.atan2(vx, vz);
     }
     const dh = wrap(dHead - a.heading);
@@ -303,22 +457,41 @@ export function createSpirits(scene, { blocked, tier }) {
       const nx = a.pos.x + Math.sin(a.heading) * st;
       const nz = a.pos.z + Math.cos(a.heading) * st;
       const body = 0.18 * a.s;
-      if (!blocked(nx, nz, body)) a.pos.set(nx, groundY(nx, nz), nz);
+      if (!blocked(nx, nz, body)) { a.pos.x = nx; a.pos.z = nz; }
       else if (!blocked(nx, a.pos.z, body)) a.pos.x = nx;
       else if (!blocked(a.pos.x, nz, body)) a.pos.z = nz;
       else a.speed *= 0.3;
+    }
+    a.pos.y = groundY(a.pos.x, a.pos.z, up);
+    // Si estuvo chapoteando en el agua y acaba de salir a la orilla, se sacude solito salpicando gotitas.
+    const wetNow = !up && inWater(a.pos.x, a.pos.z);
+    if (wetNow) {
+      a.d.wetT = (a.d.wetT || 0) + dt;
+    } else if ((a.d.wetT || 0) > 0.45) {
+      a.d.wetT = 0;
+      if (!a.pet.anim.busy) {
+        a.pet.anim.trigger('shake');
+        fx.splash(a.pos.x, a.pos.z, 0.75 * a.s);
+        if (a.pos.distanceTo(camPos) < 14) say('splash', a);
+      }
+    } else {
+      a.d.wetT = 0;
     }
   }
 
   function animate(a, dt) {
     a.pet.group.rotation.y = a.heading;
     const animSpeed = Math.max(a.speed, Math.min(0.45 * a.s, Math.abs(a.turn) * 0.2 * a.s));
+    const wag = a.role === 'companion' || a.vibe === 'jugueton' || a.vibe === 'mimoso' || a.vibe === 'saltarin' ? 1 : a.vibe === 'timido' ? 0.15 : 0.45;
+    if (a.vibe === 'saltarin' && a.speed > 0.95 * a.s && !a.pet.anim.busy && R() < dt * 0.52) {
+      a.pet.anim.trigger('jump', { h: 0.26, d: 0.44 });
+    }
     a.pet.anim.update(dt, {
-      speed: animSpeed, turn: a.turn, look: a.look, excite: a.excite, want: a.want, wag: a.role === 'companion' ? 1 : 0,
+      speed: animSpeed, turn: a.turn, look: a.look, excite: a.excite, want: a.want, wag,
       bank: clamp(-a.turn * a.speed * 0.05, -0.32, 0.32),
     });
     // Chispitas al correr y huellitas al pisar.
-    if (a.speed > 2.4 * a.s && R() < dt * 14) fx.emit(tmp.copy(a.pos).setY(0.35 * a.s), a.rim, 1, { spread: 0.3, up: 0.25, speed: 0.2, sz: 0.035, lifeT: 0.9 });
+    if (a.speed > 2.4 * a.s && R() < dt * 14) fx.emit(tmp.copy(a.pos).setY(a.pos.y + 0.35 * a.s), a.rim, 1, { spread: 0.3, up: 0.25, speed: 0.2, sz: 0.035, lifeT: 0.9 });
     if (a.label) {
       const d = a.pos.distanceTo(camPos);
       const want = (a.role === 'companion' ? d < 14 : d < 8) ? 0.95 : 0;
@@ -331,8 +504,13 @@ export function createSpirits(scene, { blocked, tier }) {
     a.pet.anim.onStep((i) => {
       if (a.speed < 0.35 * a.s || a.pet.anim.jumping || a.fade < 0.5) return;
       const p = a.pet.pawWorld(i, tmp2);
-      if (p.y > 0.12 * a.s) return;
-      fx.print(p.x, p.z, a.heading, a.rim, a.s * (i < 2 ? 0.95 : 0.85));
+      if (p.y - a.pos.y > 0.12 * a.s) return;
+      if (!up && inWater(p.x, p.z)) {
+        fx.splash(p.x, p.z, clamp((a.speed / 2.1) * a.s, 0.45, 1.2));
+        if (i === 0 && a.pos.distanceTo(camPos) < 14) say('splash', a);
+        return;
+      }
+      fx.print(p.x, p.z, a.heading, a.rim, a.s * (i < 2 ? 0.95 : 0.85), a.pos.y);
     });
   }
 
@@ -343,22 +521,42 @@ export function createSpirits(scene, { blocked, tier }) {
   // ---------- estados ----------
   const S = {
     idle: {
-      enter(a) { a.goal = null; a.dur = 1.2 + R() * 2.8; a.want = { sit: a.kind !== 'otro' && R() < 0.5 }; a.excite = 0.4; a.look = null; },
+      enter(a) {
+        a.goal = null;
+        a.dur = a.vibe === 'tranquilo' ? 2.4 + R() * 3.5 : 1.2 + R() * 2.6;
+        a.want = {
+          sit: a.kind !== 'otro' && (a.vibe === 'guardian' ? true : R() < 0.55),
+          tilt: (a.vibe === 'curioso' || a.vibe === 'mimoso') && R() < 0.45,
+        };
+        a.excite = a.vibe === 'jugueton' || a.vibe === 'saltarin' ? 0.72 : a.vibe === 'tranquilo' ? 0.25 : 0.45;
+        a.look = null;
+      },
       tick(a) {
         if (ball.free && dist2(a.pos, ball.pos) < 7 && ball.inAir) a.look = ball.pos;
         return a.t > a.dur;
       },
     },
     watch: {
-      enter(a, target) { a.goal = null; a.d.target = target; a.dur = 2 + R() * 2.5; a.want = { sit: R() < 0.7, tilt: R() < 0.3 }; a.excite = 0.6; },
+      enter(a, target) {
+        a.goal = null;
+        a.d.target = target;
+        a.dur = a.vibe === 'guardian' || a.vibe === 'curioso' ? 3.2 + R() * 2.8 : 2 + R() * 2.5;
+        a.want = { sit: a.vibe === 'guardian' || R() < 0.7, tilt: a.vibe === 'curioso' || R() < 0.35 };
+        a.excite = a.vibe === 'guardian' ? 0.75 : 0.6;
+      },
       tick(a) { a.look = a.d.target?.pos ? tmp.copy(a.d.target.pos).setY(0.4) : null; return a.t > a.dur; },
     },
     wander: {
       enter(a) {
-        const p = a.role === 'pack' || a.role === 'joined' ? meadowPoint() : tmp.copy(a.pos).add(new THREE.Vector3((R() - 0.5) * 6, 0, (R() - 0.5) * 6));
-        a.goal = { x: p.x, z: p.z, speed: (a.kind === 'gato' ? 0.6 : R() < 0.5 ? 0.75 : 1.5) * a.s, stop: 0.2 };
-        a.want = {};
-        a.excite = 0.5;
+        const p = isMeadowRole(a.role) ? zonePoint(a) : tmp.copy(a.pos).add(new THREE.Vector3((R() - 0.5) * 6, 0, (R() - 0.5) * 6));
+        const spMul = a.kind === 'gato' ? 0.65
+          : a.vibe === 'tranquilo' ? 0.6
+          : a.vibe === 'timido' ? 0.72
+          : (a.vibe === 'jugueton' || a.vibe === 'saltarin' || a.vibe === 'travieso') ? (1.35 + R() * 0.55)
+          : (R() < 0.5 ? 0.8 : 1.45);
+        a.goal = { x: p.x, z: p.z, speed: spMul * a.s, stop: 0.2 };
+        a.want = a.vibe === 'curioso' && R() < 0.35 ? { sniff: true } : {};
+        a.excite = a.vibe === 'tranquilo' ? 0.3 : (a.vibe === 'jugueton' || a.vibe === 'saltarin') ? 0.8 : 0.5;
         a.look = null;
         a.dur = 9;
       },
@@ -375,11 +573,115 @@ export function createSpirits(scene, { blocked, tier }) {
       },
       tick(a) { return a.t > a.dur; },
     },
+    dig: {
+      enter(a) {
+        a.goal = null;
+        a.want = { bow: true };
+        a.excite = 0.85;
+        a.dur = 2.3 + R() * 1.3;
+        a.d.digT = 0;
+        say('dig', a);
+      },
+      tick(a, dt) {
+        a.d.digT += dt;
+        if (a.d.digT > 0.14) {
+          a.d.digT = 0;
+          const paw = a.pet.pawWorld(R() < 0.5 ? 0 : 1, tmp2);
+          fx.emit(paw, new THREE.Color(1.4, 1.05, 0.45), 2, { spread: 0.14, up: 0.55, speed: 0.55, sz: 0.032, lifeT: 0.55 });
+        }
+        if (a.t > a.dur) { a.want = {}; a.pet.anim.trigger('shake'); return true; }
+        return false;
+      },
+    },
+    butterfly: {
+      enter(a) {
+        a.d.c = isMeadowRole(a.role) ? zonePoint(a, 0.7) : a.pos.clone();
+        a.d.ang = R() * TAU;
+        a.d.dir = R() < 0.5 ? 1 : -1;
+        a.dur = 4.2 + R() * 2.4;
+        a.excite = 0.95;
+        a.want = {};
+        bFly.userData.owner = a;
+        bFly.visible = true;
+        say('butterfly', a);
+      },
+      tick(a, dt) {
+        if (bFly.userData.owner !== a) return true;
+        a.d.ang += a.d.dir * 1.45 * dt;
+        const r = 1.8 + Math.sin(a.t * 2.1) * 0.9;
+        const bx = a.d.c.x + Math.sin(a.d.ang) * r;
+        const bz = a.d.c.z + Math.cos(a.d.ang * 1.5) * r;
+        const by = (up ? 0 : groundY(bx, bz)) + 0.55 + Math.sin(a.t * 4.5) * 0.22;
+        bFly.position.set(bx, by, bz);
+        bFly.rotation.y = a.d.ang + (a.d.dir > 0 ? 0 : Math.PI);
+        const flap = Math.sin(a.t * 22) * 0.65;
+        bFly.children[0].rotation.z = flap;
+        bFly.children[1].rotation.z = -flap;
+        a.look = bFly.position;
+        a.goal = { x: bx, z: bz, speed: 2.9 * a.s, stop: 0.35 };
+        if (R() < dt * 0.85 && !a.pet.anim.busy && dist2(a.pos, bFly.position) < 1.2) {
+          a.pet.anim.trigger('jump', { h: 0.26, d: 0.42 });
+          fx.emit(bFly.position, new THREE.Color(1.7, 1.2, 1.5), 5, { spread: 0.2, up: 0.5, sz: 0.035 });
+        }
+        if (a.t > a.dur) {
+          if (bFly.userData.owner === a) { bFly.visible = false; bFly.userData.owner = null; }
+          return true;
+        }
+        return false;
+      },
+    },
+    tug: {
+      enter(a, partner) {
+        a.d.partner = partner;
+        a.dur = 3.2 + R() * 1.4;
+        a.excite = 1;
+        a.d.ph = R() * TAU;
+        tugRope.userData.a = a;
+        tugRope.userData.b = partner;
+        tugRope.visible = true;
+      },
+      tick(a) {
+        const p = a.d.partner;
+        if (!p || p.state !== 'tug') {
+          a.want = {};
+          if (tugRope.userData.a === a || tugRope.userData.b === a) tugRope.visible = false;
+          return true;
+        }
+        const dx = a.pos.x - p.pos.x;
+        const dz = a.pos.z - p.pos.z;
+        const d = Math.hypot(dx, dz) || 1;
+        const gap = 0.46 * (a.s + p.s);
+        const pull = Math.sin(a.t * 6 + a.d.ph) * 0.08;
+        a.goal = { x: p.pos.x + (dx / d) * (gap + pull), z: p.pos.z + (dz / d) * (gap + pull), speed: 1.1 * a.s, stop: 0.04, face: p.pos };
+        a.look = tmp.copy(p.pos).setY(0.35 * p.s);
+        a.want = { bow: true, tilt: Math.sin(a.t * 8) > 0 };
+        if (tugRope.userData.a === a) {
+          const ma = a.pet.mouthWorld(tmp);
+          const mb = p.pet.mouthWorld(tmp2);
+          tugRope.position.lerpVectors(ma, mb, 0.5);
+          tugRope.scale.set(1, 1, Math.max(0.15, ma.distanceTo(mb)));
+          tugRope.lookAt(mb);
+          tugRope.visible = true;
+        }
+        if (a.t > a.dur) {
+          a.want = {};
+          a.d.partner = null;
+          tugRope.visible = false;
+          if (p.state === 'tug') { p.d.partner = null; go(p, 'chase', a); }
+          go(a, 'zoomies');
+          return null;
+        }
+        return false;
+      },
+    },
     zoomies: {
       enter(a) {
+        const c = zoneCenter(a);
+        a.d.cx = c.x;
+        a.d.cz = c.z;
         a.d.dir = R() < 0.5 ? 1 : -1;
-        a.d.rad = 2.8 + R() * 2.8;
-        a.d.ang = Math.atan2(a.pos.x - MEADOW.x, a.pos.z - MEADOW.z);
+        a.d.rad = a.zone === 'hall' ? 2.1 + R() * 1.4 : 2.6 + R() * 2.4;
+        a.d.ang = Math.atan2(a.pos.x - c.x, a.pos.z - c.z);
         a.dur = 4 + R() * 3.5;
         a.excite = 1;
         a.want = {};
@@ -388,9 +690,9 @@ export function createSpirits(scene, { blocked, tier }) {
       },
       tick(a, dt) {
         a.d.ang += a.d.dir * (Math.max(a.speed, 1) / a.d.rad) * dt;
-        if (R() < dt * 0.22) { a.d.dir *= -1; a.d.rad = 2.5 + R() * 3; }
+        if (R() < dt * 0.22) { a.d.dir *= -1; a.d.rad = a.zone === 'hall' ? 2.0 + R() * 1.4 : 2.4 + R() * 2.6; }
         const lead = 0.85 * a.d.dir;
-        a.goal = { x: MEADOW.x + Math.sin(a.d.ang + lead) * a.d.rad, z: MEADOW.z + Math.cos(a.d.ang + lead) * a.d.rad, speed: 4.5 * a.s, stop: 0 };
+        a.goal = { x: (a.d.cx ?? MEADOW.x) + Math.sin(a.d.ang + lead) * a.d.rad, z: (a.d.cz ?? MEADOW.z) + Math.cos(a.d.ang + lead) * a.d.rad, speed: (a.vibe === 'travieso' ? 5.0 : 4.5) * a.s, stop: 0 };
         return a.t > a.dur;
       },
       next: () => pickW([['idle', 2], ['bow', 1], ['tailchase', 0.4], ['rest', 0.6]]),
@@ -497,14 +799,17 @@ export function createSpirits(scene, { blocked, tier }) {
     },
     carry: {
       enter(a) {
-        const back = ball.thrower === 'player' && (a.role === 'companion' || R() < 0.75);
+        const back = ball.thrower === 'player' && (a.role === 'companion' || R() < (a.vibe === 'travieso' ? 0.35 : 0.75));
         a.d.mode = back ? 'return' : 'keep';
         a.dur = back ? 14 : 3.5 + R() * 3.5;
         a.want = { carry: true };
         a.excite = 1;
+        const c = zoneCenter(a);
+        a.d.cx = c.x;
+        a.d.cz = c.z;
         a.d.dir = R() < 0.5 ? 1 : -1;
-        a.d.rad = 3 + R() * 2;
-        a.d.ang = Math.atan2(a.pos.x - MEADOW.x, a.pos.z - MEADOW.z);
+        a.d.rad = a.zone === 'hall' ? 2.2 + R() * 1.2 : 3 + R() * 2;
+        a.d.ang = Math.atan2(a.pos.x - c.x, a.pos.z - c.z);
         // Los demás salen a perseguirlo.
         for (const b of others(a)) if (b.kind === 'perro' && (free(b) || b.state === 'ball') && dist2(a.pos, b.pos) < 10 && R() < 0.8) go(b, 'chase', a);
       },
@@ -524,7 +829,7 @@ export function createSpirits(scene, { blocked, tier }) {
           }
         } else {
           a.d.ang += a.d.dir * (Math.max(a.speed, 1) / a.d.rad) * dt;
-          a.goal = { x: MEADOW.x + Math.sin(a.d.ang + 0.8 * a.d.dir) * a.d.rad, z: MEADOW.z + Math.cos(a.d.ang + 0.8 * a.d.dir) * a.d.rad, speed: 3.3 * a.s, stop: 0 };
+          a.goal = { x: (a.d.cx ?? MEADOW.x) + Math.sin(a.d.ang + 0.8 * a.d.dir) * a.d.rad, z: (a.d.cz ?? MEADOW.z) + Math.cos(a.d.ang + 0.8 * a.d.dir) * a.d.rad, speed: 3.3 * a.s, stop: 0 };
           if (a.t > a.dur) {
             // Revoleo de cabeza: la tira para que la busquen.
             a.pet.anim.trigger('jump', { h: 0.1, d: 0.3 });
@@ -612,39 +917,78 @@ export function createSpirits(scene, { blocked, tier }) {
         const fz2 = Math.cos(o.heading);
         if (o.moving) {
           // Como en un paseo de verdad: adelante tuyo, un poco al costado, con la correa floja.
-          // De vez en cuando se desvía a olfatear algo (hasta donde da la correa).
-          a.d.sniffT = (a.d.sniffT ?? (6 + R() * 6)) - dt;
-          let lead = 1.55 * a.s + 0.35;
-          let lat = 0.38 * a.d.side;
+          // La personalidad cambia cómo te acompaña: mimoso bien pegadito, curioso olfateando más seguido.
+          const sniffFreq = a.vibe === 'curioso' || a.vibe === 'travieso' ? 3.5 + R() * 4 : 6 + R() * 6;
+          a.d.sniffT = (a.d.sniffT ?? sniffFreq) - dt;
+          let lead = (a.vibe === 'mimoso' ? 1.15 : a.vibe === 'guardian' ? 1.35 : 1.55) * a.s + 0.35;
+          let lat = (a.vibe === 'mimoso' ? 0.28 : 0.38) * a.d.side;
           if (a.d.sniffT < 0) {
             lat = 1.1 * a.d.side;
             lead = 1.0;
             a.want = { sniff: true };
-            if (a.d.sniffT < -1.4) { a.d.sniffT = 6 + R() * 8; a.d.side = R() < 0.5 ? 1 : -1; }
+            if (a.d.sniffT < -1.4) { a.d.sniffT = sniffFreq; a.d.side = R() < 0.5 ? 1 : -1; }
           } else a.want = {};
           const tx = o.pos.x + fx2 * lead + fz2 * lat;
           const tz = o.pos.z + fz2 * lead - fx2 * lat;
           const dt2 = Math.hypot(tx - a.pos.x, tz - a.pos.z);
           a.goal = { x: tx, z: tz, speed: clamp(dt2 * 2.6 + o.vel.length(), 0.6, 5.5) * Math.max(0.95, a.s), stop: 0.08 };
           a.look = a.want.sniff ? null : tmp.set(a.pos.x + fx2 * 3, 0.4, a.pos.z + fz2 * 3);
-          a.excite = 0.95;
+          a.excite = a.vibe === 'tranquilo' ? 0.65 : 0.95;
         } else {
           const still = o.still;
-          if (d > 1.6 || still < 0.6) a.goal = { x: o.pos.x + (a.pos.x - o.pos.x) / Math.max(d, 0.01) * 1.1, z: o.pos.z + (a.pos.z - o.pos.z) / Math.max(d, 0.01) * 1.1, speed: 2.2 * a.s, stop: 0.15, face: o.pos };
+          // Si su dueño se detiene en el puente, el espíritu se asoma a la baranda a mirar el agua y los pececitos.
+          if (!up && onBridge(o.pos.x, o.pos.z, 0.25) && still > 1.2) {
+            const side = a.d.side || 1;
+            const bx = BRIDGE.x + side * (BRIDGE.halfW - 0.22);
+            const bz = clamp(o.pos.z + Math.cos(o.heading) * 0.4, BRIDGE.z - BRIDGE.halfL + 0.6, BRIDGE.z + BRIDGE.halfL - 0.6);
+            const waterLook = { x: BRIDGE.x + side * 3.0, z: bz };
+            a.goal = { x: bx, z: bz, speed: 1.9 * a.s, stop: 0.14, face: waterLook };
+            a.look = tmp.set(waterLook.x, 0.05, waterLook.z);
+            a.want = { sit: arrived(a, 0.2) && still > 2.4, tilt: Math.sin(a.t * 1.5) > 0.3 };
+            a.excite = 0.65;
+            if (a.role === 'companion' && !a.d.bridgeTold && arrived(a, 0.25)) {
+              a.d.bridgeTold = true;
+              say('bridge', a);
+            }
+            return false;
+          }
+          const nearDist = a.vibe === 'mimoso' ? 0.92 : 1.1;
+          if (d > 1.6 || still < 0.6) a.goal = { x: o.pos.x + (a.pos.x - o.pos.x) / Math.max(d, 0.01) * nearDist, z: o.pos.z + (a.pos.z - o.pos.z) / Math.max(d, 0.01) * nearDist, speed: 2.2 * a.s, stop: 0.15, face: o.pos };
           else a.goal = { x: a.pos.x, z: a.pos.z, stop: 1, face: o.pos };
+          // Si frenás en la orilla del agua, tu mascota baja la cabecita a tomar agüita haciendo ondas.
+          const aheadW = !up && !inWater(a.pos.x, a.pos.z) && (
+            inWater(a.pos.x + Math.sin(a.heading) * 0.9, a.pos.z + Math.cos(a.heading) * 0.9)
+            || inWater(a.pos.x - Math.sin(a.heading) * 0.9, a.pos.z - Math.cos(a.heading) * 0.9)
+          );
+          if (aheadW && still > 1.6 && still < 9) {
+            a.want = { sniff: true };
+            a.look = null;
+            if (R() < dt * 1.8) fx.splash(a.pos.x + Math.sin(a.heading) * 0.42, a.pos.z + Math.cos(a.heading) * 0.42, 0.35);
+            return false;
+          }
           a.look = still < 10 ? tmp.copy(o.pos).setY(1.25) : null;
-          a.want = { sit: still > 1.4 && still < 16, lie: still >= 16, tilt: still > 3 && still < 5 };
+          const lieAt = a.vibe === 'tranquilo' ? 7 : 16;
+          a.want = { sit: still > 1.1 && still < lieAt, lie: still >= lieAt, tilt: (a.vibe === 'curioso' || a.vibe === 'mimoso') ? still > 1.8 && still < 7 : still > 3 && still < 5 };
           a.excite = still < 8 ? 0.7 : 0.3;
-          // Si estás quieto cerca del Prado, se va a jugar un rato.
-          if (a.role === 'companion' && still > 5 && dist2(o.pos, MEADOW) < MEADOW_R + 6 && pack.length && (a.cool.join || 0) <= 0) {
-            a.role = 'joined';
+          // Si estás quieto cerca de donde juega la manada, se va a jugar un rato con ellos (salvo el tímido o guardián).
+          const nearPack = pack.some((p) => dist2(o.pos, p.pos) < 12);
+          if ((a.role === 'companion' || a.role === 'remote') && a.vibe !== 'timido' && a.vibe !== 'guardian' && still > 5 && nearPack && pack.length && (a.cool.join || 0) <= 0) {
+            const wasRemote = a.role === 'remote';
+            a.role = wasRemote ? 'remote-joined' : 'joined';
             a.cool.join = 40;
             a.d.joinT = 14 + R() * 10;
-            say('join', a);
+            if (!wasRemote) say('join', a);
             go(a, 'bow');
             return null;
           }
-          if (a.role === 'companion' && still > 6 && still < 7 && R() < dt * 0.3) { go(a, pickW([['sniff', 1], ['tailchase', 0.5], ['roll', 0.4]])); return null; }
+          if (a.role === 'companion' && still > 6 && still < 7 && R() < dt * 0.35) {
+            const idleActs = a.vibe === 'mimoso' ? [['roll', 1.4], ['sniff', 0.5]]
+              : a.vibe === 'travieso' ? [['dig', 1.4], ['tailchase', 1.2], ['roll', 0.6]]
+              : a.vibe === 'curioso' ? [['sniff', 1.6], ['dig', 0.9]]
+              : [['sniff', 1], ['dig', 0.6], ['tailchase', 0.5], ['roll', 0.4]];
+            go(a, pickW(idleActs));
+            return null;
+          }
         }
         return false;
       },
@@ -696,7 +1040,8 @@ export function createSpirits(scene, { blocked, tier }) {
     if (ball.held !== a) return;
     ball.held = null;
     a.pet.mouthWorld(ball.pos);
-    ball.pos.y = Math.max(ball.r, ball.pos.y);
+    const fy = groundY(ball.pos.x, ball.pos.z, up) + ball.r;
+    ball.pos.y = Math.max(fy, ball.pos.y);
     const f = new THREE.Vector3(Math.sin(a.heading), 0, Math.cos(a.heading));
     ball.vel.copy(f).multiplyScalar(power).add(new THREE.Vector3(0, power * 0.55, 0));
     if (!power) ball.vel.set(f.x * 0.4, 0.5, f.z * 0.4);
@@ -704,51 +1049,93 @@ export function createSpirits(scene, { blocked, tier }) {
   }
 
   function reappear(a, o) {
-    fx.emit(tmp.copy(a.pos).setY(0.4), a.rim, 14, { up: 1 });
+    fx.emit(tmp.copy(a.pos).setY(a.pos.y + 0.4), a.rim, 14, { up: 1 });
     a.pos.set(o.pos.x - Math.sin(o.heading) * 1.4, 0, o.pos.z - Math.cos(o.heading) * 1.4);
     if (blocked(a.pos.x, a.pos.z, 0.2)) a.pos.set(o.pos.x, 0, o.pos.z);
+    a.pos.y = groundY(a.pos.x, a.pos.z, up);
     a.heading = o.heading;
     a.goal = null;
     a.speed = 0;
     a.turn = 0;
     a.fade = 0;
-    fx.emit(tmp.copy(a.pos).setY(0.4), a.rim, 20, { up: 1 });
+    fx.emit(tmp.copy(a.pos).setY(a.pos.y + 0.4), a.rim, 20, { up: 1 });
   }
 
-  // Qué hace un espíritu del Prado cuando termina lo que estaba haciendo.
+  // Qué hace un espíritu cuando termina lo que estaba haciendo, según su especie y personalidad.
   function chooseNext(a) {
-    if (a.role === 'joined' && (a.d.joinT ?? 0) <= 0) { a.role = 'companion'; return ['follow']; }
+    if ((a.role === 'joined' || a.role === 'remote-joined') && (a.d.joinT ?? 0) <= 0) {
+      a.role = a.role === 'remote-joined' ? 'remote' : 'companion';
+      return ['follow'];
+    }
     const cat = a.kind === 'gato';
     const bunny = a.kind === 'otro';
-    const near = dist2(player.pos, a.pos) < 7 && player.still > 0.5;
-    if (!ball.held && !ball.inAir && ball.idle > 2.5 && dist2(ball.pos, MEADOW) < MEADOW_R + 4 && !others(a).some((b) => b.state === 'ball')) {
-      if (!bunny && R() < (cat ? 0.25 : 0.7)) return ['ball'];
+    const vb = a.vibe || 'jugueton';
+    const near = dist2(player.pos, a.pos) < (vb === 'mimoso' ? 10 : 7) && player.still > 0.5;
+    const zc = zoneCenter(a);
+    if (!ball.held && !ball.inAir && ball.idle > 2.5 && dist2(ball.pos, zc) < 12 && !others(a).some((b) => b.state === 'ball')) {
+      const ballChance = vb === 'timido' ? 0.08 : vb === 'tranquilo' ? 0.25 : vb === 'jugueton' || vb === 'travieso' ? 0.85 : (cat ? 0.25 : 0.7);
+      if (!bunny && R() < ballChance) return ['ball'];
     }
     const runner = others(a).find((b) => (b.state === 'zoomies' || b.state === 'carry') && dist2(a.pos, b.pos) < 12);
-    if (runner && !cat && !bunny && R() < 0.55) return ['chase', runner];
-    if (near && (a.cool.greet || 0) <= 0 && a.role === 'pack' && R() < (cat ? 0.2 : 0.6)) return ['greet', player];
-    const buddy = !cat && !bunny && others(a).find((b) => b.kind === 'perro' && free(b) && dist2(a.pos, b.pos) < 3.5 && b.role !== 'companion');
-    if (buddy && R() < 0.22) { go(buddy, 'wrestle', a); return ['wrestle', buddy]; }
+    const chaseChance = vb === 'timido' ? 0.05 : vb === 'tranquilo' ? 0.18 : vb === 'jugueton' || vb === 'saltarin' || vb === 'travieso' ? 0.75 : 0.55;
+    if (runner && !cat && !bunny && R() < chaseChance) return ['chase', runner];
+    const greetChance = vb === 'timido' ? 0.0 : vb === 'mimoso' ? 0.88 : vb === 'jugueton' || vb === 'guardian' ? 0.72 : (cat ? 0.25 : 0.55);
+    if (near && (a.cool.greet || 0) <= 0 && a.role === 'pack' && R() < greetChance) return ['greet', player];
+    const buddy = !cat && !bunny && vb !== 'timido' && others(a).find((b) => b.kind === 'perro' && b.vibe !== 'timido' && free(b) && dist2(a.pos, b.pos) < 3.8 && b.role !== 'companion' && b.role !== 'remote');
+    const playChance = vb === 'jugueton' ? 0.45 : vb === 'travieso' || vb === 'saltarin' ? 0.35 : vb === 'tranquilo' ? 0.1 : 0.26;
+    if (buddy && R() < playChance) {
+      const game = !tugRope.visible && R() < 0.48 ? 'tug' : 'wrestle';
+      go(buddy, game, a);
+      return [game, buddy];
+    }
     const tired = a.pet.anim && a.excite < 0.3;
-    if (cat) return [pickW([['idle', 3], ['wander', 2], ['sniff', 1], ['rest', 2], ['roll', 0.5], ['watch', 1.5]]), others(a)[0]];
-    if (bunny) return [pickW([['wander', 3], ['sniff', 2], ['idle', 2], ['rest', 1]])];
-    return [pickW([['wander', 2.5], ['idle', 1.2], ['sniff', 1.4], ['bow', 1.6], ['zoomies', 1.1], ['roll', 0.45], ['rest', tired ? 2 : 0.5], ['tailchase', 0.35], ['watch', 0.6]]), others(a)[Math.floor(R() * others(a).length)]];
+    const canFly = !bFly.visible ? 0.75 : 0;
+    const targetBuddy = others(a)[Math.floor(R() * others(a).length)];
+    if (vb === 'timido') {
+      return [pickW([['wander', 2.8], ['watch', 2.6], ['rest', 2.2], ['sniff', 1.8], ['idle', 2.4]]), targetBuddy];
+    }
+    if (vb === 'tranquilo') {
+      return [pickW([['rest', 3.6], ['idle', 3.0], ['watch', 2.2], ['wander', 1.8], ['sniff', 1.3], ['roll', 0.5]]), targetBuddy];
+    }
+    if (vb === 'saltarin') {
+      return [pickW([['zoomies', 2.4], ['butterfly', canFly * 2.2], ['bow', 2.0], ['wander', 2.0], ['tailchase', 1.1], ['idle', 1.0], ['roll', 0.8]]), targetBuddy];
+    }
+    if (vb === 'mimoso') {
+      return [pickW([['idle', 2.4], ['roll', 1.8], ['wander', 2.0], ['watch', 1.8], ['bow', 1.4], ['rest', 1.2], ['sniff', 1.0]]), targetBuddy];
+    }
+    if (vb === 'curioso') {
+      return [pickW([['sniff', 3.2], ['butterfly', canFly * 2.4], ['dig', 1.8], ['watch', 2.2], ['wander', 2.2], ['idle', 1.0]]), targetBuddy];
+    }
+    if (vb === 'guardian') {
+      return [pickW([['watch', 3.4], ['idle', 2.8], ['wander', 2.4], ['sniff', 1.2], ['rest', 0.9]]), targetBuddy];
+    }
+    if (vb === 'travieso') {
+      return [pickW([['dig', 2.6], ['zoomies', 2.4], ['tailchase', 1.8], ['butterfly', canFly * 1.6], ['roll', 1.2], ['bow', 1.5], ['wander', 1.8]]), targetBuddy];
+    }
+    if (cat) return [pickW([['idle', 3], ['wander', 2], ['sniff', 1], ['butterfly', canFly], ['rest', 2], ['roll', 0.5], ['watch', 1.5]]), others(a)[0]];
+    if (bunny) return [pickW([['wander', 3], ['sniff', 2], ['dig', 0.8], ['butterfly', canFly * 0.7], ['idle', 2], ['rest', 1]])];
+    return [pickW([['wander', 2.4], ['idle', 1.2], ['sniff', 1.3], ['dig', 0.65], ['butterfly', canFly], ['bow', 2.0], ['zoomies', 1.4], ['roll', 0.55], ['rest', tired ? 2 : 0.5], ['tailchase', 0.45], ['watch', 0.6]]), targetBuddy];
   }
 
   function think(a, dt) {
     a.t += dt;
     for (const k in a.cool) a.cool[k] -= dt;
-    if (a.role === 'joined') {
+    if (a.role === 'joined' || a.role === 'remote-joined') {
       a.d.joinT = (a.d.joinT ?? 0) - dt;
       const o = companionOwner(a);
-      if (o.moving && dist2(o.pos, a.pos) > 4) { a.role = 'companion'; if (ball.held === a) dropBall(a, 0); go(a, 'follow'); return; }
+      if (o.moving && dist2(o.pos, a.pos) > 4) {
+        a.role = a.role === 'remote-joined' ? 'remote' : 'companion';
+        if (ball.held === a) dropBall(a, 0);
+        go(a, 'follow');
+        return;
+      }
     }
     const r = S[a.state].tick(a, dt);
     if (r === null) return;
     if (r) {
       const nx = S[a.state].next?.(a);
       if (nx) go(a, nx);
-      else if (a.role === 'companion') go(a, 'follow');
+      else if (a.role === 'companion' || a.role === 'remote') go(a, 'follow');
       else { const [st, arg] = chooseNext(a); go(a, st, arg); }
     }
   }
@@ -763,8 +1150,9 @@ export function createSpirits(scene, { blocked, tier }) {
     const v = ball.vel;
     v.y -= 9.8 * dt;
     ball.pos.addScaledVector(v, dt);
-    if (ball.pos.y < ball.r) {
-      ball.pos.y = ball.r;
+    const floorY = groundY(ball.pos.x, ball.pos.z, up) + ball.r;
+    if (ball.pos.y < floorY) {
+      ball.pos.y = floorY;
       if (v.y < -1.2) {
         if (v.y < -2.6 && dist2(ball.pos, camPos) < 14) listeners.event.forEach((fn) => fn('bounce'));
         v.y = -v.y * 0.55;
@@ -772,15 +1160,15 @@ export function createSpirits(scene, { blocked, tier }) {
         v.z *= 0.82;
       } else v.y = 0;
     }
-    if (ball.pos.y <= ball.r + 0.001) { const f = Math.exp(-dt * 1.6); v.x *= f; v.z *= f; }
-    // Rebota contra el cerco, el salón y los árboles.
+    if (ball.pos.y <= floorY + 0.001) { const f = Math.exp(-dt * 1.6); v.x *= f; v.z *= f; }
+    // Rebota contra el cerco (en las nubes), el salón y los árboles.
     const rd = Math.hypot(ball.pos.x, ball.pos.z);
-    if (rd > GARDEN_RADIUS - 1.2) { const nx = ball.pos.x / rd; const nz = ball.pos.z / rd; const dot = v.x * nx + v.z * nz; if (dot > 0) { v.x -= 1.6 * dot * nx; v.z -= 1.6 * dot * nz; } }
+    if (up && rd > GARDEN_RADIUS - 1.2) { const nx = ball.pos.x / rd; const nz = ball.pos.z / rd; const dot = v.x * nx + v.z * nz; if (dot > 0) { v.x -= 1.6 * dot * nx; v.z -= 1.6 * dot * nz; } }
     const hx = ball.pos.x - HALL_CENTER.x;
     const hz = ball.pos.z - HALL_CENTER.z;
     const hd = Math.hypot(hx, hz);
     const inHall = hd < HALL_RADIUS + 1.4;
-    if (inHall && !ball.wasInHall && ball.thrower !== 'player' && ball.pos.y < 3) { const dot = (v.x * hx + v.z * hz) / hd; if (dot < 0) { v.x -= 1.6 * dot * hx / hd; v.z -= 1.6 * dot * hz / hd; } }
+    if (!up && inHall && !ball.wasInHall && ball.thrower !== 'player' && ball.pos.y < 3) { const dot = (v.x * hx + v.z * hz) / hd; if (dot < 0) { v.x -= 1.6 * dot * hx / hd; v.z -= 1.6 * dot * hz / hd; } }
     else ball.wasInHall = inHall;
     if (blocked(ball.pos.x, ball.pos.z, 0.02) && ball.pos.y < 1.2) { v.x *= -0.5; v.z *= -0.5; ball.pos.addScaledVector(v, dt * 2); }
     const sp = Math.hypot(v.x, v.z);
@@ -789,18 +1177,20 @@ export function createSpirits(scene, { blocked, tier }) {
       ball.mesh.rotation.z -= (v.x / ball.r) * dt;
     }
     if (sp < 0.08 && !ball.inAir) ball.idle += dt; else ball.idle = 0;
-    // Si quedó olvidada lejos del Prado, vuelve sola.
-    // (Si estás cerca jugando con ella, no se la lleva.)
-    if (ball.idle > 25 && dist2(ball.pos, MEADOW) > MEADOW_R + 3 && dist2(ball.pos, player.pos) > 8) {
+    // Si quedó olvidada lejos de la zona de juego, vuelve sola (o cerca tuyo si estás explorando el mundo abierto).
+    const exploring = !up && Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 4;
+    const playCenter = up ? SKY_TERRACE : exploring ? wildCenter : MEADOW;
+    const playRad = up ? SKY_TERRACE_R + 4 : MEADOW_R + 3;
+    if (ball.idle > 25 && dist2(ball.pos, playCenter) > playRad && dist2(ball.pos, player.pos) > 8) {
       fx.emit(ball.pos, new THREE.Color(1.3, 1.5, 0.5), 12, { up: 1 });
-      ball.pos.copy(meadowPoint(3)).setY(1.6);
+      ball.pos.set(playCenter.x + (R() - 0.5) * 2.5, 1.6, playCenter.z + (R() - 0.5) * 2.5);
       ball.vel.set(0, 0, 0);
       ball.thrower = null;
       ball.idle = 0;
     }
   }
 
-  // ---------- armar la manada ----------
+  // ---------- armar la manada en cada uno de los 99 pisos ----------
   function spawnAgent(look, info, role) {
     const a = makeAgent(look, info);
     a.role = role;
@@ -820,36 +1210,60 @@ export function createSpirits(scene, { blocked, tier }) {
   }
 
   let packKey = '';
-  function setPack(memorials, excludeId = null) {
-    // Juegan las huellitas del muro: primero las destacadas, después perros, y algún gato.
+  let lastMemorials = [];
+  let lastExcludeId = null;
+  function setPack(memorials = lastMemorials, excludeId = lastExcludeId, floor = currentFl) {
+    lastMemorials = memorials;
+    lastExcludeId = excludeId;
+    currentFl = floor;
+    up = floor > 0;
+    // En cada piso juegan las huellitas de ese piso, las del muro y espíritus propios del piso.
     const all = memorials.filter((m) => m.id !== excludeId);
-    const dogs = all.filter((m) => (m.species || 'perro') === 'perro');
-    const featured = dogs.filter((m) => m.featured);
-    const rest = dogs.filter((m) => !m.featured).sort((a, b) => (b.candles || 0) - (a.candles || 0));
-    const chosen = [...featured, ...rest].slice(0, maxPack - 1);
-    const cat = all.find((m) => m.species === 'gato');
-    if (cat) chosen.push(cat);
-    while (chosen.length < Math.min(maxPack, 3)) chosen.push({ id: `jardin-${chosen.length}`, species: 'perro', name: '' });
-    const key = chosen.map((m) => `${m.id}:${m.look ? JSON.stringify(m.look) : ''}`).join('|');
+    const onThisFloor = all.filter((m) => (floor === 0 ? (m.featured || (m.slot >= 0 && Math.floor(m.slot / SLOTS_PER_FLOOR) === 0)) : (m.slot >= 0 && Math.floor(m.slot / SLOTS_PER_FLOOR) === floor)));
+    const otherFloor = all.filter((m) => !onThisFloor.includes(m)).sort((a, b) => (b.candles || 0) - (a.candles || 0));
+    const rotated = otherFloor.length
+      ? otherFloor.slice((floor * 3) % otherFloor.length).concat(otherFloor.slice(0, (floor * 3) % otherFloor.length))
+      : [];
+    const chosen = [...onThisFloor, ...rotated].slice(0, maxPack);
+    let idx = 0;
+    while (chosen.length < maxPack) {
+      const isCat = idx % 4 === 3;
+      chosen.push({ id: `espiritu-p${floor}-${idx}`, species: isCat ? 'gato' : 'perro', name: '' });
+      idx++;
+    }
+    const meadowCount = Math.ceil(maxPack * 0.65);
+    const zoneForIndex = (i) => {
+      if (!up) return i < meadowCount ? 'meadow' : 'lawn';
+      return i % 2 === 0 ? 'hall' : 'sky';
+    };
+    const key = `${floor}|` + chosen.map((m, i) => `${m.id}:${zoneForIndex(i)}:${m.look ? JSON.stringify(m.look) : ''}`).join('|');
     if (key === packKey) return;
     packKey = key;
     const keep = new Map(pack.map((a) => [a.d.key, a]));
     const next = [];
-    for (const m of chosen) {
-      const k = `${m.id}:${m.look ? JSON.stringify(m.look) : ''}`;
+    chosen.forEach((m, i) => {
+      const zone = zoneForIndex(i);
+      const k = `${floor}:${m.id}:${zone}:${m.look ? JSON.stringify(m.look) : ''}`;
       let a = keep.get(k);
       if (a) keep.delete(k);
       else {
-        a = spawnAgent(lookFor(m), { name: m.name, memorialId: m.featured || m.candles !== undefined ? m.id : null }, 'pack');
+        a = spawnAgent(lookFor(m), { name: m.name, memorialId: m.featured || m.candles !== undefined ? m.id : null, zone }, 'pack');
         a.d.key = k;
-        a.pos.copy(meadowPoint());
+        a.pos.copy(zonePoint(a));
+        a.pos.y = groundY(a.pos.x, a.pos.z, up);
         go(a, 'idle');
       }
       next.push(a);
-    }
+    });
     for (const a of keep.values()) removeAgent(a);
     pack.length = 0;
     pack.push(...next);
+    if (!ball.held || ball.held.role === 'pack') {
+      if (ball.held) dropBall(ball.held, 0);
+      const bc = up ? SKY_TERRACE : MEADOW;
+      ball.pos.set(bc.x + 1.2, groundY(bc.x + 1.2, bc.z - 0.8, up) + ball.r, bc.z - 0.8);
+      ball.vel.set(0, 0, 0);
+    }
   }
 
   // ---------- pasear ----------
@@ -865,9 +1279,10 @@ export function createSpirits(scene, { blocked, tier }) {
     // Aparece adelante tuyo (en el paseo va adelante, con la correa).
     const end = new THREE.Vector3(player.pos.x + Math.sin(player.heading) * 1.6, 0, player.pos.z + Math.cos(player.heading) * 1.6);
     if (blocked(end.x, end.z, 0.25)) end.copy(player.pos);
+    end.y = groundY(end.x, end.z, up);
     a.pos.copy(end);
     a.heading = player.heading;
-    a.d.orb = { start, end: end.clone().setY(0.5), t: 0 };
+    a.d.orb = { start, end: end.clone().setY(end.y + 0.5), t: 0 };
     go(a, 'follow');
     return a;
   }
@@ -879,6 +1294,7 @@ export function createSpirits(scene, { blocked, tier }) {
       ball.held = null;
       if (h.state === 'carry') go(h, h.role === 'pack' ? 'idle' : 'follow');
     }
+    ball.mesh.visible = true;
     ball.pos.copy(from);
     ball.vel.set(Math.sin(heading) * 6.5 * power, 4.3 * power, Math.cos(heading) * 6.5 * power);
     ball.thrower = 'player';
@@ -892,12 +1308,12 @@ export function createSpirits(scene, { blocked, tier }) {
     const seen = new Set();
     for (const o of list) {
       if (!o.pet) continue;
-      const key = `${o.sid}:${o.pet.n}:${o.pet.sp}:${o.pet.fur}:${o.pet.ears}:${o.pet.size}:${o.pet.snout}`;
+      const key = `${o.sid}:${JSON.stringify(o.pet)}`;
       seen.add(o.sid);
       let a = remotes.get(o.sid);
       if (a && a.d.key !== key) { removeAgent(a); remotes.delete(o.sid); a = null; }
       if (!a) {
-        a = spawnAgent(lookFor({ id: `${o.sid}-${o.pet.n}`, name: o.pet.n, species: o.pet.sp, look: { fur: o.pet.fur, ears: o.pet.ears, size: o.pet.size, snout: o.pet.snout } }), { name: o.pet.n }, 'remote');
+        a = spawnAgent(lookFor({ id: `${o.sid}-${o.pet.n}`, name: o.pet.n, species: o.pet.sp, look: o.pet }), { name: o.pet.n }, 'remote');
         a.d.key = key;
         a.owner = { pos: o.pos, heading: 0, moving: false, still: 0, vel: new THREE.Vector3(), last: o.pos.clone() };
         a.pos.set(o.pos.x + 1, 0, o.pos.z);
@@ -949,7 +1365,7 @@ export function createSpirits(scene, { blocked, tier }) {
       const k = i / LEASH_PTS;
       const p = new THREE.Vector3().lerpVectors(leashA, leashB, k);
       p.y -= Math.sin(Math.PI * k) * slack;
-      p.y = Math.max(0.04, p.y);
+      p.y = Math.max(a.pos.y + 0.04, p.y);
       pts.push(p);
       p.toArray(leashPos, i * 3);
     }
@@ -960,16 +1376,31 @@ export function createSpirits(scene, { blocked, tier }) {
     leashTube.visible = true;
   }
 
+  // En todos los pisos (del jardín 1 al cielo 99) juegan espíritus: en el salón y en la terraza de nubes.
+  let up = false;
+  function setUp(v, floor = v ? Math.max(1, currentFl) : 0) {
+    up = v;
+    if (bFly.visible) bFly.visible = false;
+    if (tugRope.visible) tugRope.visible = false;
+    if (companion?.role === 'joined') { companion.role = 'companion'; go(companion, 'follow'); }
+    if (floor !== currentFl) setPack(lastMemorials, lastExcludeId, floor);
+  }
+
   return {
-    pickables,
+    get pickables() {
+      return pickables;
+    },
     ball,
     get companion() { return companion; },
     get pack() { return pack; },
-    setPack,
+    setPack(memorials, excludeId, floor = currentFl) { setPack(memorials, excludeId, floor); },
+    setFloor(floor, memorials = lastMemorials, excludeId = lastExcludeId) { setPack(memorials, excludeId, floor); },
+    setUp,
     walk,
     throwBall,
     setRemote,
     on(type, fn) { listeners[type]?.push(fn); },
+    splash(x, z, strength = 1) { fx.splash(x, z, strength); },
     sparkle(p, color = new THREE.Color(1.6, 1.2, 0.8), n = 18) { fx.emit(p, color, n, { spread: 0.5, up: 1, speed: 0.8, sz: 0.06 }); },
     spiritOf(obj) { return allAgents().find((a) => a.pet.hit === obj) || null; },
     poke(a) {
@@ -991,6 +1422,13 @@ export function createSpirits(scene, { blocked, tier }) {
       if (ball.held === companion) dropBall(companion, 0);
       go(companion, 'called');
     },
+    treat() {
+      if (!companion) return;
+      companion.role = 'companion';
+      if (ball.held === companion) dropBall(companion, 0);
+      go(companion, 'poked');
+      fx.emit(tmp.copy(companion.pos).setY(companion.pos.y + 0.55 * companion.s), new THREE.Color(1.9, 1.35, 0.7), 24, { spread: 0.45, up: 1.15, speed: 0.85, sz: 0.065 });
+    },
     // El personaje: posición, rumbo y si se está moviendo (para que el acompañante lo siga).
     // De dónde sale la correa (la mano de tu personaje).
     setHand(fn) { handFn = fn; },
@@ -1003,6 +1441,27 @@ export function createSpirits(scene, { blocked, tier }) {
     },
     update(dt, cam) {
       camPos = cam;
+      // En el mundo abierto infinito, los espíritus de la zona 'lawn' van apareciendo en los claros por donde caminás.
+      if (!up && Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 6) {
+        const aheadX = player.pos.x + Math.sin(player.heading) * 14;
+        const aheadZ = player.pos.z + Math.cos(player.heading) * 14;
+        if (Math.hypot(aheadX - wildCenter.x, aheadZ - wildCenter.z) > 22) {
+          wildCenter.set(aheadX, 0, aheadZ);
+        }
+        for (const a of pack) {
+          if (a.zone === 'lawn' && dist2(a.pos, player.pos) > 46) {
+            const p = zonePoint(a);
+            if (!blocked(p.x, p.z, 0.3)) {
+              a.pos.set(p.x, groundY(p.x, p.z, up), p.z);
+              a.goal = null;
+              a.fade = 0;
+              go(a, R() < 0.5 ? 'zoomies' : 'wander');
+            }
+          }
+        }
+      } else {
+        wildCenter.copy(LAWN);
+      }
       for (const a of remotes.values()) {
         const o = a.owner;
         const moved = o.pos.distanceTo(o.last);

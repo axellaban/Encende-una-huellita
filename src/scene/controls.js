@@ -9,16 +9,23 @@ import * as THREE from 'three';
 import { GARDEN_RADIUS, SPAWN, inWater, groundY } from './world.js';
 
 const BODY = 0.3;
-const HEAD = 1.3;
-const DIST_MIN = 2.3;
-const DIST_MAX = 10;
+const HEAD = 1.55;
+const DEFAULT_PITCH = 0.24;
+const DIST_MIN = 2.6;
+const DIST_MAX = 14;
 
 export function createBlocker(colliders) {
   return function blocked(x, z, body = BODY) {
-    if (Math.hypot(x, z) > GARDEN_RADIUS - 0.6 - body) return true;
+    // En la planta baja el jardín es un mundo abierto infinito; arriba (las nubes) mantiene el radio de la terraza.
+    if (colliders.up && Math.hypot(x, z) > GARDEN_RADIUS - 0.6 - body) return true;
     for (const c of colliders.circles) {
       if (c.ground && colliders.up) continue; // en los pisos de arriba no hay árboles ni bancos
       if (Math.hypot(x - c.x, z - c.z) < c.r + body) return true;
+    }
+    if (!colliders.up && colliders.openCircles) {
+      for (const c of colliders.openCircles) {
+        if (Math.hypot(x - c.x, z - c.z) < c.r + body) return true;
+      }
     }
     for (const [x1, z1, x2, z2] of colliders.segments) {
       const dx = x2 - x1;
@@ -48,10 +55,10 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   const player = { pos: new THREE.Vector3(SPAWN.x, 0, SPAWN.z), heading: Math.PI, speed: 0, turn: 0, moving: false };
   let mode = 'fixed';
   let yaw = 0;
-  let pitch = 0.3;
-  let dist = 4.8;
-  let distTarget = 4.8;
-  let camDist = 4.8;
+  let pitch = DEFAULT_PITCH;
+  let dist = 6.8;
+  let distTarget = 6.8;
+  let camDist = 6.8;
   const pivot = new THREE.Vector3(SPAWN.x, HEAD, SPAWN.z);
   const focus = { target: new THREE.Vector3(), yaw0: 0, dist: 3 };
   let vYaw = 0;
@@ -92,11 +99,12 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
   marker.visible = false;
 
   const portrait = () => camera.aspect < 0.8;
-  const defaultDist = () => (portrait() ? 5.6 : 4.8);
+  // Vista estilo GTA: más atrás y con el personaje en el tercio inferior para ver bien el horizonte.
+  const defaultDist = () => (portrait() ? 7.8 : 6.8);
   distTarget = dist = camDist = defaultDist();
 
-  // Al río no se entra: se cruza por el puente (en los pisos de arriba no hay río).
-  const stop = (x, z) => blocked(x, z) || (!colliders.up && inWater(x, z));
+  // Se puede vadear el arroyo y el estanque (chapoteando en el agua luminosa).
+  const stop = (x, z) => blocked(x, z);
   function tryMove(dx, dz) {
     const p = player.pos;
     if (!stop(p.x + dx, p.z + dz)) { p.x += dx; p.z += dz; return true; }
@@ -231,13 +239,16 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     let best = d;
     for (const s of colliders.segments) {
       const t = segHit(from.x, from.z, from.x + o.x, from.z + o.z, s);
-      if (t !== null) best = Math.min(best, Math.max(0.9, t * d - 0.35));
+      // Mirando un nicho (foco), el punto mirado está pegado a la pared: esa pared no cuenta.
+      if (t !== null && (circles || t * d > 0.95)) best = Math.min(best, Math.max(0.9, t * d - 0.35));
     }
     // Postes, troncos y faroles: si quedan en la línea de la cámara, se acerca para no taparte.
     const len = Math.hypot(o.x, o.z) || 1;
     const ux = o.x / len;
     const uz = o.z / len;
-    for (const c of circles ? colliders.circles : []) {
+    const allCircles = circles ? (colliders.up || !colliders.openCircles ? colliders.circles : [...colliders.circles, ...colliders.openCircles]) : [];
+    for (const c of allCircles) {
+      if ((c.ground && colliders.up) || c.r <= 0) continue;
       const cx = c.x - from.x;
       const cz = c.z - from.z;
       const along = cx * ux + cz * uz;
@@ -249,20 +260,22 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         best = Math.min(best, Math.max(1.0, (hitAt / len) * d - 0.1));
       }
     }
-    for (let k = 0; k < 6; k++) {
-      const x = from.x + (o.x * best) / d;
-      const z = from.z + (o.z * best) / d;
-      if (Math.hypot(x, z) < GARDEN_RADIUS + 0.3) break;
-      best *= 0.85;
+    if (colliders.up) {
+      for (let k = 0; k < 6; k++) {
+        const x = from.x + (o.x * best) / d;
+        const z = from.z + (o.z * best) / d;
+        if (Math.hypot(x, z) < GARDEN_RADIUS + 0.3) break;
+        best *= 0.85;
+      }
     }
     return best;
   }
 
   function followPose(outPos, outLook) {
-    const lift = portrait() ? 0.15 : 0;
+    const lift = portrait() ? 0.24 : 0.14;
     outLook.set(pivot.x, pivot.y + lift, pivot.z);
     offset(yaw, pitch, camDist, outPos).add(outLook);
-    outPos.y = Math.max(0.45, outPos.y);
+    outPos.y = Math.max(0.55, outPos.y);
   }
 
   function anglesFrom(stand, target) {
@@ -279,7 +292,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     // Si venimos de mirar un marco, la cámara queda detrás del personaje mirando hacia donde mira él.
     if (mode !== 'follow') {
       yaw = player.heading + Math.PI;
-      pitch = 0.3;
+      pitch = DEFAULT_PITCH;
       distTarget = defaultDist();
       dist = camDist = distTarget;
     }
@@ -329,7 +342,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
     walkTo(point) {
       if (mode === 'focus') leaveFocus();
       walkTarget = new THREE.Vector3(point.x, 0, point.z);
-      marker.position.set(point.x, (point.y || 0) + 0.03, point.z);
+      marker.position.set(point.x, Math.max(point.y || 0, groundY(point.x, point.z, colliders.up)) + 0.025, point.z);
       marker.visible = true;
     },
     // Vuelo de cámara a un punto mirando a un objetivo; al llegar queda en modo "focus".
@@ -356,7 +369,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
       camera.lookAt(lookAt);
     },
     placePlayer(p, facing = null) {
-      player.pos.set(p.x, colliders.up ? 0 : groundY(p.x, p.z), p.z);
+      player.pos.set(p.x, groundY(p.x, p.z, colliders.up), p.z);
       if (facing) player.heading = Math.atan2(facing.x - p.x, facing.z - p.z);
       player.speed = 0;
       walkTarget = null;
@@ -367,7 +380,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
       mode = 'follow';
       fly = null;
       yaw = player.heading + Math.PI;
-      pitch = 0.3;
+      pitch = DEFAULT_PITCH;
       dist = distTarget = camDist = defaultDist();
       pivot.set(player.pos.x, HEAD, player.pos.z);
       followPose(camera.position, lookAt);
@@ -396,7 +409,7 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         // Primero el salto; después baja suave, como con un paracaídas de tela.
         air.vy = air.t < 0.55 ? air.vy - 14 * dt : air.vy + (-1.05 - air.vy) * Math.min(1, dt * 2.5);
         player.pos.y += air.vy * dt;
-        const gy = colliders.up ? 0 : groundY(player.pos.x, player.pos.z);
+        const gy = groundY(player.pos.x, player.pos.z, colliders.up);
         if (air.t > 0.5 && player.pos.y <= gy) {
           player.pos.y = gy;
           air = null;
@@ -472,8 +485,8 @@ export function createControls(camera, dom, colliders, { reduced = false } = {})
         if (!moving) player.speed *= 0.5;
       }
       player.moving = moving && player.speed > 0.15;
-      // Sube y baja por el arco del puente.
-      const gy = colliders.up ? 0 : groundY(player.pos.x, player.pos.z);
+      // Sube y baja por el arco del puente y el piso de madera del salón.
+      const gy = groundY(player.pos.x, player.pos.z, colliders.up);
       player.pos.y += (gy - player.pos.y) * Math.min(1, dt * 12);
       if (player.moving) listeners.move.forEach((fn) => fn());
       if (marker.visible) {

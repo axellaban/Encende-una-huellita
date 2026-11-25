@@ -544,12 +544,24 @@ let MAT = null;
 function giftMaterial() {
   if (MAT) return MAT;
   MAT = new THREE.MeshLambertMaterial({ vertexColors: true });
-  // De noche se tienen que ver: un poco de luz propia; lo que tiene color > 1 brilla (bloom).
+  // De noche se tienen que ver: luz propia suave, borde cálido (fresnel) de vela y bloom en colores HDR (> 1).
   MAT.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-      totalEmissiveRadiance += vColor.rgb * 0.3 + max(vColor.rgb - 1.0, 0.0) * 1.6;`);
+    sh.vertexShader = `varying vec3 vGiftN; varying vec3 vGiftV;\n${sh.vertexShader}`.replace(
+      '#include <worldpos_vertex>',
+      `#include <worldpos_vertex>
+       vec4 g mvPos = modelViewMatrix * vec4(transformed, 1.0);
+       vGiftN = normalize(normalMatrix * objectNormal);
+       vGiftV = normalize(-mvPos.xyz);`.replace('vec4 g mvPos', 'vec4 gMvPos').replace('-mvPos.xyz', '-gMvPos.xyz'),
+    );
+    sh.fragmentShader = `varying vec3 vGiftN; varying vec3 vGiftV;\n${sh.fragmentShader}`.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+       float gRim = 1.0 - clamp(dot(normalize(vGiftN), normalize(vGiftV)), 0.0, 1.0);
+       float gSpec = clamp(dot(normalize(vGiftN), normalize(vec3(0.25, 0.85, 0.45))), 0.0, 1.0);
+       totalEmissiveRadiance += vColor.rgb * (0.32 + gSpec * gSpec * 0.14) + vec3(0.22, 0.15, 0.06) * (gRim * gRim) + max(vColor.rgb - 1.0, 0.0) * 1.65;`,
+    );
   };
-  MAT.customProgramCacheKey = () => 'gift-3d';
+  MAT.customProgramCacheKey = () => 'gift-3d-v2';
   return MAT;
 }
 
@@ -836,6 +848,13 @@ export function createOfferFx(scene) {
           grace(kept, ch, to, scale, land);
         },
       });
+    },
+    // Al tocar un regalito en la repisa: hace su gracia en el lugar con un destello.
+    playGrace(ch, to, scale, land) {
+      if (!to) return;
+      ring(to.clone().setY(to.y + 0.02), [1.8, 1.5, 0.7], scale * 2.1);
+      burst(to.clone().setY(to.y + scale * 0.4), [1.8, 1.4, 0.8], 14, 0.9);
+      grace(giftMesh(ch), ch, to, scale, land);
     },
     // Corazones que salen de tu pecho y suben hacia el marco.
     hug(from, to) {

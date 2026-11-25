@@ -36,73 +36,80 @@ function tex(c, repeat) {
 
 // ---------- texturas ----------
 const picadoCache = new Map();
-// Papel picado: banderita de papel con recortes (flores, huellitas, calaveritas y flecos).
+// Papel picado: banderita de papel con UN recorte grande y limpio en el medio (flor, huellita,
+// calaverita o corazón), una fila de agujeritos arriba y flecos abajo. Antes tenía muchos recortes
+// chiquitos que de lejos se mezclaban y no se entendía el dibujo.
 export function papelPicadoTexture(color, variant = 0) {
   const k = `${color}:${variant % 4}`;
   if (picadoCache.has(k)) return picadoCache.get(k);
-  const [c, g] = canvas(256, 300);
+  const [c, g] = canvas(512, 600);
+  g.scale(2, 2); // se dibuja en 256x300 con el doble de resolución (bordes nítidos)
   g.fillStyle = color;
   g.fillRect(0, 0, 256, 300);
   g.globalCompositeOperation = 'destination-out';
   // Flecos de abajo.
-  for (let x = 0; x < 256; x += 16) {
+  for (let x = 0; x < 256; x += 21.33) {
     g.beginPath();
     g.moveTo(x, 300);
-    g.lineTo(x + 8, 268);
-    g.lineTo(x + 16, 300);
+    g.lineTo(x + 10.66, 270);
+    g.lineTo(x + 21.33, 300);
     g.fill();
   }
-  // Borde de agujeritos.
-  for (let x = 14; x < 256; x += 22) {
-    g.beginPath(); g.arc(x, 22, 5, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.arc(x, 250, 4, 0, Math.PI * 2); g.fill();
-  }
-  for (let y = 44; y < 240; y += 24) {
-    g.beginPath(); g.arc(14, y, 4, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.arc(242, y, 4, 0, Math.PI * 2); g.fill();
-  }
-  const cx = 128;
-  const cy = 140;
+  // Fila de agujeritos arriba (donde se dobla sobre el hilo) y una guarda de rombitos abajo.
+  for (let x = 20; x < 250; x += 27) { g.beginPath(); g.arc(x, 20, 5, 0, Math.PI * 2); g.fill(); }
+  for (let x = 24; x < 240; x += 26) { g.beginPath(); g.moveTo(x, 246); g.lineTo(x + 7, 254); g.lineTo(x, 262); g.lineTo(x - 7, 254); g.fill(); }
   const v = variant % 4;
+  g.save();
+  g.translate(128, 140);
   if (v === 0) {
-    // Flor grande.
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
+    // Flor: 6 pétalos separados por puentes de papel y el centro de papel con un agujero.
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
       g.beginPath();
-      g.ellipse(cx + Math.cos(a) * 44, cy + Math.sin(a) * 44, 22, 12, a, 0, Math.PI * 2);
+      g.ellipse(Math.cos(a) * 52, Math.sin(a) * 52, 30, 17, a, 0, Math.PI * 2);
       g.fill();
     }
-    g.beginPath(); g.arc(cx, cy, 18, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(0, 0, 11, 0, Math.PI * 2); g.fill();
   } else if (v === 1) {
-    // Huellita (nuestro sello).
-    g.beginPath(); g.ellipse(cx, cy + 22, 36, 30, 0, 0, Math.PI * 2); g.fill();
-    for (const [dx, dy] of [[-48, -14], [48, -14], [-20, -46], [20, -46]]) {
-      g.beginPath(); g.ellipse(cx + dx, cy + dy, 14, 19, dx * 0.006, 0, Math.PI * 2); g.fill();
+    // Huellita: almohadilla grande y cuatro deditos, con papel entre medio.
+    g.beginPath();
+    g.moveTo(0, -4);
+    g.bezierCurveTo(34, -8, 56, 30, 40, 52);
+    g.bezierCurveTo(26, 70, -26, 70, -40, 52);
+    g.bezierCurveTo(-56, 30, -34, -8, 0, -4);
+    g.fill();
+    for (const [dx, dy, rot] of [[-62, -24, -0.45], [-24, -64, -0.15], [24, -64, 0.15], [62, -24, 0.45]]) {
+      g.beginPath(); g.ellipse(dx, dy, 17, 23, rot, 0, Math.PI * 2); g.fill();
     }
   } else if (v === 2) {
-    // Calaverita.
-    g.beginPath(); g.arc(cx, cy - 8, 52, 0, Math.PI * 2); g.fill();
+    // Calaverita: la cabeza recortada y los ojos, la nariz y los dientes de papel.
+    g.beginPath(); g.arc(0, -10, 66, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.roundRect?.(-34, 40, 68, 34, 10); g.fill();
     g.globalCompositeOperation = 'source-over';
     g.fillStyle = color;
-    g.beginPath(); g.arc(cx - 20, cy - 10, 14, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.arc(cx + 20, cy - 10, 14, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.moveTo(cx, cy + 4); g.lineTo(cx - 7, cy + 18); g.lineTo(cx + 7, cy + 18); g.fill();
-    for (let i = -2; i <= 2; i++) g.fillRect(cx + i * 10 - 3, cy + 26, 6, 14);
+    g.beginPath(); g.arc(-25, -14, 19, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(25, -14, 19, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.moveTo(0, 6); g.lineTo(-10, 26); g.lineTo(10, 26); g.closePath(); g.fill();
+    for (let i = -2; i <= 2; i++) g.fillRect(i * 13 - 2.5, 40, 5, 34);
+    g.fillRect(-36, 54, 72, 5);
     g.globalCompositeOperation = 'destination-out';
-    g.beginPath(); g.arc(cx - 20, cy - 10, 5, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.arc(cx + 20, cy - 10, 5, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(-25, -14, 7, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(25, -14, 7, 0, Math.PI * 2); g.fill();
   } else {
-    // Corazón con rombos.
-    g.beginPath();
-    g.moveTo(cx, cy + 50);
-    g.bezierCurveTo(cx - 80, cy - 10, cx - 30, cy - 70, cx, cy - 26);
-    g.bezierCurveTo(cx + 30, cy - 70, cx + 80, cy - 10, cx, cy + 50);
-    g.fill();
+    // Corazón grande con un corazoncito de papel adentro.
+    const heart = (s) => {
+      g.beginPath();
+      g.moveTo(0, 70 * s);
+      g.bezierCurveTo(-100 * s, 0, -46 * s, -86 * s, 0, -34 * s);
+      g.bezierCurveTo(46 * s, -86 * s, 100 * s, 0, 0, 70 * s);
+      g.fill();
+    };
+    heart(1);
+    g.globalCompositeOperation = 'source-over';
+    g.fillStyle = color;
+    heart(0.42);
   }
-  // Rombos y gotitas alrededor.
-  for (const [x, y] of [[50, 70], [206, 70], [50, 210], [206, 210]]) {
-    g.beginPath(); g.moveTo(x, y - 12); g.lineTo(x + 9, y); g.lineTo(x, y + 12); g.lineTo(x - 9, y); g.fill();
-  }
+  g.restore();
   g.globalCompositeOperation = 'source-over';
   const t = tex(c);
   picadoCache.set(k, t);
@@ -110,102 +117,133 @@ export function papelPicadoTexture(color, variant = 0) {
 }
 
 let talaTex;
-// Azulejo de talavera.
+// Azulejo de talavera poblana en alta definición.
 export function talaveraTexture() {
   if (talaTex) return talaTex;
-  const [c, g] = canvas(128, 128);
-  g.fillStyle = '#f7f0e2';
-  g.fillRect(0, 0, 128, 128);
-  g.strokeStyle = '#1d4fa8';
-  g.lineWidth = 5;
-  g.strokeRect(2, 2, 124, 124);
-  g.fillStyle = '#1d4fa8';
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    g.beginPath(); g.ellipse(64 + Math.cos(a) * 26, 64 + Math.sin(a) * 26, 18, 9, a, 0, Math.PI * 2); g.fill();
+  const [c, g] = canvas(256, 256);
+  g.fillStyle = '#faf3e4';
+  g.fillRect(0, 0, 256, 256);
+  // Borde azul cobalto doble con guarda punteada.
+  g.strokeStyle = '#1b4a9c';
+  g.lineWidth = 8;
+  g.strokeRect(4, 4, 248, 248);
+  g.lineWidth = 2.5;
+  g.strokeRect(16, 16, 224, 224);
+  // Pétalos diagonales y axiales estilo cerámica artesanal.
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const diag = i % 2 === 1;
+    g.fillStyle = diag ? '#1b4a9c' : '#2a64c2';
+    g.beginPath();
+    g.ellipse(128 + Math.cos(a) * (diag ? 54 : 42), 128 + Math.sin(a) * (diag ? 54 : 42), diag ? 34 : 24, diag ? 15 : 11, a, 0, Math.PI * 2);
+    g.fill();
   }
-  g.fillStyle = '#f2b51a';
-  g.beginPath(); g.arc(64, 64, 12, 0, Math.PI * 2); g.fill();
-  for (const [x, y] of [[8, 8], [120, 8], [8, 120], [120, 120]]) {
-    g.beginPath(); g.arc(x, y, 12, 0, Math.PI * 2); g.fill();
+  // Centro dorado y terracota.
+  g.fillStyle = '#d96b27';
+  g.beginPath(); g.arc(128, 128, 26, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#f5be2b';
+  g.beginPath(); g.arc(128, 128, 17, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#faf3e4';
+  g.beginPath(); g.arc(128, 128, 7, 0, Math.PI * 2); g.fill();
+  // Esquinas florales que se unen al repetir el azulejo.
+  for (const [x, y] of [[16, 16], [240, 16], [16, 240], [240, 240]]) {
+    g.fillStyle = '#f5be2b';
+    g.beginPath(); g.arc(x, y, 22, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#1b4a9c';
+    g.beginPath(); g.arc(x, y, 11, 0, Math.PI * 2); g.fill();
   }
   talaTex = tex(c, [1, 1]);
   return talaTex;
 }
 
 const skullCache = new Map();
-// Cara de calaverita de azúcar (para visitantes y la ofrenda).
+// Cara de calaverita de azúcar en alta definición (para visitantes y la ofrenda).
 export function calaveraTexture(hue = 330) {
   const k = Math.round(hue / 30) * 30;
   if (skullCache.has(k)) return skullCache.get(k);
-  const [c, g] = canvas(256, 256);
-  g.fillStyle = '#fbf3e6';
-  g.fillRect(0, 0, 256, 256);
-  const col = `hsl(${k} 75% 55%)`;
-  const col2 = `hsl(${(k + 140) % 360} 70% 50%)`;
-  // Ojos: círculos con pétalos.
-  for (const x of [88, 168]) {
+  const [c, g] = canvas(512, 512);
+  const bg = g.createRadialGradient(256, 230, 30, 256, 256, 260);
+  bg.addColorStop(0, '#fffaf0');
+  bg.addColorStop(1, '#f4e6d0');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, 512, 512);
+  const col = `hsl(${k} 78% 54%)`;
+  const col2 = `hsl(${(k + 140) % 360} 72% 48%)`;
+  // Ojos: coronas de pétalos festoneados con borde dorado y doble brillo en la pupila.
+  for (const x of [176, 336]) {
     g.fillStyle = col;
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      g.beginPath(); g.ellipse(x + Math.cos(a) * 26, 110 + Math.sin(a) * 26, 11, 7, a, 0, Math.PI * 2); g.fill();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      g.beginPath(); g.ellipse(x + Math.cos(a) * 52, 220 + Math.sin(a) * 52, 21, 13, a, 0, Math.PI * 2); g.fill();
     }
-    g.fillStyle = '#2a1b2e';
-    g.beginPath(); g.arc(x, 110, 20, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#fff';
-    g.beginPath(); g.arc(x - 6, 104, 5, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#e6a832';
+    g.lineWidth = 4;
+    g.beginPath(); g.arc(x, 220, 43, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#231528';
+    g.beginPath(); g.arc(x, 220, 39, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.arc(x - 12, 208, 10, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(x + 11, 231, 4.5, 0, Math.PI * 2); g.fill();
   }
-  // Nariz de corazón.
-  g.fillStyle = '#2a1b2e';
+  // Nariz de corazón invertido.
+  g.fillStyle = '#231528';
   g.beginPath();
-  g.moveTo(128, 162);
-  g.bezierCurveTo(112, 150, 116, 136, 128, 144);
-  g.bezierCurveTo(140, 136, 144, 150, 128, 162);
+  g.moveTo(256, 324);
+  g.bezierCurveTo(224, 300, 232, 272, 256, 288);
+  g.bezierCurveTo(280, 272, 288, 300, 256, 324);
   g.fill();
-  // Sonrisa cosida.
-  g.strokeStyle = '#2a1b2e';
-  g.lineWidth = 4;
-  g.beginPath(); g.arc(128, 160, 42, 0.25 * Math.PI, 0.75 * Math.PI); g.stroke();
+  // Sonrisa bordada con arabescos en las comisuras.
+  g.strokeStyle = '#231528';
+  g.lineWidth = 7.5;
+  g.lineCap = 'round';
+  g.beginPath(); g.arc(256, 320, 84, 0.24 * Math.PI, 0.76 * Math.PI); g.stroke();
   for (let i = -3; i <= 3; i++) {
     const a = Math.PI / 2 + i * 0.11;
-    const x = 128 + Math.cos(a) * 42;
-    const y = 160 + Math.sin(a) * 42;
-    g.beginPath(); g.moveTo(x, y - 7); g.lineTo(x, y + 7); g.stroke();
+    const x = 256 + Math.cos(a) * 84;
+    const y = 320 + Math.sin(a) * 84;
+    g.beginPath(); g.moveTo(x, y - 14); g.lineTo(x, y + 14); g.stroke();
   }
-  // Frente con flor y puntitos.
+  // Flor de cempasúchil y filigrana en la frente.
   g.fillStyle = col2;
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    g.beginPath(); g.arc(128 + Math.cos(a) * 12, 52 + Math.sin(a) * 12, 7, 0, Math.PI * 2); g.fill();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    g.beginPath(); g.arc(256 + Math.cos(a) * 24, 104 + Math.sin(a) * 24, 13, 0, Math.PI * 2); g.fill();
   }
   g.fillStyle = PALETTE.amarillo;
-  g.beginPath(); g.arc(128, 52, 7, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(256, 104, 14, 0, Math.PI * 2); g.fill();
   g.fillStyle = col;
-  for (let i = 0; i < 7; i++) { g.beginPath(); g.arc(70 + i * 19, 196 + Math.sin(i) * 3, 3.5, 0, Math.PI * 2); g.fill(); }
+  for (let i = 0; i < 7; i++) { g.beginPath(); g.arc(140 + i * 38, 392 + Math.sin(i) * 6, 7, 0, Math.PI * 2); g.fill(); }
   const t = tex(c);
   skullCache.set(k, t);
   return t;
 }
 
 const paintCache = new Map();
-// Madera pintada de colores con un friso de talavera abajo.
+// Muro artesanal pintado con textura de estuco cálido, tablones y sombreado vertical.
 export function paintedWallTexture(color) {
   if (paintCache.has(color)) return paintCache.get(color);
-  const [c, g] = canvas(256, 256);
+  const [c, g] = canvas(512, 512);
   g.fillStyle = color;
-  g.fillRect(0, 0, 256, 256);
-  for (let x = 0; x < 256; x += 32) {
-    g.fillStyle = 'rgba(0,0,0,0.12)';
-    g.fillRect(x, 0, 2, 256);
-    for (let i = 0; i < 6; i++) {
+  g.fillRect(0, 0, 512, 512);
+  const shade = g.createLinearGradient(0, 0, 0, 512);
+  shade.addColorStop(0, 'rgba(255,235,200,0.12)');
+  shade.addColorStop(0.5, 'rgba(0,0,0,0)');
+  shade.addColorStop(1, 'rgba(15,5,10,0.24)');
+  g.fillStyle = shade;
+  g.fillRect(0, 0, 512, 512);
+  for (let x = 0; x < 512; x += 64) {
+    g.fillStyle = 'rgba(0,0,0,0.14)';
+    g.fillRect(x, 0, 3, 512);
+    g.fillStyle = 'rgba(255,240,215,0.08)';
+    g.fillRect(x + 3, 0, 2, 512);
+    for (let i = 0; i < 10; i++) {
       g.fillStyle = `rgba(255,255,255,${Math.random() * 0.05})`;
-      g.fillRect(x + 3 + Math.random() * 26, 0, 1 + Math.random() * 2, 256);
+      g.fillRect(x + 5 + Math.random() * 52, 0, 1.5 + Math.random() * 3, 512);
     }
   }
-  // Desgaste suave.
-  for (let i = 0; i < 300; i++) {
-    g.fillStyle = `rgba(255,240,220,${Math.random() * 0.05})`;
-    g.fillRect(Math.random() * 256, Math.random() * 256, 4 + Math.random() * 10, 2);
+  for (let i = 0; i < 550; i++) {
+    g.fillStyle = `rgba(255,240,220,${Math.random() * 0.055})`;
+    g.fillRect(Math.random() * 512, Math.random() * 512, 6 + Math.random() * 18, 2.5);
   }
   const t = tex(c);
   paintCache.set(color, t);
@@ -270,7 +308,17 @@ export function marigoldGeometry(r = 0.1, color = PALETTE.cempasuchil, rnd = Mat
 }
 
 export function marigoldMaterial() {
-  return new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, emissive: '#6a2800', emissiveIntensity: 0.6 });
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, emissive: '#752d00', emissiveIntensity: 0.62 });
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+       float rimM = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);
+       totalEmissiveRadiance += diffuseColor.rgb * (rimM * rimM * 0.45);`,
+    );
+  };
+  mat.customProgramCacheKey = () => 'marigold-velvet-1';
+  return mat;
 }
 
 // Muchas flores en un solo dibujo (para guirnaldas, arcos y macetas).
@@ -305,16 +353,21 @@ export function picadoBanner(a, b, { sag = 0.4, flags = 10, size = 0.42, seed = 
     p.y -= Math.sin(Math.PI * t) * sag;
     const color = PICADO_COLORS[(i + seed) % PICADO_COLORS.length];
     const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
-      map: papelPicadoTexture(color, i + seed), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide,
-      emissive: color, emissiveIntensity: 0.28,
+      map: papelPicadoTexture(color, i + seed), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide,
+      emissive: color, emissiveIntensity: 0.4,
     }));
     m.position.copy(p);
     m.rotation.y = yaw;
     group.add(m);
     pieces.push({ m, seed: seed * 7 + i });
   }
+  // Una brisa suave: se mecen despacio y en ola a lo largo de la hilera (antes subían y bajaban
+  // rápido y el dibujo no se llegaba a leer).
   group.userData.flutter = (t) => {
-    for (const pc of pieces) pc.m.rotation.x = Math.sin(t * 2.2 + pc.seed) * 0.18 + Math.sin(t * 5.1 + pc.seed * 2) * 0.05;
+    for (const pc of pieces) {
+      pc.m.rotation.x = Math.sin(t * 1.1 + pc.seed * 0.55) * 0.07 + Math.sin(t * 2.3 + pc.seed) * 0.015;
+      pc.m.rotation.z = Math.sin(t * 0.8 + pc.seed * 0.55) * 0.03;
+    }
   };
   return group;
 }
@@ -419,43 +472,134 @@ function paintGeo(geo, color) {
 }
 
 const bgCache = new Map();
-// Fondos para el lugar de cada huellita (el paspartú detrás de la foto).
+// Fondos ilustrados en alta definición para el interior de cada obituario (el paisaje detrás de la foto y las repisitas).
 export function backgroundTexture(id = 'crema') {
   if (bgCache.has(id)) return bgCache.get(id);
-  const [c, g] = canvas(160, 200);
-  const W = 160;
-  const H = 200;
-  const grad = (a, b) => { const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(0, 0, W, H); };
-  const dots = (col, n, r) => { g.fillStyle = col; for (let i = 0; i < n; i++) { g.beginPath(); g.arc(Math.random() * W, Math.random() * H, r * (0.5 + Math.random()), 0, Math.PI * 2); g.fill(); } };
+  const W = 512;
+  const H = 512;
+  const [c, g] = canvas(W, H);
+  const grad = (a, b, c2 = null) => {
+    const gr = g.createLinearGradient(0, 0, 0, H);
+    gr.addColorStop(0, a);
+    if (c2) { gr.addColorStop(0.58, b); gr.addColorStop(1, c2); } else gr.addColorStop(1, b);
+    g.fillStyle = gr;
+    g.fillRect(0, 0, W, H);
+  };
+  const dots = (col, n, r) => {
+    g.fillStyle = col;
+    for (let i = 0; i < n; i++) {
+      g.beginPath();
+      g.arc(Math.random() * W, Math.random() * H, r * (0.5 + Math.random()), 0, Math.PI * 2);
+      g.fill();
+    }
+  };
+  // Pradera suave con colinas y florcitas silvestres (como en la vista de obituario con ventanitas).
+  const drawMeadowHills = (hill1, hill2) => {
+    g.fillStyle = hill1;
+    g.beginPath();
+    g.moveTo(0, H * 0.62);
+    g.bezierCurveTo(W * 0.28, H * 0.52, W * 0.65, H * 0.68, W, H * 0.56);
+    g.lineTo(W, H);
+    g.lineTo(0, H);
+    g.closePath();
+    g.fill();
+    g.fillStyle = hill2;
+    g.beginPath();
+    g.moveTo(0, H * 0.72);
+    g.bezierCurveTo(W * 0.35, H * 0.64, W * 0.72, H * 0.78, W, H * 0.68);
+    g.lineTo(W, H);
+    g.lineTo(0, H);
+    g.closePath();
+    g.fill();
+    const flCols = ['#fff8e8', '#ffd24c', '#ff9a3c', '#ff7aa8', '#e6f2ff'];
+    for (let i = 0; i < 65; i++) {
+      const fx = (i * 79 + (i % 7) * 23) % W;
+      const fy = H * 0.64 + ((i * 53) % Math.round(H * 0.33));
+      const fr = 3.5 + (i % 4) * 1.4;
+      g.fillStyle = flCols[i % flCols.length];
+      for (let p = 0; p < 5; p++) {
+        const a = (p / 5) * Math.PI * 2;
+        g.beginPath();
+        g.arc(fx + Math.cos(a) * fr, fy + Math.sin(a) * fr, fr * 0.65, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = '#ffcf3a';
+      g.beginPath();
+      g.arc(fx, fy, fr * 0.55, 0, Math.PI * 2);
+      g.fill();
+    }
+  };
   switch (id) {
-    case 'cempasuchil': grad('#ffb238', '#ff7a1a'); dots('rgba(255,230,140,.6)', 30, 6); break;
+    case 'cempasuchil':
+      grad('#ffd26a', '#ff9428', '#e85d12');
+      dots('rgba(255,244,185,0.55)', 45, 11);
+      drawMeadowHills('rgba(155,195,110,0.45)', 'rgba(110,165,85,0.65)');
+      break;
     case 'picado': {
       grad('#fbefd9', '#f3dfc0');
-      PICADO_COLORS.forEach((col, i) => { g.fillStyle = col; g.fillRect(i * (W / 7), 0, W / 7 - 2, 26); g.beginPath(); g.moveTo(i * (W / 7), 26); g.lineTo(i * (W / 7) + W / 14, 36); g.lineTo((i + 1) * (W / 7) - 2, 26); g.fill(); });
+      PICADO_COLORS.forEach((col, i) => {
+        const bw = W / 7;
+        g.fillStyle = col;
+        g.fillRect(i * bw, 0, bw - 4, 68);
+        g.beginPath();
+        g.moveTo(i * bw, 68);
+        g.lineTo(i * bw + bw / 2, 92);
+        g.lineTo((i + 1) * bw - 4, 68);
+        g.fill();
+      });
       break;
     }
     case 'talavera': {
       const t = talaveraTexture().image;
-      for (let y = 0; y < H; y += 40) for (let x = 0; x < W; x += 40) g.drawImage(t, x, y, 40, 40);
+      for (let y = 0; y < H; y += 128) for (let x = 0; x < W; x += 128) g.drawImage(t, x, y, 128, 128);
       break;
     }
-    case 'noche': grad('#2a1846', '#120c22'); dots('rgba(255,200,120,.8)', 24, 2.2); break;
-    case 'estrellas': grad('#1b2350', '#3a1f5c'); dots('rgba(255,255,230,.9)', 60, 1.4); break;
-    case 'rosa': grad('#ff4fa3', '#c2186b'); dots('rgba(255,220,240,.35)', 26, 7); break;
-    case 'turquesa': grad('#3fd6cf', '#118f8b'); dots('rgba(230,255,250,.35)', 26, 7); break;
-    case 'arcoiris': ['#ff8a8a', '#ffb870', '#ffe58a', '#9be38f', '#8ec5ff', '#a99bff', '#e0a0ff'].forEach((col, i) => { g.fillStyle = col; g.fillRect(0, (i * H) / 7, W, H / 7 + 1); }); break;
-    case 'jardin': grad('#cfe8b0', '#7fb46b'); ['#ff9a1f', '#e4167c', '#ffcf3a', '#ffffff'].forEach((col) => dots(col, 10, 5)); break;
-    case 'atardecer': grad('#ffcf7a', '#c2397a'); break;
+    case 'noche':
+      grad('#22153d', '#3a2260', '#160e28');
+      dots('rgba(255,220,145,0.85)', 55, 3.8);
+      break;
+    case 'estrellas':
+      grad('#18224d', '#382262', '#203660');
+      dots('rgba(255,255,230,0.9)', 95, 2.8);
+      drawMeadowHills('rgba(72,118,92,0.55)', 'rgba(54,96,74,0.75)');
+      break;
+    case 'rosa':
+      grad('#ff78b8', '#d42678');
+      dots('rgba(255,230,245,0.4)', 40, 12);
+      break;
+    case 'turquesa':
+    case 'cielo':
+      grad('#bce0f5', '#dff2fa', '#b5dfc0');
+      drawMeadowHills('#96c98b', '#75b36d');
+      break;
+    case 'arcoiris':
+      ['#ff8a8a', '#ffb870', '#ffe58a', '#9be38f', '#8ec5ff', '#a99bff', '#e0a0ff'].forEach((col, i) => {
+        g.fillStyle = col;
+        g.fillRect(0, (i * H) / 7, W, H / 7 + 2);
+      });
+      break;
+    case 'jardin':
+      grad('#c6e6f5', '#e4f4d8', '#9fd18b');
+      drawMeadowHills('#94c884', '#72b068');
+      break;
+    case 'atardecer':
+      grad('#ffd88a', '#f29cb8', '#b8d4a6');
+      drawMeadowHills('#8ec27e', '#6ea864');
+      break;
     case 'huellitas': {
       grad('#fbefd9', '#f0dcc0');
-      g.fillStyle = 'rgba(201,112,78,.35)';
-      for (let y = 18; y < H; y += 40) for (let x = 18 + ((y / 40) % 2) * 20; x < W; x += 40) {
-        g.beginPath(); g.ellipse(x, y + 5, 7, 6, 0, 0, Math.PI * 2); g.fill();
-        for (const [dx, dy] of [[-8, -4], [8, -4], [-3, -10], [3, -10]]) { g.beginPath(); g.arc(x + dx, y + dy, 2.6, 0, Math.PI * 2); g.fill(); }
+      g.fillStyle = 'rgba(201,112,78,0.32)';
+      for (let y = 46; y < H; y += 96) for (let x = 46 + ((y / 96) % 2) * 48; x < W; x += 96) {
+        g.beginPath(); g.ellipse(x, y + 12, 16, 14, 0, 0, Math.PI * 2); g.fill();
+        for (const [dx, dy] of [[-18, -10], [18, -10], [-7, -22], [7, -22]]) {
+          g.beginPath(); g.arc(x + dx, y + dy, 6, 0, Math.PI * 2); g.fill();
+        }
       }
       break;
     }
-    default: grad('#fbf1e0', '#efe0c6');
+    default:
+      grad('#d4ebf7', '#eef6e6', '#b8ddb0');
+      drawMeadowHills('#99cb8c', '#7ab570');
   }
   const t = tex(c);
   bgCache.set(id, t);

@@ -8,7 +8,8 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { floorName } from './floors.js';
 import './styles.css';
 import { connect, myTokens } from './api.js';
-import { buildWorld, SPAWN, HALL_CENTER, ELEVATOR_POS, uTime, creekZ, CREEK_HALF, onPath, insideHall, onBridge } from './scene/world.js';
+import { downloadDemoBackup } from './migrate.js';
+import { buildWorld, SPAWN, HALL_CENTER, uTime, creekZ, CREEK_HALF, onPath, insideHall, inCorridor, onBridge, inWater, groundY } from './scene/world.js';
 import { buildHall, SLOTS_PER_FLOOR, EASEL_POS } from './scene/hall.js';
 import { createControls } from './scene/controls.js';
 import { createLanterns } from './scene/lanterns.js';
@@ -20,7 +21,8 @@ import { createHeaven, FLOORS } from './scene/heaven.js';
 import { createCharacter } from './scene/character.js';
 import { createOfferFx } from './scene/gifts3d.js';
 import { createSparkles } from './scene/sparkles.js';
-import { FURS, EARS, SIZES, SNOUTS } from '../server/looks.js';
+import { createMist } from './scene/mist.js';
+import { FURS, PATTERNS, COATS, EARS, TAILS, EYES, SIZES, SNOUTS, PERSONALITIES } from '../server/looks.js';
 import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard, drawKeepsake } from './share.js';
 import { polaroid } from './photo.js';
 // Cómo llegó esta persona (link de una huellita, invitación de alguien). Se lee antes de tocar la URL.
@@ -85,7 +87,7 @@ import { GUIDE_STEPS, renderGuide } from './guide.js';
   void PICADO_COLORS;
 }
 import { portraitCanvas } from './scene/textures.js';
-import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver, setMood, step, boop, clink, liftDoors, liftHum } from './audio.js';
+import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver, setMood, step, boop, clink, liftDoors, liftHum, petVoice } from './audio.js';
 import { TIERS, pickTier, savedQuality, saveQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
 import { FEATURED } from '../server/seed.js';
 
@@ -116,8 +118,15 @@ const visitor = {
   sid: remember('huellita.sid', () => Math.random().toString(36).slice(2) + Date.now().toString(36)),
   name: remember('huellita.name', () => `${pick(NOUN)} ${pick(ADJ)}`),
 };
-$('#me-name').textContent = visitor.name;
-$('#me-initial').textContent = visitor.name[0];
+function syncVisitorChips() {
+  const init = (visitor.name || '·')[0].toUpperCase();
+  if ($('#me-name')) $('#me-name').textContent = visitor.name;
+  if ($('#me-initial')) $('#me-initial').textContent = init;
+  if ($('#top-me-name')) $('#top-me-name').textContent = visitor.name;
+  if ($('#top-me-initial')) $('#top-me-initial').textContent = init;
+  if ($('#me-dialog-name')) $('#me-dialog-name').textContent = visitor.name;
+}
+syncVisitorChips();
 // El color del sarape; si es impar lleva sombrero y si es par, corona de flores (así lo ven los demás).
 let visitorHue = Number(remember('huellita.hue', () => String(Math.floor(Math.random() * 360))));
 const game = createGame();
@@ -171,6 +180,8 @@ let spirits;
 let me; // tu personaje
 let captureNext = null; // modo foto
 let heaven = null; // el cielo que cambia con el piso
+let mist = null; // la bruma en capas del jardín (mist.js)
+let glideFx = 0; // para la estela de viento al planear
 let bloomPass = null;
 let composer = null;
 let adaptive = null;
@@ -191,10 +202,13 @@ function setupRenderer() {
     setTimeout(() => location.reload(), 1200);
   }, { once: true });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
-  adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: tier.maxPixelRatio, min: tierName === 'low' ? 0.7 : 0.85 });
+  renderer.toneMappingExposure = 1.16;
+  const maxRatio = coarse ? Math.min(tier.maxPixelRatio, 1.85) : tier.maxPixelRatio;
+  const minRatio = tierName === 'high' ? Math.min(window.devicePixelRatio || 1, coarse ? 1.25 : 1.75) : tierName === 'mid' ? 1.0 : 0.75;
+  adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: maxRatio, min: minRatio });
   if (tier.bloom) {
-    const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: tierName === 'high' ? 4 : 2 });
+    // En celulares evitamos MSAA 4x sobre HalfFloatType (consume ~150 MB de VRAM y hace que iOS recargue la pestaña).
+    const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: (!coarse && tierName === 'high') ? 4 : 0 });
     composer = new EffectComposer(renderer, rt);
     composer.setPixelRatio(adaptive.ratio);
     composer.setSize(innerWidth, innerHeight);
@@ -210,7 +224,7 @@ function setupRenderer() {
           gl_FragColor = vec4(clamp(c.rgb, 0.0, 64.0), c.a);
         }`,
     }));
-    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.45, 0.9);
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.52, 0.48, 0.89);
     composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
     // Acuarela: el último pase, en el color final de la pantalla.
@@ -286,6 +300,8 @@ async function buildScene() {
   ]);
   setupRenderer();
   world = buildWorld(scene, tier);
+  const savedSky = store.get('huellita.sky') || 'night';
+  world.setSkyMood?.(savedSky);
   hall = buildHall(scene, world.colliders, tier);
   lanterns = createLanterns(scene, tier);
   offerFx = createOfferFx(scene);
@@ -295,11 +311,20 @@ async function buildScene() {
   elevator = createElevator(scene, world.colliders, Math.random);
   avatars.visible = store.get('huellita.quiet') !== '1';
   controls = createControls(camera, canvas, world.colliders, { reduced });
+  // Al aterrizar de un planeo: un puf de brillitos y un pasito.
+  controls.onLand(() => {
+    const P = controls.player;
+    spirits?.sparkle(new THREE.Vector3(P.pos.x, 0.15, P.pos.z), new THREE.Color(1.6, 1.5, 1.9), 22);
+    step(world.colliders.up ? 'cloud' : 'grass');
+    haptic(8);
+  });
   scene.add(controls.marker);
   me = createCharacter({ hue: visitorHue, light: tierName !== 'low' });
   scene.add(me.group);
   spirits = createSpirits(scene, { blocked: controls.blocked, tier });
   heaven = createHeaven(scene, world, { renderer, bloom: bloomPass, tier });
+  // Bruma en capas sobre el río y a lo lejos (se esconde con el jardín en los pisos del cielo).
+  mist = createMist(world.ground, { tier, reduced });
   // Sombras de día en los pisos del cielo (sólo calidad alta): el sol proyecta tu sombra y la de los
   // espíritus sobre el piso del salón. La luz sigue a tu personaje (así alcanza un mapa chico).
   if (tierName === 'high') {
@@ -312,7 +337,7 @@ async function buildScene() {
     L.shadow.bias = -0.0008;
     L.shadow.normalBias = 0.03;
     scene.add(L.target);
-    world.deck.receiveShadow = true;
+    world.deck.traverse((o) => { if (o.isMesh) o.receiveShadow = true; });
     sunShadows = L;
   }
   spirits.setHand((v) => me.leashHand(v));
@@ -324,10 +349,13 @@ async function buildScene() {
   controls.onTap((e) => {
     if (document.body.classList.contains('intro')) return skipIntro();
     if (!sheetEl.hidden) { closeSheet(); return; }
-    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, ...spirits.pickables, elevator.hit, ...world.walkable]);
+    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, ...elevator.hits, ...world.walkable]);
     if (!hit) return;
+    // Un muro: caminar hacia él (no abrir lo que haya del otro lado).
+    if (hit.object.userData.kind === 'wall') { controls.walkTo(hit.point.clone().setY(0)); hideHint(); return; }
     if (hit.object.userData.kind === 'jar') { clink(); return openJar(); }
-    if (hit.object.userData.kind === 'elevator') return callElevator();
+    if (hit.object.userData.kind === 'sofa') return sitOnSofa(hit.object.userData.sofa);
+    if (hit.object.userData.kind === 'elevator') return callElevator(hit.object.userData.liftIdx);
     if (hit.object.userData.kind === 'spirit') return tapSpirit(spirits.spiritOf(hit.object));
     if (hit.object.userData.kind === 'ball') {
       if (controls.player.pos.distanceTo(spirits.ball.pos.clone().setY(0)) < 4) return throwBall();
@@ -335,7 +363,7 @@ async function buildScene() {
       return;
     }
     const key = slotKeyFromHit(hit.object);
-    if (key === 'featured') return hall.featured && visit(hall.featured);
+    if (key === 'featured') return hall.featured ? visit(hall.featured) : visitWelcome();
     if (typeof key === 'string' && key.startsWith('spot:')) {
       const m = memorials.find((x) => x.id === key.slice(5));
       return m && visit(m);
@@ -350,13 +378,13 @@ async function buildScene() {
     hideHint();
   });
   controls.onHover((e) => {
-    const hit = cast(e, [...hall.pickables(), ...cozy.pickables, ...spirits.pickables, elevator.hit]);
+    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, ...elevator.hits]);
     const key = hit && hit.distance < 16 ? slotKeyFromHit(hit.object) : null;
     hall.setHover(key);
-    canvas.style.cursor = hit && hit.distance < 16 && (key !== null || hit.object.userData.kind) ? 'pointer' : '';
+    canvas.style.cursor = hit && hit.distance < 16 && (key !== null || (hit.object.userData.kind && hit.object.userData.kind !== 'wall')) ? 'pointer' : '';
   });
   controls.onMove(hideHint);
-  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
+  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, renderer, THREE, spirits, elevator, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
     goFloor: (f) => goFloor(f, true, true),
     // Para grabar videos (scripts/video.mjs): los gestos en 3D sin pasar por la API.
     get memorials() { return memorials; },
@@ -392,21 +420,42 @@ async function buildScene() {
     uTime.value = t;
     controls.update(dt);
     const P = controls.player;
+    if (!world.colliders.up) world.updateOpen?.(P.pos.x, P.pos.z);
     me.group.position.copy(P.pos);
     me.group.rotation.y = P.heading;
     me.leashing = !!(walking && spirits.companion && spirits.companion.state === 'follow');
-    me.update(dt, { speed: P.speed, turn: P.turn });
+    me.update(dt, { speed: P.speed, turn: P.turn, gliding: controls.gliding });
+    // Planeando: una estela de viento detrás tuyo.
+    if (controls.gliding && !reduced) {
+      glideFx -= dt;
+      if (glideFx < 0) {
+        glideFx = 0.07;
+        _v.set(P.pos.x - Math.sin(P.heading) * 0.5, P.pos.y + 1.0, P.pos.z - Math.cos(P.heading) * 0.5);
+        spirits.sparkle(_v, new THREE.Color(1.3, 1.5, 1.9), 3);
+      }
+    }
     spirits.setPlayer(P.pos, P.heading, P.moving, dt);
     spirits.update(dt, camera.position);
     // Botón de acción según lo que haya cerca, y la interfaz que se desvanece al caminar o mientras
     // vuela la cámara (vuelve medio segundo después de frenar).
     stillFor = P.moving ? 0 : stillFor + dt;
     actT -= dt;
-    if (actT < 0) { actT = 0.3; updateAction(); }
+    if (actT < 0) {
+      actT = 0.3;
+      updateAction();
+      const retBtn = $('#return-hall');
+      if (retBtn) {
+        const distHall = Math.round(Math.hypot(P.pos.x - HALL_CENTER.x, P.pos.z - HALL_CENTER.z));
+        const farOut = !world.colliders.up && Math.hypot(P.pos.x, P.pos.z) > 62;
+        retBtn.hidden = !farOut;
+        if (farOut && $('#return-dist')) $('#return-dist').textContent = `· ${distHall} m`;
+      }
+    }
     const busy = introDone && (P.moving || controls.sticking || controls.flying);
     calmT = busy ? 0.6 : calmT - dt;
     if ((calmT > 0) !== hudAway) { hudAway = calmT > 0; document.body.classList.toggle('moving', hudAway); }
     heaven.update(dt, t);
+    mist?.update(world.fog);
     if (sunShadows) {
       // De día (arriba) hay sombras; de noche, en el jardín, no.
       const day = heaven.k > 0.3;
@@ -427,7 +476,9 @@ async function buildScene() {
         stepT = 1;
         const x = P.pos.x;
         const z = P.pos.z;
-        step(world.colliders.up ? 'cloud' : onBridge(x, z, 0.1) ? 'wood' : onPath(x, z, 0.1) || insideHall(x, z) ? 'stone' : 'grass');
+        const wet = !world.colliders.up && inWater(x, z);
+        if (wet) spirits?.splash(x, z, Math.min(1.25, Math.max(0.6, P.speed / 2.2)));
+        step(world.colliders.up ? 'cloud' : onBridge(x, z, 0.1) ? 'wood' : wet ? 'water' : insideHall(x, z) ? 'wood' : onPath(x, z, 0.1) ? 'stone' : 'grass');
       }
     }
     // Si otro visitante pasa cerca, se saludan.
@@ -455,6 +506,15 @@ async function buildScene() {
       const d = Math.abs(P.pos.z - creekZ(P.pos.x)) - CREEK_HALF;
       setRiver(world.colliders.up ? 0 : Math.max(0, 1 - d / 16) ** 1.6);
     }
+    // Tus pasos sobre el puente (o cerca del agua) y tu mascota encienden el plancton del río.
+    if (!world.colliders.up) {
+      const near = (p) => Math.abs(p.z - creekZ(p.x)) < CREEK_HALF + 1.2;
+      const c = spirits?.companion;
+      cozy.setRiverMovers([
+        near(P.pos) ? { x: P.pos.x, z: P.pos.z, w: P.moving ? 1 : 0.45 } : null,
+        c && c.fade > 0.5 && near(c.pos) ? { x: c.pos.x, z: c.pos.z, w: 0.8 } : null,
+      ]);
+    }
     cozy.animate(t, dt);
     elevator.animate(t, dt);
     avatars.animate(dt, t);
@@ -477,10 +537,29 @@ let api;
 let memorials = [];
 let seq = 0;
 
+function hiddenSet(kind) {
+  try {
+    const raw = JSON.parse(store.get('huellita.hidden') || '{}');
+    return new Set(Array.isArray(raw[kind]) ? raw[kind] : []);
+  } catch {
+    return new Set();
+  }
+}
+function hideItem(kind, id) {
+  try {
+    const raw = JSON.parse(store.get('huellita.hidden') || '{}');
+    const set = new Set(Array.isArray(raw[kind]) ? raw[kind] : []);
+    set.add(id);
+    raw[kind] = [...set];
+    store.set('huellita.hidden', JSON.stringify(raw));
+  } catch { /* sin storage */ }
+}
+
 async function refresh() {
   const r = await api.list();
   lastFull = Date.now();
-  memorials = r.memorials;
+  const hid = hiddenSet('m');
+  memorials = r.memorials.filter((m) => m.featured || !hid.has(m.id));
   if (walking) {
     const w = memorials.find((m) => m.id === walking.id);
     if (!w) stopWalk();
@@ -493,7 +572,7 @@ async function refresh() {
     } else walking = w;
   }
   hall?.render(memorials);
-  spirits?.setPack(memorials, walking?.id);
+  spirits?.setPack(memorials, walking?.id, currentFloor());
   renderStats(r.stats);
   renderBirthdays();
   renderFloors();
@@ -566,12 +645,12 @@ function renderFloors() {
 }
 
 // ---------- el ascensor, como uno de verdad ----------
-// Llamarlo: tu personaje camina hasta la puerta, suena la campanita y se abren las puertas (adentro,
-// la cabina iluminada). Entra caminando, se da vuelta y aparece la botonera. Al elegir el piso se
-// cierran las puertas y la cámara queda adentro, detrás tuyo, mirando afuera: para subir, la cabina
-// sube de verdad por la torre de vidrio y el jardín queda abajo; para bajar, se la ve descender hacia
-// el piso nuevo. En el medio se cruzan unas nubes (ahí cambia el piso), frena suave, campanita, se
-// abren las puertas y salís caminando. Si cerrás la botonera sin elegir, salís caminando.
+// Está en la pared del salón, entre dos pasillos. Llamarlo: tu personaje camina hasta la puerta,
+// suena la campanita y se abren las puertas metálicas (adentro, la cabina iluminada). Entra caminando,
+// se da vuelta y la cámara entra con vos: queda al fondo de la cabina, detrás tuyo, mirando las
+// puertas, y aparece la botonera. Al elegir el piso se cierran las puertas, el indicador cuenta los
+// pisos, hay un sacudón al arrancar y al frenar, un velo de nubes tapa el cambio de piso, campanita,
+// se abren las puertas en el piso nuevo y salís caminando. Si cerrás la botonera sin elegir, salís.
 let riding = false; // la escena del ascensor está en curso
 let insideLift = false; // tu personaje está adentro de la cabina, con la botonera abierta
 const tween = (dur, fn) => new Promise((res) => {
@@ -637,9 +716,14 @@ function cloudVeil(on, dur = 0.5) {
 }
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
-let shotSide = 0.95;
-function liftCam(drop = 0) {
-  elevator.shot(camPos, camLook, shotSide, drop);
+let liftDrop = 0; // cuánto baja la mirada de la cámara de la cabina (con la botonera abierta)
+// La cámara dentro de la cabina; `shake` es el sacudón del viaje.
+function liftCam(drop = liftDrop, shake = 0) {
+  elevator.insideShot(camPos, camLook, drop);
+  if (shake) {
+    camPos.x += (Math.random() - 0.5) * shake;
+    camPos.y += (Math.random() - 0.5) * shake;
+  }
   controls.teleportCamera(camPos, camLook);
 }
 function liftBegin() {
@@ -656,20 +740,23 @@ function liftEnd() {
   controls.held = false;
   controls.enabled = true;
   document.body.classList.remove('riding');
-  elevator.setCab(null);
+  elevator.setInside(false);
+  if (me) me.close = false;
   riding = false;
   insideLift = false;
 }
 
-async function callElevator() {
+async function callElevator(liftIdx = null) {
   if (!controls || !elevator || riding) return;
+  if (typeof liftIdx === 'number') elevator.useIndex(liftIdx);
+  else elevator.useNearest(controls.player.pos);
   if (reduced) { renderFloors(); $('#floors').showModal(); return; }
   liftBegin();
   const P = controls.player;
-  const door = elevator.doorPoint(1.25);
-  // Lejos (desde el menú): aparece cerca del ascensor, mirándolo.
+  const door = elevator.doorPoint(1.1);
+  // Lejos (desde el menú): aparece en el salón, cerca del ascensor más próximo, mirándolo.
   if (Math.hypot(P.pos.x - door.x, P.pos.z - door.z) > 11) {
-    teleportPlayer(elevator.doorPoint(5.5), door);
+    teleportPlayer(elevator.doorPoint(4.2), door);
     controls.snapFollow();
   }
   controls.held = false;
@@ -677,25 +764,28 @@ async function callElevator() {
   controls.held = true;
   await scriptedWalk(door, 0.35);
   await scriptedTurn(elevator.outHeading + Math.PI, 0.35);
-  // Campanita, se prende el botón y se abren las puertas; la cámara se pone de costado para ver entrar.
+  // Campanita, se prende el botón y se abren las puertas; la cámara se pone de costado para verte entrar.
   ding();
   haptic(8);
-  shotSide = 0.95;
-  elevator.shot(camPos, camLook, shotSide);
-  controls.flyTo(camPos, camLook, null, { duration: 1.1 });
-  const settled = later(1150);
-  await later(350);
+  elevator.shot(camPos, camLook, 0.6);
+  controls.flyTo(camPos, camLook, null, { duration: 1.0 });
+  await later(450);
   elevator.setOpen(true);
   liftDoors();
-  await later(900);
-  // Entra (un escalón y el piso de la cabina) y se da vuelta.
-  const inCab = elevator.cabPoint(0.05);
-  await scriptedWalk(elevator.doorPoint(0.15), 0.55, inCab.y * 0.6);
-  await scriptedWalk(inCab, 0.75, inCab.y);
-  await scriptedTurn(elevator.outHeading, 0.6);
-  await settled;
-  // La botonera tapa la mitad de abajo: la cabina, arriba en la pantalla.
-  await tween(0.6, (k) => liftCam(easeIO(k) * 1.55));
+  await later(850);
+  // Entra (cruza el umbral) y se da vuelta hacia las puertas.
+  elevator.setInside(true);
+  await scriptedWalk(elevator.doorPoint(-0.15), 0.5);
+  await scriptedWalk(elevator.cabPoint(0.45, -0.1), 0.6);
+  await scriptedTurn(elevator.outHeading, 0.55);
+  me.close = true;
+  // La cámara entra con vos (por el medio de la puerta) y se queda al fondo de la cabina.
+  elevator.insideShot(camPos, camLook, 0);
+  controls.flyTo(camPos, camLook, null, { duration: 1.0, path: [elevator.doorPoint(0.9).setY(1.95), elevator.doorPoint(-0.3).setY(2.0)] });
+  await later(1050);
+  // La botonera tapa la mitad de abajo: la puerta y el indicador, arriba en la pantalla.
+  await tween(0.5, (k) => liftCam(easeIO(k) * 0.38));
+  liftDrop = 0.38;
   insideLift = true;
   renderFloors();
   $('#floors').showModal();
@@ -703,16 +793,21 @@ async function callElevator() {
 
 // Salir caminando de la cabina (al llegar, o si no elegiste piso).
 async function leaveLift(fromPanel = false) {
-  const out = elevator.doorPoint(2.1);
-  // Si cerraste la botonera sin elegir, la cámara vuelve a encuadrar la cabina entera.
-  if (fromPanel) await tween(0.5, (k) => liftCam((1 - easeIO(k)) * 1.55));
-  await scriptedWalk(elevator.doorPoint(0.3), 0.7, 0.15);
-  await scriptedWalk(out, 0.65, 0);
-  // Gira hacia el jardín antes de que la cámara lo siga: detrás suyo está la torre y la cámara
-  // pasaría por adentro de la puerta.
-  await scriptedTurn(elevator.outHeading + 1.15, 0.45);
+  if (fromPanel) await tween(0.45, (k) => liftCam((1 - easeIO(k)) * liftDrop));
+  liftDrop = 0;
+  if (elevator.open < 0.5) {
+    elevator.setOpen(true);
+    liftDoors();
+    await later(700);
+  }
+  me.close = false;
+  await scriptedWalk(elevator.doorPoint(-0.1), 0.6);
+  elevator.setInside(false);
+  await scriptedWalk(elevator.doorPoint(1.9), 0.65);
+  // Gira hacia el salón antes de que la cámara lo siga (detrás suyo está la pared del ascensor).
+  await scriptedTurn(elevator.outHeading + (elevator.exitTurn ?? 1.15), 0.45);
   controls.placePlayer(controls.player.pos, null);
-  controls.follow({ duration: 1.1 });
+  controls.follow({ duration: 1.1, path: [elevator.doorPoint(0.6).setY(2.0)] });
   await later(650);
   elevator.setOpen(false);
   liftDoors(true);
@@ -725,70 +820,40 @@ async function rideTo(f) {
   insideLift = false;
   const from = currentFloor();
   const up = f > from;
-  const P = controls.player;
-  const { CAB_MIN, CAB_MAX } = elevator;
-  const setCab = (y) => {
-    elevator.setCab(y);
-    P.pos.y = elevator.cabPoint(0).y;
-    liftCam();
-  };
   const count = (k) => {
     const n = Math.round(from + (f - from) * k);
     if (n !== count.last) { count.last = n; elevator.showFloor(n + 1, up ? 1 : -1); tick(); }
   };
-  // Se cierran las puertas (la cámara vuelve a encuadrar la cabina entera).
-  shotSide = 0.95;
-  tween(0.6, (k) => liftCam((1 - easeIO(k)) * 1.55));
+  count.last = from;
+  // Se cierran las puertas (la cámara vuelve a mirar derecho las puertas).
+  const d0 = liftDrop;
+  tween(0.6, (k) => liftCam((1 - easeIO(k)) * d0));
+  liftDrop = 0;
   elevator.setOpen(false);
   liftDoors(true);
   haptic(10);
   await later(1000);
-  liftHum(up ? 5.2 : 5.0);
-  if (up) {
-    // Sube por la torre de vidrio: el jardín (o el mar de nubes) queda abajo.
-    const top = CAB_MIN + (CAB_MAX - CAB_MIN) * 0.9;
-    await tween(3.4, (k) => {
-      const e = easeIO(k);
-      shotSide = 0.95 - 1.9 * e;
-      setCab(CAB_MIN + (top - CAB_MIN) * e);
-      count(e * 0.85);
-      if (k > 0.72 && !rideTo.veil) { rideTo.veil = true; cloudVeil(true, 0.7); }
-    });
-    await later(150);
-    goFloor(f, true, true);
-    count(1);
-    // Llega desde abajo, frenando.
-    shotSide = 0.95;
-    setCab(CAB_MIN + 0.55);
-    cloudVeil(false, 0.8);
-    await tween(1.3, (k) => setCab(CAB_MIN + 0.55 * (1 - easeOut(k))));
-  } else {
-    // Baja: un sacudón al arrancar, nubes, y se ve el piso nuevo acercarse desde arriba.
-    await tween(0.6, (k) => { setCab(CAB_MIN + Math.sin(k * Math.PI) * 0.05); count(k * 0.1); });
-    await cloudVeil(true, 0.55);
-    goFloor(f, true, true);
-    const top = CAB_MIN + (CAB_MAX - CAB_MIN) * 0.75;
-    shotSide = -0.95;
-    setCab(top);
-    cloudVeil(false, 0.8);
-    await tween(3.4, (k) => {
-      const e = easeIO(k);
-      shotSide = -0.95 + 1.9 * e;
-      setCab(top + (CAB_MIN - top) * e);
-      count(0.1 + e * 0.9);
-    });
-  }
-  rideTo.veil = false;
-  setCab(CAB_MIN);
+  liftHum(4.8);
+  // Arranca con un sacudón y cuenta los pisos; a mitad de camino, el velo de nubes tapa el cambio.
+  const shakeAt = (k) => (k < 0.1 ? Math.sin((k / 0.1) * Math.PI) * 0.035 : 0.004);
+  await tween(1.6, (k) => { liftCam(0, shakeAt(k * 0.45)); count(easeIO(k) * 0.45); });
+  await cloudVeil(true, 0.35);
+  goFloor(f, true, true);
+  cloudVeil(false, 0.7);
+  await tween(2.0, (k) => {
+    const kk = 0.45 + k * 0.55;
+    liftCam(0, kk > 0.9 ? Math.sin(((kk - 0.9) / 0.1) * Math.PI) * 0.03 : 0.004);
+    count(0.45 + easeOut(k) * 0.55);
+  });
+  liftCam(0);
   elevator.showFloor(f + 1, 0);
-  await later(250);
+  await later(220);
   ding();
   haptic([10, 40, 10]);
   elevator.setOpen(true);
   liftDoors();
   toast(`🛗 Piso ${f + 1} · ${floorName(f)}`);
   await later(900);
-  P.pos.y = elevator.cabPoint(0).y;
   await leaveLift();
 }
 
@@ -796,6 +861,7 @@ function goFloor(f, quiet = false, instant = false) {
   if (!hall || f === hall.floor) return;
   hall.setFloor(f, memorials);
   heaven?.setFloor(f, instant);
+  spirits?.setFloor(f, memorials, walking?.id);
   renderFloors();
   elevator?.setFloor(f);
   heartbeat();
@@ -805,11 +871,26 @@ function goFloor(f, quiet = false, instant = false) {
 // ---------- visitar ----------
 let current = null;
 
+function visitWelcome() {
+  closeModals();
+  closeSheet();
+  if (hall && controls) {
+    goFloor(0, true);
+    const distMul = camera.aspect < 0.8 ? 1.08 : camera.aspect < 1.2 ? 1.02 : 0.95;
+    const { stand, target, frame } = hall.viewpoint('featured', 0, distMul);
+    hideHint();
+    placeNear(stand, frame, 1.6, 5.4);
+    controls.flyTo(stand, target, () => hall.pulse('featured'));
+  }
+  toast('🌹 “No era más que un zorro semejante a cien mil otros. Pero yo le hice mi amigo y ahora es único en el mundo.” — El Principito 🤍');
+}
+
 function visit(m) {
   closeModals();
   if (hall && controls) {
     const key = m.slot < 0 ? 'featured' : m.slot % SLOTS_PER_FLOOR;
-    if (m.slot >= 0) goFloor(floorOf(m), true);
+    // La ofrenda de la destacada está sólo en el piso 1.
+    goFloor(m.slot < 0 ? 0 : floorOf(m), true);
     const sheet = bottomSheet();
     const shift = sheet ? 0 : key === 'featured' ? 0.9 : 1.1;
     // En pantallas verticales el campo horizontal es angosto: nos paramos más lejos.
@@ -822,7 +903,17 @@ function visit(m) {
     }
     hideHint();
     if (key === 'featured') placeNear(stand, frame, 1.6, 5.4);
-    else placeNear(stand, frame, 0.85);
+    else {
+      placeNear(stand, frame, 0.85);
+      // Camino de chispitas doradas desde el salón hasta su nicho.
+      if (spirits) {
+        const mouth = new THREE.Vector3().lerpVectors(HALL_CENTER, frame, 0.45).setY(0.45);
+        for (let i = 1; i <= 5; i++) {
+          const pt = new THREE.Vector3().lerpVectors(mouth, frame, i / 5);
+          setTimeout(() => spirits?.sparkle(pt, new THREE.Color(1.9, 1.45, 0.65), 8), i * 110);
+        }
+      }
+    }
     controls.flyTo(stand, target, () => hall.pulse(key));
   }
   openSheet(m);
@@ -960,19 +1051,48 @@ function closeSheet() {
 }
 $('#sheet-x').onclick = closeSheet;
 
+function inspectShelfGift(m, emo, single = null) {
+  tick();
+  haptic(8);
+  if (hall && offerFx) {
+    const key = hall.memorialKey(m);
+    if (key !== null) hall.bounceGift(key, emo, offerFx);
+  }
+  if (single) {
+    const rest = single.gift.split(' ').slice(1).join(' ');
+    return toast(`🎁 ${single.who} le dejó ${(rest || single.gift).toLowerCase()} · ${timeAgo(single.at)}`);
+  }
+  const matching = (m.giftList || []).filter((x) => x.gift.startsWith(emo));
+  if (matching.length === 1) {
+    const g = matching[0];
+    const rest = g.gift.split(' ').slice(1).join(' ');
+    return toast(`🎁 ${g.who} le dejó ${(rest || g.gift).toLowerCase()} · ${timeAgo(g.at)}`);
+  }
+  if (matching.length > 1) {
+    const names = [...new Set(matching.map((x) => x.who))].slice(0, 3).join(', ');
+    const rest = matching[0].gift.split(' ').slice(1).join(' ');
+    return toast(`🎁 ${names} le dejaron ${(rest || emo).toLowerCase()}`);
+  }
+  toast(`🎁 Regalito en la repisa de ${m.name}`);
+}
+
 function fillSheet(m) {
   $('#s-photo').src = photoSrc(m);
   $('#s-photo').alt = `Foto de ${m.name}`;
   $('.sheet-photo').classList.toggle('gold', !!m.featured || m.candles >= 20);
+  const topGifts = (m.lastGifts && m.lastGifts.length ? m.lastGifts : Object.keys(m.giftCounts || {})).slice(0, 4);
+  $('.sheet-photo').dataset.leftGift = topGifts[0] || '🕯️';
+  $('.sheet-photo').dataset.rightGift = topGifts[1] || '🌼';
   $('#s-name').textContent = m.name;
   const kind = { perro: 'Perro', gato: 'Gato', otro: 'Compañero' }[m.species] || '';
-  const bits = [kind];
+  const vibeName = PERSONALITIES.find((p) => p.id === m.look?.vibe)?.name || '';
+  const bits = [kind, vibeName];
   if (m.birthday) bits.push(`🎂 ${fmtDay(m.birthday)}${m.birthYear ? ` de ${m.birthYear}` : ''}`);
   if (m.passedDay) bits.push(`🌈 ${fmtDay(m.passedDay)}${m.passedYear ? ` de ${m.passedYear}` : ''}`);
   if (m.birthYear && m.passedYear) bits.push(`${m.passedYear - m.birthYear} años de amor`);
   $('#s-meta').textContent = bits.filter(Boolean).join(' · ');
   $('#s-msg').textContent = m.message ? `“${m.message}”` : '';
-  const tag = m.featured ? 'Huellita destacada' : isBirthday(m) ? '🎂 Hoy es su cumpleaños' : m.slot >= 0 ? `Piso ${floorOf(m) + 1}` : '';
+  const tag = isBirthday(m) ? '🎂 Hoy es su cumpleaños' : m.slot >= 0 ? `Piso ${floorOf(m) + 1}` : m.featured ? 'Huellita destacada' : '';
   $('#s-tag').textContent = tag;
   $('#s-tag').hidden = !tag;
   const same = sheetEl.dataset.id === m.id;
@@ -980,7 +1100,13 @@ function fillSheet(m) {
   setCount('#s-flowers', m.flowers, same);
   setCount('#s-gb', m.guestbookCount ?? 0, same);
   sheetEl.dataset.id = m.id;
+  const mine = !!myTokens()[m.id] && !m.featured;
   $('#s-delete').hidden = !myTokens()[m.id];
+  $('#s-report').hidden = !!m.featured || mine;
+  $('#gb-closed-msg').hidden = !m.gbClosed;
+  $('#gb-form').hidden = !!m.gbClosed;
+  const gbLbl = $('#tool-gb-label');
+  if (gbLbl) gbLbl.textContent = m.gbClosed ? 'Abrir libro' : 'Cerrar libro';
   $('#s-walk').hidden = !canWalk(m);
   $('#s-walk-act').hidden = !canWalk(m);
   $('#s-walk-act').classList.toggle('on', walking?.id === m.id);
@@ -995,34 +1121,87 @@ function fillSheet(m) {
   $('#s-flower').classList.toggle('done', didToday('f', m.id));
   $('#s-gift').classList.toggle('done', didToday('g', m.id));
   $('#s-hug').classList.toggle('done', didToday('h', m.id));
+  // Quiénes encendieron una vela, racha de luz y agradecimiento de la familia.
+  const cw = $('#s-candles-who');
+  const cl = m.candleList || [];
+  const hasStreak = (m.streak || 0) > 1;
+  const recentThanks = m.thankedAt && Date.now() - m.thankedAt < 36 * 3600_000;
+  cw.hidden = !cl.length && !hasStreak && !recentThanks && !(mine && m.candles > 0);
+  cw.innerHTML = '';
+  if (!cw.hidden) {
+    if (hasStreak) {
+      const st = document.createElement('span');
+      st.className = 'candle-streak';
+      st.textContent = `🔥 ${m.streak} días seguidos con una vela encendida`;
+      cw.append(st);
+    }
+    if (cl.length) {
+      const names = [...new Set(cl.map((c) => `${c.who}${c.country ? ` ${flag(c.country)}` : ''}`))].slice(0, 6);
+      const whoSpan = document.createElement('span');
+      whoSpan.className = 'candle-names';
+      whoSpan.textContent = `🕯️ Encendieron una vela: ${names.join(', ')}${cl.length > names.length ? ' y más' : ''}`;
+      cw.append(whoSpan);
+    }
+    if (recentThanks) {
+      const th = document.createElement('span');
+      th.className = 'candle-thanked';
+      th.textContent = `🤍 La familia de ${m.name} agradece cada vela encendida`;
+      cw.append(th);
+    }
+    if (mine && m.candles > 0) {
+      const thankedToday = didToday('th', m.id);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn soft small thanks-btn';
+      btn.id = 's-thanks-btn';
+      btn.disabled = thankedToday;
+      btn.textContent = thankedToday ? '🤍 Ya diste las gracias hoy' : '🤍 Dar las gracias a todos';
+      btn.onclick = async () => {
+        btn.disabled = true;
+        const r = await ownAction('thanks', {}, '🤍 Tu agradecimiento llegó al jardín');
+        if (r) {
+          markToday('th', m.id);
+          confetti(['🤍', '🕯️', '✨']);
+          sparkle();
+          fillSheet(current);
+        } else btn.disabled = false;
+      };
+      cw.append(btn);
+    }
+  }
   // Glow: sólo en mis mascotas.
-  const mine = !!myTokens()[m.id] && !m.featured;
   const pet = myPet();
   $('#s-glow').hidden = !mine;
   if (mine) $('#s-glow').innerHTML = glowCardHTML(m);
   $('#s-mine').hidden = !(mine && pet && pet.id !== m.id);
-  // La repisa: cada regalito con cuántos le dejaron (como en una ofrenda de verdad).
+  // La repisa: cada regalito con cuántos le dejaron (como en una ofrenda de verdad). Tocarlo lo anima en 3D y muestra quién lo dejó.
   const gc = Object.entries(m.giftCounts || {}).sort((a, b) => b[1] - a[1]);
   $('#s-shelf').hidden = !gc.length;
   $('#s-shelf').innerHTML = '';
   for (const [emo, n] of gc.slice(0, 12)) {
-    const sp = document.createElement('span');
+    const sp = document.createElement('button');
+    sp.type = 'button';
     sp.className = 'shelf-item';
     sp.innerHTML = '<i></i><b></b>';
     sp.querySelector('i').textContent = emo;
     sp.querySelector('b').textContent = `×${n}`;
+    sp.title = 'Tocar para ver quién lo dejó';
+    sp.onclick = () => inspectShelfGift(m, emo);
     $('#s-shelf').append(sp);
   }
   const gl = m.giftList || [];
   $('#s-gifts').hidden = !gl.length;
   $('#s-gifts').innerHTML = '';
   for (const g of gl.slice(0, 8)) {
-    const sp = document.createElement('span');
+    const sp = document.createElement('button');
+    sp.type = 'button';
+    sp.className = 'gift-chip';
     const [emo, ...rest] = g.gift.split(' ');
     sp.innerHTML = '<i></i>';
     sp.querySelector('i').textContent = emo;
     sp.append(`${rest.join(' ')} · ${g.who}`);
     sp.title = timeAgo(g.at);
+    sp.onclick = () => inspectShelfGift(m, emo, g);
     $('#s-gifts').append(sp);
   }
   fillExtras(m);
@@ -1054,18 +1233,54 @@ function setCount(sel, n, animate) {
 function renderGuestbook(list) {
   const ul = $('#gb-list');
   ul.innerHTML = '';
-  if (list && !list.length) {
+  if (!list) return;
+  const hid = hiddenSet('gb');
+  const visible = list.filter((e) => !hid.has(e.id));
+  if (!visible.length) {
     const li = document.createElement('li');
     li.className = 'gb-empty';
     li.textContent = 'Todavía nadie firmó. ¿Querés ser la primera persona?';
     ul.append(li);
     return;
   }
-  for (const e of list || []) {
+  const mine = current && isMine(current);
+  for (const e of visible) {
     const li = document.createElement('li');
     li.textContent = e.text;
     const s = document.createElement('small');
     s.textContent = `— ${e.name} · ${timeAgo(e.at)}`;
+    const acts = document.createElement('span');
+    acts.className = 'gb-acts';
+    if (mine) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'gb-act';
+      del.title = 'Borrar esta firma';
+      del.setAttribute('aria-label', 'Borrar esta firma');
+      del.textContent = '✕';
+      del.onclick = async () => {
+        await ownAction('del-gb', { entryId: e.id }, 'Firma borrada');
+        if (current) {
+          const full = await api.get(current.id).catch(() => null);
+          if (full) renderGuestbook(full.guestbook || []);
+        }
+      };
+      acts.append(del);
+    }
+    const rep = document.createElement('button');
+    rep.type = 'button';
+    rep.className = 'gb-act';
+    rep.title = 'Ocultar o denunciar este mensaje';
+    rep.setAttribute('aria-label', 'Ocultar o denunciar este mensaje');
+    rep.textContent = '⚑';
+    rep.onclick = () => {
+      hideItem('gb', e.id);
+      if (current) api.report({ kind: 'guestbook', targetId: current.id, subId: e.id, sid: visitor.sid }).catch(() => {});
+      renderGuestbook(list);
+      toast('Mensaje ocultado 🤍');
+    };
+    acts.append(rep);
+    s.append(acts);
     li.append(s);
     ul.append(li);
   }
@@ -1083,12 +1298,11 @@ function updateMemorial(m) {
 
 function releaseLantern(m, { burst = false } = {}) {
   if (!hall || !lanterns) return;
-  const key = m.slot < 0 ? 'featured' : floorOf(m) === hall.floor ? m.slot % SLOTS_PER_FLOOR : null;
-  const from = key !== null ? hall.worldPos(key) : new THREE.Vector3(HALL_CENTER.x, 7.2, HALL_CENTER.z);
+  const key = hall.memorialKey(m);
+  const from = key !== null ? hall.worldPos(key, 0.5) : new THREE.Vector3(HALL_CENTER.x, 7.2, HALL_CENTER.z);
   if (key !== null) {
-    // Un poco hacia adelante del marco, hacia el centro del salón.
-    const toCenter = new THREE.Vector3(HALL_CENTER.x - from.x, 0, HALL_CENTER.z - from.z).normalize();
-    from.addScaledVector(toCenter, key === 'featured' ? -0.6 : 0.5);
+    // Un poco adelante del marco (de la ofrenda, hacia la entrada; del nicho, hacia el pasillo).
+    if (key === 'featured') from.z += 0.6;
     from.y -= 0.35;
     if (burst) lanterns.burst(from.clone());
   }
@@ -1140,20 +1354,26 @@ $('#s-share').onclick = () => openShare();
 
 // ---------- recuerdo: la estampita para guardar o compartir ----------
 let keepBlob = null;
+let keepQr = false;
 async function openKeepsake() {
   if (!current) return;
   const m = current;
   $('#keep-img').hidden = true;
   $('#keep-wait').hidden = false;
   $('#keep-save').removeAttribute('href');
-  $('#keepsake').showModal();
+  const qrBtn = $('#keep-qr');
+  if (qrBtn) {
+    qrBtn.setAttribute('aria-pressed', String(keepQr));
+    qrBtn.textContent = keepQr ? '📱 Con QR ✓' : '📱 Con QR';
+  }
+  if (!$('#keepsake').open) $('#keepsake').showModal();
   const dates = [
     m.birthday ? `${fmtDay(m.birthday)}${m.birthYear ? ` de ${m.birthYear}` : ''}` : m.birthYear || '',
     m.passedDay ? `${fmtDay(m.passedDay)}${m.passedYear ? ` de ${m.passedYear}` : ''}` : m.passedYear || '',
   ].filter(Boolean).join('  –  ');
   const years = m.birthYear && m.passedYear ? `${m.passedYear - m.birthYear} años de amor` : '';
   try {
-    const c = await drawKeepsake(m, photoSrc(m), { dates, years, link: `${location.host}/h/${m.id}` });
+    const c = await drawKeepsake(m, photoSrc(m), { dates, years, link: `${location.host}/h/${m.id}`, qrUrl: keepQr ? shareUrl(m.id) : '' });
     keepBlob = await new Promise((res) => c.toBlob(res, 'image/png'));
     const url = URL.createObjectURL(keepBlob);
     $('#keep-img').src = url;
@@ -1164,6 +1384,10 @@ async function openKeepsake() {
   } catch { $('#keep-wait').textContent = 'No se pudo pintar la estampita. Probá de nuevo.'; }
 }
 $('#s-keep').onclick = openKeepsake;
+$('#keep-qr').onclick = () => {
+  keepQr = !keepQr;
+  openKeepsake();
+};
 $('#keep-share').onclick = async () => {
   if (!keepBlob || !current) return;
   const file = new File([keepBlob], 'recuerdo.png', { type: 'image/png' });
@@ -1196,6 +1420,16 @@ $('#s-delete').onclick = async () => {
     await refresh();
     toast('La huellita fue quitada del muro.');
   } catch (err) { toast(err.message); }
+};
+
+$('#s-report').onclick = async () => {
+  if (!current || current.featured) return;
+  const m = current;
+  hideItem('m', m.id);
+  api.report({ kind: 'memorial', targetId: m.id, sid: visitor.sid }).catch(() => {});
+  closeSheet();
+  await refresh().catch(() => {});
+  toast('Ocultamos esta huellita en tu equipo y avisamos para revisarla 🤍');
 };
 
 const IDEAS = ['Corré libre 🤍', 'Siempre en nuestro corazón', 'Gracias por tanto amor', 'Te mando un abrazo enorme', 'Que brille tu estrella 🌟', 'Nunca te vamos a olvidar', 'Fuiste el mejor compañero'];
@@ -1403,7 +1637,7 @@ function renderList() {
   }
   for (const m of list.slice(0, 300)) {
     const b = document.createElement('button');
-    b.className = `card${m.featured ? ' featured-card' : ''}`;
+    b.className = 'card';
     const img = document.createElement('img');
     img.loading = 'lazy';
     img.alt = '';
@@ -1411,7 +1645,7 @@ function renderList() {
     const name = document.createElement('b');
     name.textContent = m.name;
     const s = document.createElement('small');
-    s.textContent = `🕯️ ${m.candles} · ${m.featured ? 'Centro del salón' : `Piso ${floorOf(m) + 1}`}`;
+    s.textContent = `🕯️ ${m.candles} · ${m.slot < 0 ? 'Centro del salón' : `Piso ${floorOf(m) + 1}`}`;
     b.append(img, name, s);
     b.onclick = () => visit(m);
     grid.append(b);
@@ -1462,8 +1696,19 @@ function openMenu() {
   $('#opt-watercolor').disabled = !watercolor;
   const q = savedQuality();
   $$('#opt-quality button').forEach((b) => b.classList.toggle('on', b.dataset.q === q));
+  const skyMood = store.get('huellita.sky') || 'night';
+  $$('#opt-sky button').forEach((b) => b.classList.toggle('on', b.dataset.sky === skyMood));
   $('#menu').showModal();
 }
+$$('#opt-sky button').forEach((b) => {
+  b.onclick = () => {
+    const mood = b.dataset.sky || 'night';
+    store.set('huellita.sky', mood);
+    world?.setSkyMood?.(mood);
+    $$('#opt-sky button').forEach((x) => x.classList.toggle('on', x.dataset.sky === mood));
+    toast(mood === 'sunset' ? '🌅 Cielo de atardecer dorado' : mood === 'meteors' ? '🌠 Noche de estrellas brillantes' : '🌙 Noche estrellada del jardín');
+  };
+});
 $('#opt-music').onchange = (e) => { setMusic(e.target.checked); syncMusicBtn(); store.set('huellita.music', e.target.checked ? '1' : '0'); };
 $('#opt-watercolor').onchange = (e) => {
   store.set('huellita.watercolor', e.target.checked ? '1' : '0');
@@ -1495,6 +1740,7 @@ const THEN = {
   photo: () => photoMode(),
   meadow: () => goMeadow(),
   options: () => openMenu(),
+  me: () => $('#me-chip')?.click(),
 };
 $$('dialog [data-close]').forEach((b) => {
   b.onclick = () => {
@@ -1549,16 +1795,18 @@ function timeAgo(at) {
   return `hace ${Math.round(s / 86400)} días`;
 }
 
-// Así te ven los demás: color del sarape y sombrero o corona.
+// Así te ven los demás: ropa, color, sombrero o corona y peinado.
 {
   const HUES = [8, 32, 50, 140, 176, 210, 262, 318];
   const HUE_NAMES = ['Rojo', 'Naranja', 'Amarillo', 'Verde', 'Turquesa', 'Azul', 'Violeta', 'Rosa'];
   const box = $('#me-hues');
-  const hatOf = (h) => Math.round(h) % 2 === 1;
-  // hue % 8: el bit 0 es el sombrero y los bits 1-2 el peinado (ver character.js).
-  const styleOf = (h) => Math.round(h) % 8;
+  const outfitOf = (h) => Math.floor(Math.max(0, Math.round(h)) / 360) % 4;
+  const baseOf = (h) => ((Math.round(h) % 360) + 360) % 360;
+  const hatOf = (h) => baseOf(h) % 2 === 1;
+  // baseHue % 8: el bit 0 es el sombrero y los bits 1-2 el peinado; floor(hue / 360) % 4 es la ropa.
+  const styleOf = (h) => baseOf(h) % 8;
   const hairOf = (h) => Math.floor(styleOf(h) / 2);
-  const withStyle = (h, st) => (((Math.round(h) - styleOf(h) + st) % 360) + 360) % 360;
+  const withStyle = (h, st, out = outfitOf(h)) => out * 360 + (((baseOf(h) - styleOf(h) + st) % 360) + 360) % 360;
   const swapCharacter = (h) => {
     const old = me;
     me = createCharacter({ hue: h, light: tierName !== 'low' });
@@ -1570,7 +1818,11 @@ function timeAgo(at) {
     spirits?.sparkle(me.group.position.clone().setY(1));
     me.wave();
   };
-  const paintChip = () => { $('#me-initial').style.background = `hsl(${visitorHue} 55% 46%)`; };
+  const paintChip = () => {
+    const col = `hsl(${baseOf(visitorHue)} 55% 46%)`;
+    if ($('#me-initial')) $('#me-initial').style.background = col;
+    if ($('#top-me-initial')) $('#top-me-initial').style.background = col;
+  };
   paintChip();
   const setHue = (h) => {
     visitorHue = h;
@@ -1579,6 +1831,33 @@ function timeAgo(at) {
     if (me) swapCharacter(h);
     heartbeat();
   };
+  const setVisitorName = (raw) => {
+    const clean = String(raw || '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+    if (!clean || clean === visitor.name) return;
+    visitor.name = clean;
+    store.set('huellita.name', clean);
+    store.set('huellita.signName', clean);
+    if ($('#gb-form')?.elements?.name) $('#gb-form').elements.name.value = clean;
+    syncVisitorChips();
+    heartbeat();
+  };
+  const nameIn = $('#me-name-input');
+  if (nameIn) {
+    nameIn.addEventListener('input', (e) => {
+      const clean = e.target.value.replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+      if (clean) {
+        visitor.name = clean;
+        store.set('huellita.name', clean);
+        store.set('huellita.signName', clean);
+        if ($('#gb-form')?.elements?.name) $('#gb-form').elements.name.value = clean;
+        syncVisitorChips();
+      }
+    });
+    nameIn.addEventListener('change', (e) => setVisitorName(e.target.value));
+  }
+  $('#me-dialog')?.addEventListener('close', () => {
+    if (nameIn?.value) setVisitorName(nameIn.value);
+  });
   for (const h of HUES) {
     const l = document.createElement('label');
     const i = document.createElement('input');
@@ -1591,22 +1870,30 @@ function timeAgo(at) {
     sp.setAttribute('aria-label', HUE_NAMES[HUES.indexOf(h)]);
     sp.title = HUE_NAMES[HUES.indexOf(h)];
     l.append(i, sp);
-    i.onchange = () => setHue(withStyle(h, styleOf(visitorHue)));
+    i.onchange = () => setHue(withStyle(h, styleOf(visitorHue), outfitOf(visitorHue)));
     box.append(l);
   }
+  $$('input[name="me-outfit"]').forEach((i) => {
+    i.onchange = () => setHue(withStyle(visitorHue, styleOf(visitorHue), Number(i.value)));
+  });
   $$('input[name="me-head"]').forEach((i) => {
     i.onchange = () => setHue(withStyle(visitorHue, hairOf(visitorHue) * 2 + (i.value === 'hat' ? 1 : 0)));
   });
   $$('input[name="me-hair"]').forEach((i) => {
     i.onchange = () => setHue(withStyle(visitorHue, Number(i.value) * 2 + (hatOf(visitorHue) ? 1 : 0)));
   });
-  $('#me-chip').onclick = () => {
-    $('#me-dialog-name').textContent = visitor.name;
-    $$('input[name="me-hue"]').forEach((i) => { i.checked = Math.abs(Number(i.value) - (visitorHue - styleOf(visitorHue))) <= 8; });
+  const openMeDialog = () => {
+    closeModals();
+    syncVisitorChips();
+    if (nameIn) nameIn.value = visitor.name;
+    $$('input[name="me-hue"]').forEach((i) => { i.checked = Math.abs(Number(i.value) - (baseOf(visitorHue) - styleOf(visitorHue))) <= 8; });
+    $$('input[name="me-outfit"]').forEach((i) => { i.checked = Number(i.value) === outfitOf(visitorHue); });
     $$('input[name="me-head"]').forEach((i) => { i.checked = (i.value === 'hat') === hatOf(visitorHue); });
     $$('input[name="me-hair"]').forEach((i) => { i.checked = Number(i.value) === hairOf(visitorHue); });
     $('#me-dialog').showModal();
   };
+  $('#me-chip').onclick = openMeDialog;
+  if ($('#top-me-chip')) $('#top-me-chip').onclick = openMeDialog;
 }
 
 function syncMusicBtn() {
@@ -1630,6 +1917,7 @@ const VERBS = {
   eternal: (e) => `✨ ${e.visitor} encendió la luz eterna de ${e.petName}`,
   altar: (e) => `🌼 ${e.visitor} puso a ${e.petName} en la ofrenda`,
   diary: (e) => `📖 La familia de ${e.petName} escribió una página en su diario`,
+  thanks: (e) => `🤍 La familia de ${e.petName} agradece las velas encendidas`,
   gift: (e) => `🎁 ${e.visitor} le dejó ${e.gift?.split(' ')[0] || 'un regalito'} a ${e.petName}`,
   hug: (e) => `🫂 ${e.visitor} le mandó un abrazo a la familia de ${e.petName}`,
 };
@@ -2031,13 +2319,13 @@ async function leaveGift(gft) {
     const r = await api.gift(current.id, who(), gft);
     markToday('g', r.memorial.id);
     if (r.already) return toast(`🎁 Ya le dejaste un regalito a ${r.memorial.name} hoy. Volvé mañana 🤍`);
-    updateMemorial(r.memorial);
-    const full = await api.get(r.memorial.id).catch(() => null);
-    if (full && current?.id === full.id) { current = { ...current, ...full }; fillSheet(current); }
     const emo = gft.split(' ')[0];
     const gm = r.memorial;
     const gkey = hall?.memorialKey(gm) ?? null;
     if (gkey !== null) hall.holdGift(gkey, true);
+    updateMemorial(r.memorial);
+    const full = await api.get(r.memorial.id).catch(() => null);
+    if (full && current?.id === full.id) { current = { ...current, ...full }; fillSheet(current); }
     const flew = offerGesture(gm, 'gift', (from, to, done) => offerFx.gift(emo, from, to, hall.giftScale(gkey), () => { hall.holdGift(gkey, false); done(); }));
     if (!flew) { if (gkey !== null) hall.holdGift(gkey, false); floatFromCurrent(emo); }
     tick();
@@ -2247,17 +2535,52 @@ function nearestFrame(P) {
   });
   return best;
 }
+function startGlide() {
+  if (!controls?.glide()) return;
+  me?.smile(3);
+  haptic(12);
+  hideHint();
+}
+function sitOnSofa(sofa) {
+  if (!controls || !me || !sofa) return;
+  if (me.sitting) {
+    me.sitting = false;
+    haptic(6);
+    return;
+  }
+  const facing = new THREE.Vector3(
+    sofa.seat.x + Math.sin(sofa.heading) * 2,
+    sofa.seat.y,
+    sofa.seat.z + Math.cos(sofa.heading) * 2,
+  );
+  controls.placePlayer(sofa.seat, facing);
+  me.sitting = true;
+  me.smile(4);
+  haptic(8);
+  hideHint();
+  if (spirits?.companion) {
+    spirits.companion.state = 'rest';
+    spirits.companion.timer = 8;
+  }
+  toast('🛋️ Descansando un ratito en el salón…', null, true);
+}
 function computeAction() {
   if (!controls || !hall || !introDone) return null;
   const P = controls.player;
+  if (me?.sitting) return { kind: 'sofa', ic: '🛋️', lbl: 'Levantarse', key: 'stand', run: () => { me.sitting = false; haptic(6); } };
+  const nearSofa = hall.nearestSofa?.(P.pos);
+  if (nearSofa) return { kind: 'sofa', ic: '🛋️', lbl: 'Sentarse', key: 'sit', run: () => sitOnSofa(nearSofa) };
   const b = spirits?.ball;
   if (b && !b.held && !b.inAir && P.pos.distanceTo(_v.set(b.pos.x, 0, b.pos.z)) < 2.6) return { kind: 'ball', ic: '🎾', lbl: 'Tirar', key: 'ball', run: throwBall };
-  // La ofrenda de la destacada es enorme: se la ofrece desde la entrada del salón si la mirás.
+  // La ofrenda central del salón: se la ofrece desde la entrada si la mirás.
   const fd = Math.hypot(EASEL_POS.x - P.pos.x, EASEL_POS.z - P.pos.z);
   const ff = ((EASEL_POS.x - P.pos.x) * Math.sin(P.heading) + (EASEL_POS.z - P.pos.z) * Math.cos(P.heading)) / Math.max(fd, 1e-3);
-  if (hall.featured && (fd < 6 || (fd < 11.5 && ff > 0.5))) {
-    const f = hall.featured;
-    return { kind: 'visit', ic: '🕯️', lbl: f.name, key: `f:${f.id}`, run: () => visit(f) };
+  if (hall.floor === 0 && (fd < 6 || (fd < 11.5 && ff > 0.5))) {
+    if (hall.featured) {
+      const f = hall.featured;
+      return { kind: 'visit', ic: '🕯️', lbl: f.name, key: `f:${f.id}`, run: () => visit(f) };
+    }
+    return { kind: 'welcome', ic: '🌹', lbl: 'Bienvenida', key: 'welcome', run: () => visitWelcome() };
   }
   const fr = nearestFrame(P);
   if (fr) {
@@ -2265,12 +2588,14 @@ function computeAction() {
     if (m) return { kind: 'visit', ic: '🕯️', lbl: m.name, key: `m:${m.id}`, run: () => visit(m) };
     return { kind: 'add', ic: '＋', lbl: 'Sumar acá', key: `a:${fr.i}`, run: () => openAdd(hall.floor * SLOTS_PER_FLOOR + fr.i) };
   }
-  if (P.pos.distanceTo(_v.set(ELEVATOR_POS.x, 0, ELEVATOR_POS.z)) < 5.5) return { kind: 'lift', ic: '🛗', lbl: 'Ascensor', key: 'lift', run: callElevator };
+  if (elevator && elevator.nearestDist(P.pos) < 3.4) return { kind: 'lift', ic: '🛗', lbl: 'Ascensor', key: 'lift', run: () => callElevator() };
   if (currentFloor() === 0 && P.pos.distanceTo(_v.set(JAR_POS.x, 0, JAR_POS.z)) < 3.2) return { kind: 'jar', ic: '🫙', lbl: 'Frasco', key: 'jar', run: () => { clink(); openJar(); } };
   const c = spirits?.companion;
   // Paseando, el botón es la pelota; si te quedás quieto un rato al lado de tu mascota, acariciarla.
   if (c && c.fade > 0.5 && stillFor > 2.5 && P.pos.distanceTo(c.pos) < 2.4) return { kind: 'pet', ic: '🐾', lbl: 'Acariciar', key: 'pet', run: () => { stillFor = 0; tapSpirit(c); } };
   if (walking) return { kind: 'ball', ic: '🎾', lbl: 'Tirar', key: 'ball-w', run: throwBall };
+  // En los pisos del cielo, afuera de los pasillos: saltar y planear con el sarape abierto.
+  if (currentFloor() > 0 && !inCorridor(P.pos.x, P.pos.z) && !controls.gliding) return { kind: 'glide', ic: '🌬️', lbl: 'Planear', key: 'glide', run: startGlide };
   return { kind: 'gestures', ic: '🤍', lbl: 'Gestos', key: 'g', run: null };
 }
 function updateAction() {
@@ -2320,9 +2645,21 @@ function fillExtras(m) {
   ga.hidden = !m.gathering;
   if (m.gathering) {
     const when = new Date(m.gathering);
-    const now = Date.now() >= m.gathering && Date.now() < m.gathering + 3 * 3600_000;
-    ga.innerHTML = `<span>🕯️ ${now ? `El encuentro de ${escapeHtml(m.name)} es ahora` : `Encuentro de ${escapeHtml(m.name)} · ${when.toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`}</span><button class="btn soft small" id="s-ics">📅 Añadir al calendario</button>`;
-    $('#s-ics').onclick = () => downloadIcs(m);
+    const now = Date.now() >= m.gathering - 15 * 60_000 && Date.now() < m.gathering + 3 * 3600_000;
+    const hereCount = Number($('#here')?.textContent) || 1;
+    if (now) {
+      ga.innerHTML = `<span>🕯️ <b>El encuentro de ${escapeHtml(m.name)} es ahora</b> · ${hereCount} ${hereCount === 1 ? 'persona acompañando' : 'personas acompañando'}</span><button class="btn primary small" id="s-gather-now">🕯️ Encender vela juntos</button>`;
+      $('#s-gather-now').onclick = () => {
+        if (!didToday('c', m.id)) return $('#s-candle').click();
+        releaseLantern(m, { burst: true });
+        sparkle();
+        haptic([10, 40, 16]);
+        toast(`🕯️ Tu vela brilla junto a quienes recuerdan hoy a ${m.name}`);
+      };
+    } else {
+      ga.innerHTML = `<span>🕯️ Encuentro de ${escapeHtml(m.name)} · ${when.toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</span><button class="btn soft small" id="s-ics">📅 Añadir al calendario</button>`;
+      $('#s-ics').onclick = () => downloadIcs(m);
+    }
   }
   $('#s-family').hidden = !isMine(m);
   const card = $('#s-card');
@@ -2426,6 +2763,11 @@ const TOOLS = {
   diary: () => openDiary(),
   gathering: () => { $('#gathering').showModal(); },
   invite: () => inviteFamily(),
+  'gb-toggle': async () => {
+    if (!current) return;
+    const next = !current.gbClosed;
+    await ownAction('edit', { gbClosed: next }, next ? '🔒 Libro de visitas cerrado' : '📖 Libro de visitas abierto');
+  },
   altar: async () => {
     try {
       const r = await api.toAltar(current.id, who());
@@ -2991,7 +3333,7 @@ async function photoMode() {
     const caption = comp ? `Paseando con ${comp.name} 🐾` : 'En el jardín de las huellitas 🌼';
     const when = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
     lastPhoto = { canvas: await polaroid(url, { caption, sub: `${when} · Encendé una huellita` }), name: comp?.name || 'jardin', id: comp?.memorialId || null };
-    $('#photo-preview').src = lastPhoto.canvas.toDataURL('image/jpeg', 0.9);
+    $('#polaroid-preview').src = lastPhoto.canvas.toDataURL('image/jpeg', 0.9);
     $('#photo-dialog-sub').textContent = comp ? `Un recuerdo de tu paseo con ${comp.name}.` : 'Un recuerdo de tu visita al jardín.';
     $('#photo-dialog').showModal();
   }, { duration: reduced ? 0.3 : 1.1 });
@@ -3119,6 +3461,27 @@ function throwBall() {
   setTimeout(() => spirits.throwBall(me.handWorld(), P.heading), 230);
 }
 $('#walk-call').onclick = () => { spirits?.call(); haptic(8); if (walking) toast(`📣 ¡${walking.name}, vení!`); };
+$('#walk-treat').onclick = () => {
+  if (!spirits || !walking) return;
+  me?.pet();
+  spirits.treat();
+  boop();
+  petVoice(walking.species);
+  avatars?.floatAt('🦴', (spirits.companion?.pos || controls.player.pos).clone().setY(1.0));
+  haptic([10, 35, 10]);
+  toast(`🦴 ¡Qué rico! ${walking.name} da un saltito de felicidad 🤍`);
+};
+$('#return-hall').onclick = () => {
+  if (!controls) return;
+  const spot = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 15.5);
+  teleportPlayer(spot, ENTRY_LOOK);
+  if (spirits?.companion) {
+    spirits.companion.pos.set(spot.x + 1.1, groundY(spot.x + 1.1, spot.z - 1.2, false), spot.z - 1.2);
+  }
+  controls.follow();
+  $('#return-hall').hidden = true;
+  toast('🏛️ Volviste a la entrada del salón');
+};
 $('#walk-stop').onclick = stopWalk;
 $('#walk-who').onclick = () => { if (walking) visit(memorials.find((m) => m.id === walking.id) || walking); };
 $('#s-walk-act').onclick = () => $('#s-walk').click();
@@ -3129,14 +3492,26 @@ $('#s-walk').onclick = () => {
 };
 
 const SPIRIT_LINES = ['mueve la cola de felicidad', 'te mira con ojitos brillantes', 'da un saltito de alegría', 'te quiere invitar a jugar'];
+const VIBE_LINES = {
+  jugueton: ['te invita a jugar dando saltitos 🎾', 'hace una reverencia para que corras con él 🐾'],
+  saltarin: ['pega un salto enorme de alegría 🦘', 'rebota en el aire moviendo la cola ✨'],
+  mimoso: ['se apoya contra tus piernas pidiendo mimos 🤍', 'se tira panza arriba para que lo acaricies 🐾'],
+  tranquilo: ['suspira calentito y mueve la punta de la cola 🌙', 'te mira con paz, bien pachorra 🤍'],
+  curioso: ['ladea la cabecita mirándote con intriga 🦋', 'olfatea tu mano con mucha curiosidad 🐾'],
+  timido: ['te mira de reojito desde su rincón tranquilo 🙈', 'mueve apenas la colita con timidez 🤍'],
+  guardian: ['se sienta derechito cuidando el jardín 🛡️', 'te acompaña firme y atento, como siempre 🐾'],
+  travieso: ['sale corriendo en círculos con cara de pícaro 😈', 'hace una pirueta traviesa y busca qué desenterrar 🐾'],
+};
 function tapSpirit(a) {
   boop();
   if (!a) return;
+  petVoice(a.kind);
   const P0 = controls.player;
   const petting = a.role === 'companion' && P0.pos.distanceTo(a.pos) < 2.2 && !P0.moving;
   if (petting) spirits.cuddle(a); else spirits.poke(a);
   haptic([8, 30, 8]);
   avatars?.floatAt('🤍', a.pos.clone().setY(0.9 * a.s + 0.3));
+  const line = pick(VIBE_LINES[a.vibe] || SPIRIT_LINES);
   if (a.role === 'companion') {
     // Si está cerca, tu personaje se agacha a acariciarlo.
     const P = controls.player;
@@ -3145,12 +3520,12 @@ function tapSpirit(a) {
       me.pet();
       return toast(`🤍 Acariciaste a ${a.name}`);
     }
-    return toast(`🐾 ${a.name} ${pick(SPIRIT_LINES)}`);
+    return toast(`🐾 ${a.name} ${line}`);
   }
   if (a.role === 'remote') return toast(`🐾 ${a.name} pasea con su familia`);
   const m = a.memorialId && memorials.find((x) => x.id === a.memorialId);
-  if (m) toast(`🐾 ${m.name} juega en el Prado de los espíritus`, { label: 'Visitar su lugar', fn: () => visit(m) });
-  else toast(a.kind === 'gato' ? '🐱 Un gatito de luz te saluda. Corré libre 🌈' : '🐶 Un perrito de luz mueve la cola. Corré libre 🌈');
+  if (m) toast(`🐾 ${m.name} ${line}`, { label: 'Visitar su lugar', fn: () => visit(m) });
+  else toast(a.kind === 'gato' ? `🐱 Un gatito de luz ${line}` : `🐶 Un perrito de luz ${line}`);
 }
 
 function wireSpirits() {
@@ -3158,29 +3533,272 @@ function wireSpirits() {
   const once = (k, fn) => { if (!told.has(k)) { told.add(k); fn(); } };
   spirits.on('event', (type, a) => {
     if (type === 'bounce') return tick();
+    if (type === 'splash') return step('water');
     if (!a) return;
     if (type === 'arrived' && a.role === 'companion') {
       sparkle();
+      petVoice(a.kind);
       haptic([10, 40, 16]);
       toast(`🐾 ${a.name} está con vos. Caminen juntos por el jardín.`);
       once('tip-ball', () => setTimeout(() => toast('🎾 Tocá la pelota para tirársela'), 4200));
     }
+    if (type === 'bridge' && a.role === 'companion') once('bridge', () => toast(`🌈 ${a.name} se asomó a mirar los pececitos de luz`, null, true));
     if (type === 'dropped' && (a.role === 'companion' || a.role === 'joined')) once('drop', () => toast(`🎾 ${a.name} te trajo la pelota. ¡Tirala de nuevo!`));
     if (type === 'dropped' && a.role === 'pack' && a.name) toast(`🎾 ${a.name} te devolvió la pelota`, null, true);
     if (type === 'join') once('join', () => toast(`🐾 ${a.name} se fue a jugar con los del Prado. Cuando camines, vuelve con vos.`));
-    if (type === 'greet' && a.name && a.role === 'pack') once(`greet-${a.name}`, () => toast(`🐶 ${a.name} vino a saludarte`, null, true));
+    if (type === 'greet' && a.name && a.role === 'pack') once(`greet-${a.name}`, () => { petVoice(a.kind); toast(`🐶 ${a.name} vino a saludarte`, null, true); });
   });
 }
 
-// Cómo era: pelaje, orejas y tamaño (para que su espíritu se le parezca).
-function lookPicker(box, value = {}) {
+// Cómo era: pelaje, combinación de colores, manchitas, tipo de pelo, orejas, colita, ojos y tamaño.
+function drawPetPreview(canvasEl, l = {}, species = 'perro') {
+  if (!canvasEl) return;
+  const g = canvasEl.getContext('2d');
+  const W = canvasEl.width;
+  const H = canvasEl.height;
+  g.clearRect(0, 0, W, H);
+  // Fondo suave con halo de espíritu.
+  const rad = g.createRadialGradient(W * 0.5, H * 0.52, 8, W * 0.5, H * 0.52, W * 0.48);
+  rad.addColorStop(0, 'rgba(255, 224, 155, 0.35)');
+  rad.addColorStop(1, 'rgba(255, 224, 155, 0)');
+  g.fillStyle = rad;
+  g.fillRect(0, 0, W, H);
+
+  const cat = species === 'gato';
+  const bunny = species === 'otro';
+  const furHex = FURS.find((f) => f.id === l.fur)?.hex || (cat ? '#8f8c8a' : '#c98a4b');
+  const pat = l.pattern || 'solid';
+  const fur2Hex = FURS.find((f) => f.id === l.fur2)?.hex
+    || (pat === 'mask' || pat === 'tabby' ? '#2e2520' : (pat === 'spots' || pat === 'patches' || pat === 'eye') && l.fur === 'blanco' ? '#2e2925' : '#fbf6ee');
+  const coat = l.coat || 'normal';
+  const ears = l.ears || (cat ? 'up' : 'down');
+  const tail = l.tail || (cat ? 'thin' : coat === 'fluffy' ? 'fluffy' : 'thin');
+  const snout = l.snout || 'mid';
+  const eyes = l.eyes || (cat ? 'amber' : 'honey');
+  const EYE_HEX = { honey: '#8a5224', dark: '#241815', amber: '#d9a13a', green: '#489e5a', blue: '#46a0e6' };
+
+  g.save();
+  const sc = { xs: 0.84, s: 0.92, m: 1.0, l: 1.08, xl: 1.15 }[l.size] || 1.0;
+  g.translate(W * 0.5, H * 0.58);
+  g.scale(sc, sc);
+
+  // Cola.
+  g.save();
+  g.fillStyle = pat === 'mask' ? fur2Hex : furHex;
+  g.strokeStyle = pat === 'mask' ? fur2Hex : furHex;
+  if (bunny || tail === 'bob') {
+    g.beginPath(); g.arc(-34, 8, 9, 0, Math.PI * 2); g.fill();
+  } else if (tail === 'curl') {
+    g.lineWidth = coat === 'fluffy' ? 11 : 8;
+    g.lineCap = 'round';
+    g.beginPath(); g.arc(-30, -8, 12, 0.3, Math.PI * 1.65); g.stroke();
+  } else {
+    g.lineWidth = (tail === 'fluffy' || coat === 'fluffy') ? 14 : coat === 'short' ? 6 : 9;
+    g.lineCap = 'round';
+    g.beginPath(); g.moveTo(-24, 10); g.quadraticCurveTo(-48, -4, -44, -24); g.stroke();
+    if (['socks', 'tuxedo', 'bicolor', 'patches', 'eye'].includes(pat)) {
+      g.fillStyle = fur2Hex;
+      g.beginPath(); g.arc(-44, -24, g.lineWidth * 0.48, 0, Math.PI * 2); g.fill();
+    }
+  }
+  g.restore();
+
+  // Cuerpo.
+  const bodyRx = coat === 'fluffy' ? 30 : coat === 'short' ? 25 : 27;
+  const bodyRy = coat === 'fluffy' ? 21 : 19;
+  g.save();
+  g.beginPath();
+  g.ellipse(-6, 10, bodyRx, bodyRy, -0.1, 0, Math.PI * 2);
+  g.fillStyle = furHex;
+  g.fill();
+  g.clip();
+  if (['tuxedo', 'bicolor', 'calico', 'patches'].includes(pat)) {
+    g.fillStyle = pat === 'calico' ? '#fbf6ee' : fur2Hex;
+    g.beginPath(); g.ellipse(12, 16, 18, 15, 0.2, 0, Math.PI * 2); g.fill();
+  }
+  if (pat === 'spots') {
+    g.fillStyle = fur2Hex;
+    for (const [sx, sy, sr] of [[-18, 2, 5], [-6, -2, 4.2], [-12, 14, 4.5], [2, 5, 3.8], [-22, 12, 3.5]]) {
+      g.beginPath(); g.arc(sx, sy, sr, 0, Math.PI * 2); g.fill();
+    }
+  } else if (pat === 'patches') {
+    g.fillStyle = fur2Hex;
+    g.beginPath(); g.arc(-16, 1, 12, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(2, 14, 10, 0, Math.PI * 2); g.fill();
+  } else if (pat === 'calico') {
+    g.fillStyle = l.fur2 ? fur2Hex : '#d97534';
+    g.beginPath(); g.arc(-16, 0, 12, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#2b221e';
+    g.beginPath(); g.arc(-2, 4, 10, 0, Math.PI * 2); g.fill();
+  } else if (pat === 'tabby') {
+    g.strokeStyle = fur2Hex;
+    g.lineWidth = 3.5;
+    for (const sx of [-20, -11, -2, 6]) {
+      g.beginPath(); g.moveTo(sx, -12); g.quadraticCurveTo(sx - 3, 4, sx + 1, 18); g.stroke();
+    }
+  }
+  g.restore();
+
+  // Pechera peluda o con rulitos.
+  if (coat === 'fluffy' || coat === 'curly') {
+    g.fillStyle = ['tuxedo', 'bicolor', 'calico'].includes(pat) ? (pat === 'calico' ? '#fbf6ee' : fur2Hex) : furHex;
+    for (const [rx, ry, rr] of [[10, 6, 8], [14, 12, 7.5], [8, 16, 7]]) {
+      g.beginPath(); g.arc(rx, ry, rr, 0, Math.PI * 2); g.fill();
+    }
+  }
+
+  // Patitas.
+  const sock = ['socks', 'tuxedo', 'bicolor', 'calico', 'patches', 'eye'].includes(pat);
+  const pawCol = pat === 'mask' ? fur2Hex : pat === 'calico' ? '#fbf6ee' : sock ? fur2Hex : furHex;
+  for (const px of [-20, -10, 6, 15]) {
+    g.fillStyle = furHex;
+    g.fillRect(px - 3.5, 20, 7, 13);
+    g.fillStyle = pawCol;
+    g.beginPath(); g.ellipse(px + 1, 33, 5.2, 3.6, 0, 0, Math.PI * 2); g.fill();
+  }
+
+  // Cabeza y orejas.
+  const hx = 14;
+  const hy = -12;
+  const hr = cat ? 16 : 17.5;
+  // Oreja trasera.
+  const drawEar = (side, front) => {
+    const earCol = (pat === 'mask' || (pat === 'eye' && side > 0) || (pat === 'patches' && side < 0) || (pat === 'calico' && side > 0))
+      ? (pat === 'calico' ? '#d97534' : fur2Hex)
+      : furHex;
+    g.fillStyle = earCol;
+    g.beginPath();
+    if (bunny) {
+      g.ellipse(hx + side * 6, hy - 22, 4.5, 14, side * 0.15, 0, Math.PI * 2);
+    } else if (ears === 'down') {
+      g.ellipse(hx + side * 12, hy + 2, 6, 13, side * 0.25, 0, Math.PI * 2);
+    } else {
+      const big = ears === 'big' ? 1.35 : 1;
+      const ex = hx + side * 10;
+      const ey = hy - 10;
+      g.moveTo(ex - 6 * big, ey + 4);
+      g.lineTo(ex + side * (ears === 'tip' ? 6 : 2) * big, ey - 13 * big);
+      g.lineTo(ex + 6 * big, ey + 4);
+      g.closePath();
+    }
+    g.fill();
+    void front;
+  };
+  drawEar(-1, false);
+
+  // Cabeza.
+  g.save();
+  g.beginPath();
+  g.arc(hx, hy, hr, 0, Math.PI * 2);
+  g.fillStyle = furHex;
+  g.fill();
+  g.clip();
+  if (pat === 'bicolor') {
+    g.fillStyle = fur2Hex;
+    g.fillRect(hx - 20, hy + 3, 40, 20);
+    g.fillRect(hx - 2.5, hy - 20, 6, 30);
+  } else if (pat === 'mask') {
+    g.fillStyle = fur2Hex;
+    g.beginPath(); g.ellipse(hx + 5, hy + 2, 13, 10, 0, 0, Math.PI * 2); g.fill();
+  } else if (pat === 'eye') {
+    g.fillStyle = fur2Hex;
+    g.beginPath(); g.arc(hx + 6, hy - 2, 7.2, 0, Math.PI * 2); g.fill();
+  } else if (pat === 'calico') {
+    g.fillStyle = '#d97534';
+    g.beginPath(); g.arc(hx - 7, hy - 8, 9, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#2b221e';
+    g.beginPath(); g.arc(hx + 8, hy - 9, 8, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+
+  // Rulitos en la cabeza.
+  if (coat === 'curly') {
+    g.fillStyle = furHex;
+    for (const [cx, cy, cr] of [[hx - 5, hy - 15, 5.5], [hx + 1, hy - 17, 6], [hx + 7, hy - 15, 5.5]]) {
+      g.beginPath(); g.arc(cx, cy, cr, 0, Math.PI * 2); g.fill();
+    }
+  } else if (coat === 'fluffy') {
+    g.fillStyle = pat === 'mask' ? fur2Hex : furHex;
+    g.beginPath(); g.arc(hx - 12, hy + 4, 6, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(hx + 12, hy + 4, 6, 0, Math.PI * 2); g.fill();
+  }
+
+  drawEar(1, true);
+
+  // Hocico.
+  const snW = cat || bunny ? 7 : snout === 'long' ? 13 : snout === 'flat' ? 6 : 9.5;
+  g.fillStyle = pat === 'mask' ? fur2Hex : ['tuxedo', 'bicolor', 'calico'].includes(pat) ? '#fbf6ee' : furHex;
+  g.beginPath();
+  g.ellipse(hx + 11 + (snW - 7) * 0.45, hy + 4, snW, 6.2, 0, 0, Math.PI * 2);
+  g.fill();
+  // Nariz.
+  g.fillStyle = cat || bunny ? '#f08aa0' : '#1c1512';
+  g.beginPath();
+  g.arc(hx + 11 + snW * 1.15, hy + 2, cat ? 2.4 : 3.2, 0, Math.PI * 2);
+  g.fill();
+
+  // Ojos (dos ojos en vista 3/4 para que se vea "uno y uno").
+  for (const [idx, ox] of [[0, hx + 1], [1, hx + 9.5]]) {
+    const eCol = bunny ? '#3a2a2a' : eyes === 'odd' ? (idx === 0 ? '#46a0e6' : '#d9a13a') : (EYE_HEX[eyes] || '#8a5224');
+    g.fillStyle = eCol;
+    g.beginPath(); g.arc(ox, hy - 2, 3.7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#181210';
+    g.beginPath(); g.ellipse(ox + 0.4, hy - 2, cat ? 1.2 : 2.1, 2.3, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.arc(ox - 0.8, hy - 3.1, 1.1, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+}
+
+function lookPicker(box, value = {}, speciesFn = null) {
+  if (!box) return;
   box.innerHTML = '';
-  const make = (title, name, list, swatch) => {
+  const getSpecies = speciesFn || (() => {
+    const form = box.closest('form');
+    return form?.querySelector('input[name="species"]:checked')?.value || current?.species || 'perro';
+  });
+
+  // Tarjeta con vista previa en vivo mientras combinás colores y manchitas.
+  const head = document.createElement('div');
+  head.className = 'look-preview-card';
+  const cv = document.createElement('canvas');
+  cv.width = 168;
+  cv.height = 112;
+  cv.className = 'look-canvas';
+  const txt = document.createElement('div');
+  txt.innerHTML = '<b>Así se ve su espíritu</b><small>Combiná colores, manchitas, tipo de pelo, orejas, colita y ojos.</small>';
+  head.append(cv, txt);
+  box.append(head);
+
+  const refreshPreview = () => {
+    const cur = readLook(box) || value;
+    const sp = getSpecies();
+    drawPetPreview(cv, cur, sp);
+    const fur2Row = box.querySelector('.look-fur2');
+    if (fur2Row) fur2Row.classList.toggle('is-dimmed', (!cur.pattern || cur.pattern === 'solid') && !cur.fur2);
+    const snoutRow = box.querySelector('.look-snout');
+    if (snoutRow) snoutRow.hidden = sp !== 'perro';
+  };
+
+  const make = (title, name, list, swatch, allowEmpty = null) => {
     const fs = document.createElement('fieldset');
     fs.className = `look-row look-${name}`;
     const lg = document.createElement('legend');
     lg.textContent = title;
     fs.append(lg);
+    if (allowEmpty) {
+      const l = document.createElement('label');
+      const i = document.createElement('input');
+      i.type = 'radio';
+      i.name = `look-${name}`;
+      i.value = '';
+      i.checked = !value[name];
+      i.onchange = refreshPreview;
+      const sp = document.createElement('span');
+      sp.textContent = allowEmpty;
+      l.append(i, sp);
+      fs.append(l);
+    }
     for (const it of list) {
       const l = document.createElement('label');
       const i = document.createElement('input');
@@ -3188,6 +3806,7 @@ function lookPicker(box, value = {}) {
       i.name = `look-${name}`;
       i.value = it.id;
       i.checked = value[name] === it.id;
+      i.onchange = refreshPreview;
       const sp = document.createElement('span');
       if (swatch) { sp.className = 'swatch'; sp.style.setProperty('--c', it.hex); sp.title = it.name; sp.setAttribute('aria-label', it.name); } else sp.textContent = it.name;
       l.append(i, sp);
@@ -3195,14 +3814,40 @@ function lookPicker(box, value = {}) {
     }
     box.append(fs);
   };
-  make('Su pelaje', 'fur', FURS, true);
+  make('Su personalidad', 'vibe', PERSONALITIES);
+  make('Color principal', 'fur', FURS, true);
+  make('Manchitas y dibujo', 'pattern', PATTERNS);
+  make('Segundo color (manchas / pecho / patitas)', 'fur2', FURS, true, 'Automático');
+  make('Su pelo', 'coat', COATS);
   make('Sus orejas', 'ears', EARS);
+  make('Su colita', 'tail', TAILS);
+  make('Sus ojos', 'eyes', EYES);
   make('Su tamaño', 'size', SIZES);
   make('Su hocico (perros)', 'snout', SNOUTS);
+
+  const form = box.closest('form');
+  if (form) {
+    form.querySelectorAll('input[name="species"]').forEach((r) => {
+      r.addEventListener('change', refreshPreview);
+    });
+  }
+  refreshPreview();
 }
 function readLook(box) {
-  const v = (n) => box.querySelector(`input[name="look-${n}"]:checked`)?.value;
-  const out = { fur: v('fur'), ears: v('ears'), size: v('size'), snout: v('snout') };
+  if (!box) return null;
+  const v = (n) => box.querySelector(`input[name="look-${n}"]:checked`)?.value || undefined;
+  const out = {
+    vibe: v('vibe'),
+    fur: v('fur'),
+    fur2: v('fur2'),
+    pattern: v('pattern'),
+    coat: v('coat'),
+    ears: v('ears'),
+    tail: v('tail'),
+    eyes: v('eyes'),
+    size: v('size'),
+    snout: v('snout'),
+  };
   return Object.values(out).some(Boolean) ? out : null;
 }
 lookPicker($('#add-look'));
@@ -3297,7 +3942,28 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheetEl.hidden &
 
 (async () => {
   const label = $('#enter-label');
-  api = await connect();
+  try {
+    api = await connect({ onProgress: () => { label.textContent = 'Guardando tus recuerdos…'; } });
+  } catch (err) {
+    $('#splash').classList.add('connection-issue');
+    $('#connection-error').hidden = false;
+    $('#connection-error').textContent = err.message;
+    $('#backup-demo').hidden = false;
+    $('#backup-demo').onclick = downloadDemoBackup;
+    label.textContent = 'Volver a intentar';
+    $('#enter').disabled = false;
+    $('#enter').onclick = () => location.reload();
+    return;
+  }
+  const recoveredIds = api.migration?.mapping || {};
+  game.remap(recoveredIds);
+  if (recoveredIds[ARRIVAL.id]) {
+    ARRIVAL.id = recoveredIds[ARRIVAL.id];
+    const url = new URL(location.href);
+    if (/^\/h\//.test(url.pathname)) url.pathname = `/h/${ARRIVAL.id}`;
+    if (url.hash.startsWith('#h/')) url.hash = `#h/${ARRIVAL.id}`;
+    history.replaceState(null, '', url);
+  }
   if (api.mode === 'local') {
     $('#mode').hidden = false;
     $('#mode').textContent = 'Modo demo · lo que sumes queda en este navegador';
@@ -3318,6 +3984,18 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheetEl.hidden &
   await refresh().catch((err) => toast(err.message));
   label.textContent = 'Entrar al jardín 🕯️';
   personalizeSplash();
+  api.night().then((n) => {
+    const el = $('#splash-night');
+    if (!el) return;
+    const total = memorials.reduce((a, m) => a + (m.candles || 0), 0);
+    const count = n?.candles || total;
+    if (count > 0) {
+      el.hidden = false;
+      el.textContent = n?.candles
+        ? `🕯️ ${n.candles.toLocaleString('es-AR')} ${n.candles === 1 ? 'vela encendida' : 'velas encendidas'} esta noche${n.countries > 1 ? ` · ${n.countries} países` : ''}`
+        : `🕯️ ${total.toLocaleString('es-AR')} ${total === 1 ? 'vela encendida' : 'velas encendidas'} en el jardín`;
+    }
+  }).catch(() => {});
   $('#enter').disabled = false;
   checkReach();
   heartbeat();

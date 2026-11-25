@@ -165,6 +165,10 @@ tarjeta para historias, farolillo que se va volando y palabras de consuelo.
 
 ## Publicarlo en Vercel
 
+La producción de este repositorio ya está conectada a Upstash y publica desde `main` con Node 22.
+La base está vinculada sólo a Production; las previews conservan el modo demo. Estas instrucciones
+sirven para un proyecto nuevo:
+
 1. En Vercel: **Add New → Project** e importá este repositorio. No hace falta tocar nada:
    `vercel.json` ya configura el build (Vite → `dist/`) y la API (`api/handler.js`).
 2. **Conectá la base de datos** para que las velas, flores y huellitas se compartan entre todos:
@@ -175,10 +179,11 @@ tarjeta para historias, farolillo que se va volando y palabras de consuelo.
 Sin el paso 2 el sitio funciona igual en **modo demo**: cada visitante ve sólo lo que suma en su
 propio navegador (aparece un aviso abajo). Con Upstash conectado, todo es compartido y en vivo.
 
-**Antes de conectar una base a un sitio que ya se usó en modo demo:** los recuerdos de esos
-navegadores no se importan automáticamente. No borres sus datos; el rescate está pendiente en
-`PENDIENTES.md`. El permiso de edición también se guarda en el navegador: conservá el enlace de
-familia para poder entrar desde otro dispositivo.
+**Si ya usaste el sitio en modo demo:** volvé a entrar desde ese mismo navegador. El jardín recupera
+automáticamente sus huellitas, fotos, voz, diarios, libros, regalitos y notas en la base compartida,
+conservando el acceso familiar y una copia original en el dispositivo. Si se corta la conexión,
+podés reintentar sin duplicados o guardar una copia. Conservá el enlace de familia para poder
+editar desde otro dispositivo; todavía no hay inicio de sesión ni recuperación por email.
 
 La base conserva el historial de diarios, mensajes, regalitos, notas y gestos sin borrar los
 anteriores cuando llegan nuevos. La interfaz muestra los más recientes; consultar los anteriores
@@ -260,6 +265,7 @@ lab/gifts.html          Los 36 regalitos en 3D juntos (sólo en desarrollo)
 | Método y ruta | Qué hace |
 | --- | --- |
 | `GET /api/health` | Si hay base de datos conectada |
+| `POST /api/import` | Recupera por lotes los recuerdos del modo demo, con recibos para reintentar y permisos familiares nuevos |
 | `GET /api/memorials` | Todas las huellitas y totales |
 | `POST /api/memorials` | Crea una (`name`, `species`, `photo` como data URL, `birthday`/`passedDay` en `MM-DD`, `message`, `slot`, `look` = `{fur, ears, size, pattern}`). Devuelve `editToken` |
 | `GET /api/memorials/:id` | Una huellita con su libro de visitas |
@@ -292,5 +298,6 @@ La investigación inicial, hecha con [REA](https://github.com/morluto/rea), est�
 
 ## Pendientes
 
-Lo que falta, priorizado, está en [`PENDIENTES.md`](PENDIENTES.md). Lo más urgente: conectar Upstash en
-Vercel (hoy el sitio publicado está en modo demo), moderación mínima y probarlo en teléfonos reales.
+Lo que falta, priorizado, está en [`PENDIENTES.md`](PENDIENTES.md). Lo más urgente: moderación mínima,
+recuperación de acceso por email y probarlo en teléfonos reales. Producción ya usa Upstash y rescata
+los recuerdos del modo demo al volver a visitar desde el navegador que los creó.

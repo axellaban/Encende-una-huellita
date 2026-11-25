@@ -13,13 +13,15 @@
 //   night:<día> / nco:<día>   INT / SET  velas y países de la noche
 //   jar / jarn       LIST / INT  frasco de gracias
 //   rl:<k>:<min>     INT   límite de envíos por minuto
+//   im:<origen>:<registro> STR recibos del rescate del modo demo (sin vencimiento)
 import { randomBytes, createHash } from 'node:crypto';
 import { FEATURED, FEATURED_IDS } from './seed.js';
 import { GLOW, GIFT_SET, SAYINGS, EMOTES } from './glow.js';
 import { BACKGROUND_IDS } from './plans.js';
+import { createImporter } from './migration.js';
 
 const P = 'hu:';
-export const SLOTS_PER_FLOOR = 90;
+export const SLOTS_PER_FLOOR = 270;
 const MAX_SLOT = SLOTS_PER_FLOOR * 200;
 const PRESENCE_MS = 25_000;
 const MAX_PRESENT = 150;
@@ -64,6 +66,8 @@ export function createStore(kv) {
       flowers: Number(h.flowers) || 0,
       gifts: Number(h.gifts) || 0,
       glow: Number(h.glow) || 0,
+      streak: Number(h.streak) || (Number(h.candles) > 0 ? 1 : 0),
+      thankedAt: Number(h.thankedAt) || null,
       guestbookCount: Number(h.gb) || 0,
       lastGifts: h.lastGifts ? JSON.parse(h.lastGifts) : [],
       giftCounts: Object.fromEntries(Object.keys(h).filter((k) => k.startsWith('gc:')).map((k) => [k.slice(3), Number(h[k]) || 0])),
@@ -84,6 +88,7 @@ export function createStore(kv) {
     for (const f of FEATURED) {
       cmds.push(['HSETNX', `${P}m:${f.id}`, 'data', JSON.stringify({ slot: f.slot, createdAt: 0, featured: true })]);
       cmds.push(['ZADD', `${P}ids`, '0', f.id]);
+      if (f.slot >= 0) cmds.push(['HSETNX', `${P}slots`, String(f.slot), f.id]);
     }
     if (cmds.length) await kv.pipeline(cmds);
     featuredReady = true;
@@ -129,9 +134,30 @@ export function createStore(kv) {
     return { h };
   }
 
+  async function claimSlot(wanted, id) {
+    const slots = fromHash(await kv.cmd('HGETALL', `${P}slots`));
+    const previous = Object.keys(slots).find((s) => slots[s] === id);
+    if (previous !== undefined) return Number(previous);
+    if (Number.isInteger(wanted) && wanted >= 0 && wanted < MAX_SLOT) {
+      if (await kv.cmd('HSETNX', `${P}slots`, String(wanted), id)) return wanted;
+      if (await kv.cmd('HGET', `${P}slots`, String(wanted)) === id) return wanted;
+    }
+    for (let tries = 0; tries < 6; tries++) {
+      const rows = fromHash(await kv.cmd('HGETALL', `${P}slots`));
+      const own = Object.keys(rows).find((s) => rows[s] === id);
+      if (own !== undefined) return Number(own);
+      let slot = 0;
+      while (rows[slot]) slot++;
+      if (slot >= MAX_SLOT) break;
+      if (await kv.cmd('HSETNX', `${P}slots`, String(slot), id)) return slot;
+    }
+    throw Object.assign(new Error('El muro está muy concurrido. Probá de nuevo.'), { status: 409 });
+  }
+
   const store = {
     kind: kv.kind,
     owner,
+    importBatch: createImporter(kv, { ensureFeatured, claimSlot, getRaw, toPublic, event }),
 
     async list() {
       await ensureFeatured();
@@ -144,15 +170,17 @@ export function createStore(kv) {
       await ensureFeatured();
       const m = toPublic(await getRaw(id), id);
       if (!m) return null;
-      const [gb, gf, dy, dh] = await kv.pipeline([
+      const [gb, gf, dy, dh, cd] = await kv.pipeline([
         ['LRANGE', `${P}gb:${id}`, '0', '99'], ['LRANGE', `${P}gf:${id}`, '0', '29'],
         ['LRANGE', `${P}dy:${id}`, '0', '49'], ['HGETALL', `${P}dh:${id}`],
+        ['LRANGE', `${P}cd:${id}`, '0', '29'],
       ]);
       const hearts = fromHash(dh);
       return {
         ...m,
         guestbook: gb.map((x) => JSON.parse(x)),
         giftList: gf.map((x) => JSON.parse(x)),
+        candleList: (cd || []).map((x) => JSON.parse(x)),
         diary: dy.map((x) => { const p = JSON.parse(x); return { ...p, hearts: Number(hearts[p.id]) || 0 }; }),
       };
     },
@@ -160,17 +188,7 @@ export function createStore(kv) {
     async create(input, photo, visitor, pendingGlow = 0) {
       const id = newId();
       const token = randomBytes(18).toString('base64url');
-      let slot = null;
-      if (Number.isInteger(input.slot) && input.slot >= 0 && input.slot < MAX_SLOT) {
-        if (await kv.cmd('HSETNX', `${P}slots`, String(input.slot), id)) slot = input.slot;
-      }
-      for (let tries = 0; slot === null && tries < 6; tries++) {
-        const used = new Set(Object.keys(fromHash(await kv.cmd('HGETALL', `${P}slots`))).map(Number));
-        let s = 0;
-        while (used.has(s)) s++;
-        if (await kv.cmd('HSETNX', `${P}slots`, String(s), id)) slot = s;
-      }
-      if (slot === null) throw Object.assign(new Error('El muro está muy concurrido. Probá de nuevo.'), { status: 409 });
+      const slot = await claimSlot(input.slot, id);
       const data = {
         slot,
         name: input.name,
@@ -185,9 +203,11 @@ export function createStore(kv) {
       };
       // El Glow que la persona juntó antes de sumar a su mascota la estaba esperando (con tope).
       const glow = Math.max(0, Math.min(60, Number(pendingGlow) || 0));
+      const day = today();
       const cmds = [
-        ['HSET', `${P}m:${id}`, 'data', JSON.stringify(data), 'candles', '1', 'flowers', '0', 'gb', '0', 'gifts', '0', 'glow', String(glow), 'tokenHash', hashToken(token)],
+        ['HSET', `${P}m:${id}`, 'data', JSON.stringify(data), 'candles', '1', 'flowers', '0', 'gb', '0', 'gifts', '0', 'glow', String(glow), 'streak', '1', 'lastCandleDay', day, 'tokenHash', hashToken(token)],
         ['ZADD', `${P}ids`, String(data.createdAt), id],
+        ['LPUSH', `${P}cd:${id}`, JSON.stringify({ who: visitor || 'Su familia', country: null, at: data.createdAt })],
       ];
       if (photo) cmds.push(['SET', `${P}photo:${id}`, JSON.stringify({ t: photo.type, d: photo.bytes.toString('base64') })]);
       await kv.pipeline(cmds);
@@ -203,7 +223,7 @@ export function createStore(kv) {
       if (!h.tokenHash || h.tokenHash !== hashToken(token || '')) return 'forbidden';
       const { slot } = JSON.parse(h.data);
       await kv.pipeline([
-        ['DEL', `${P}m:${id}`, `${P}photo:${id}`, `${P}gb:${id}`, `${P}gf:${id}`, `${P}dy:${id}`, `${P}dh:${id}`, `${P}voice:${id}`, `${P}photo:${id}:1`, `${P}photo:${id}:2`, `${P}photo:${id}:3`],
+        ['DEL', `${P}m:${id}`, `${P}photo:${id}`, `${P}gb:${id}`, `${P}gf:${id}`, `${P}cd:${id}`, `${P}dy:${id}`, `${P}dh:${id}`, `${P}voice:${id}`, `${P}photo:${id}:1`, `${P}photo:${id}:2`, `${P}photo:${id}:3`],
         ['ZREM', `${P}ids`, id],
         ['HDEL', `${P}slots`, String(slot)],
       ]);
@@ -220,7 +240,16 @@ export function createStore(kv) {
       const glow = await grantGlow(id, 'candle', who, first ? GLOW.firstLight : 0);
       const code = await country(who.country);
       const day = today();
-      const night = [['INCR', `${P}night:${day}`], ['EXPIRE', `${P}night:${day}`, String(DAY_TTL * 2)]];
+      const yest = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+      const prevDay = h.lastCandleDay || '';
+      const curStreak = Number(h.streak) || 0;
+      const newStreak = prevDay === day ? Math.max(1, curStreak) : prevDay === yest ? curStreak + 1 : 1;
+      const cEntry = { who: who.visitor || 'Alguien', country: code, at: Date.now() };
+      const night = [
+        ['INCR', `${P}night:${day}`], ['EXPIRE', `${P}night:${day}`, String(DAY_TTL * 2)],
+        ['HSET', `${P}m:${id}`, 'streak', String(newStreak), 'lastCandleDay', day],
+        ['LPUSH', `${P}cd:${id}`, JSON.stringify(cEntry)],
+      ];
       if (code) night.push(['SADD', `${P}nco:${day}`, code], ['EXPIRE', `${P}nco:${day}`, String(DAY_TTL * 2)]);
       await kv.pipeline(night);
       if (who.ref) await kv.cmd('INCR', `${P}ref:${who.ref}`);
@@ -248,7 +277,7 @@ export function createStore(kv) {
       if (!h.data) return null;
       if (!(await onceToday('g', who.sid, id))) return { memorial: toPublic(h, id), already: true };
       const entry = { gift, who: who.visitor || 'Alguien', at: Date.now() };
-      const last = [gift.split(' ')[0], ...(h.lastGifts ? JSON.parse(h.lastGifts) : [])].slice(0, 3);
+      const last = [gift.split(' ')[0], ...(h.lastGifts ? JSON.parse(h.lastGifts) : [])].slice(0, 5);
       await kv.pipeline([
         ['LPUSH', `${P}gf:${id}`, JSON.stringify(entry)],
         ['HINCRBY', `${P}m:${id}`, 'gifts', '1'],
@@ -277,6 +306,7 @@ export function createStore(kv) {
       await ensureFeatured();
       const h = await getRaw(id);
       if (!h.data) return null;
+      if (JSON.parse(h.data).gbClosed) throw Object.assign(new Error('La familia cerró el libro de visitas de esta huellita.'), { status: 403 });
       const e = { id: newId(), name: entry.name, text: entry.text, at: Date.now() };
       await kv.pipeline([
         ['LPUSH', `${P}gb:${id}`, JSON.stringify(e)],
@@ -292,7 +322,7 @@ export function createStore(kv) {
       const o = await owner(id, token);
       if (o.error) return o.error;
       const data = JSON.parse(o.h.data);
-      for (const k of ['name', 'message', 'birthday', 'passedDay', 'species', 'look']) if (patch[k] !== undefined) data[k] = patch[k];
+      for (const k of ['name', 'message', 'birthday', 'passedDay', 'species', 'look', 'gbClosed']) if (patch[k] !== undefined) data[k] = patch[k];
       const cmds = [];
       if (photo) {
         data.hasPhoto = true;
@@ -303,6 +333,40 @@ export function createStore(kv) {
       if (patch.bg && BACKGROUND_IDS.has(patch.bg)) cmds.push(['HSET', `${P}m:${id}`, 'bg', patch.bg]);
       await kv.pipeline(cmds);
       return toPublic(await getRaw(id), id);
+    },
+
+    async deleteGuestbook(id, token, entryId) {
+      const o = await owner(id, token);
+      if (o.error) return o.error;
+      const rawList = await kv.cmd('LRANGE', `${P}gb:${id}`, '0', '99');
+      const target = rawList.find((x) => {
+        try { return JSON.parse(x).id === entryId; } catch { return false; }
+      });
+      if (target) {
+        const nextCount = Math.max(0, rawList.filter((x) => x !== target).length);
+        await kv.pipeline([
+          ['LREM', `${P}gb:${id}`, '1', target],
+          ['HSET', `${P}m:${id}`, 'gb', String(nextCount)],
+        ]);
+      }
+      return toPublic(await getRaw(id), id);
+    },
+
+    async thankCandles(id, token) {
+      const o = await owner(id, token);
+      if (o.error) return o.error;
+      if (!(await onceToday('th', token.slice(0, 12), id))) return { memorial: toPublic(o.h, id), already: true };
+      const now = Date.now();
+      await kv.cmd('HSET', `${P}m:${id}`, 'thankedAt', String(now));
+      const memorial = toPublic(await getRaw(id), id);
+      await event('thanks', memorial, 'La familia');
+      return { memorial };
+    },
+
+    async report({ kind, targetId, subId, reason, sid }) {
+      const entry = { id: newId(), kind: kind || 'memorial', targetId: targetId || '', subId: subId || null, reason: reason || '', sid: sid || null, at: Date.now() };
+      await kv.cmd('LPUSH', `${P}rep`, JSON.stringify(entry));
+      return { ok: true, id: entry.id };
     },
 
     // Imagen para la vista previa al compartir (la arma el navegador de la familia).
@@ -449,7 +513,7 @@ export function createStore(kv) {
           x: Number.isFinite(info.x) ? Math.round(info.x * 100) / 100 : 0,
           z: Number.isFinite(info.z) ? Math.round(info.z * 100) / 100 : 24,
           ry: Number.isFinite(info.ry) ? Math.round(info.ry * 100) / 100 : 0,
-          hue: Number.isFinite(info.hue) ? Math.round(info.hue) % 360 : 30,
+          hue: Number.isFinite(info.hue) ? ((Math.round(info.hue) % 1440) + 1440) % 1440 : 30,
           say,
           emote,
           gestureAt: say || emote ? now : 0,

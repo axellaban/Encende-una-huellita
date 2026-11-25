@@ -184,10 +184,126 @@ export async function uploadOgCard(api, m, photoSrc) {
   }
 }
 
+// Generador de código QR (ISO 18004, nivel L, modo byte, versiones 3 y 4: hasta 78 caracteres)
+// para poder imprimir la estampita y llevarla a la ofrenda de casa.
+function makeQrMatrix(text) {
+  const bytes = [...new TextEncoder().encode(String(text).slice(0, 78))];
+  const ver = bytes.length <= 53 ? 3 : 4;
+  const N = ver === 3 ? 29 : 33;
+  const dataLen = ver === 3 ? 55 : 80;
+  const ecLen = ver === 3 ? 15 : 20;
+  const align = ver === 3 ? 22 : 26;
+
+  // Empaquetar bits: modo byte (0100), largo (8 bits), datos, terminador y relleno.
+  const bits = [0, 1, 0, 0];
+  for (let i = 7; i >= 0; i--) bits.push((bytes.length >> i) & 1);
+  for (const b of bytes) for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1);
+  for (let i = 0; i < 4 && bits.length < dataLen * 8; i++) bits.push(0);
+  while (bits.length % 8 !== 0) bits.push(0);
+  const data = [];
+  for (let i = 0; i < bits.length; i += 8) {
+    let v = 0;
+    for (let j = 0; j < 8; j++) v = (v << 1) | bits[i + j];
+    data.push(v);
+  }
+  const pads = [0xec, 0x11];
+  for (let i = 0; data.length < dataLen; i++) data.push(pads[i % 2]);
+
+  // Reed-Solomon en GF(256) con polinomio 0x11d.
+  const exp = new Uint8Array(512);
+  const log = new Uint8Array(256);
+  let x = 1;
+  for (let i = 0; i < 255; i++) {
+    exp[i] = x;
+    log[x] = i;
+    x <<= 1;
+    if (x & 256) x ^= 0x11d;
+  }
+  for (let i = 255; i < 512; i++) exp[i] = exp[i - 255];
+  const mul = (a, b) => (a && b ? exp[log[a] + log[b]] : 0);
+  let gen = [1];
+  for (let i = 0; i < ecLen; i++) {
+    const next = new Array(gen.length + 1).fill(0);
+    for (let j = 0; j < gen.length; j++) {
+      next[j] ^= gen[j];
+      next[j + 1] ^= mul(gen[j], exp[i]);
+    }
+    gen = next;
+  }
+  const ec = new Array(ecLen).fill(0);
+  for (const b of data) {
+    const f = b ^ ec.shift();
+    ec.push(0);
+    for (let j = 0; j < ecLen; j++) ec[j] ^= mul(gen[j + 1], f);
+  }
+  const codewords = [...data, ...ec];
+
+  const grid = Array.from({ length: N }, () => new Int8Array(N));
+  const used = Array.from({ length: N }, () => new Uint8Array(N));
+  const setMod = (r, c, v) => {
+    if (r < 0 || r >= N || c < 0 || c >= N) return;
+    grid[r][c] = v ? 1 : 0;
+    used[r][c] = 1;
+  };
+  const finder = (r0, c0) => {
+    for (let dr = -1; dr <= 7; dr++) {
+      for (let dc = -1; dc <= 7; dc++) {
+        const on = dr >= 0 && dr <= 6 && dc >= 0 && dc <= 6 && (dr === 0 || dr === 6 || dc === 0 || dc === 6 || (dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4));
+        setMod(r0 + dr, c0 + dc, on);
+      }
+    }
+  };
+  finder(0, 0);
+  finder(0, N - 7);
+  finder(N - 7, 0);
+  for (let dr = -2; dr <= 2; dr++) {
+    for (let dc = -2; dc <= 2; dc++) {
+      setMod(align + dr, align + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
+    }
+  }
+  for (let i = 8; i < N - 8; i++) {
+    setMod(6, i, i % 2 === 0);
+    setMod(i, 6, i % 2 === 0);
+  }
+  setMod(N - 8, 8, 1);
+  // Reservar información de formato.
+  for (let i = 0; i < 9; i++) {
+    if (i !== 6) { used[8][i] = 1; used[i][8] = 1; }
+    if (i < 8) { used[8][N - 1 - i] = 1; used[N - 1 - i][8] = 1; }
+  }
+
+  let bitIdx = 0;
+  let up = true;
+  for (let col = N - 1; col > 0; col -= 2) {
+    if (col === 6) col--;
+    for (let i = 0; i < N; i++) {
+      const r = up ? N - 1 - i : i;
+      for (let dc = 0; dc < 2; dc++) {
+        const c = col - dc;
+        if (used[r][c]) continue;
+        const bit = bitIdx < codewords.length * 8 ? (codewords[bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1 : 0;
+        bitIdx++;
+        grid[r][c] = bit ^ ((r + c) % 2 === 0 ? 1 : 0);
+      }
+    }
+    up = !up;
+  }
+  // Formato para nivel L (01) y máscara 0 (000): 0x77c4.
+  const fmt = 0x77c4;
+  const fPosA = [[8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8], [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8]];
+  const fPosB = [[N - 1, 8], [N - 2, 8], [N - 3, 8], [N - 4, 8], [N - 5, 8], [N - 6, 8], [N - 7, 8], [8, N - 8], [8, N - 7], [8, N - 6], [8, N - 5], [8, N - 4], [8, N - 3], [8, N - 2], [8, N - 1]];
+  for (let i = 0; i < 15; i++) {
+    const b = (fmt >> i) & 1;
+    grid[fPosA[i][0]][fPosA[i][1]] = b;
+    grid[fPosB[i][0]][fPosB[i][1]] = b;
+  }
+  return grid;
+}
+
 // "Recuerdo": una estampita vertical (1080x1350) para guardar, imprimir o compartir en historias.
 // Papel cálido, papel picado arriba, la foto bajo un arco dorado, el nombre, las fechas, las palabras
 // de la familia y una velita con flores de cempasúchil.
-export async function drawKeepsake(m, photoSrc, { dates = '', years = '', link = '' } = {}) {
+export async function drawKeepsake(m, photoSrc, { dates = '', years = '', link = '', qrUrl = '' } = {}) {
   const W = 1080;
   const H = 1350;
   const c = document.createElement('canvas');
@@ -313,5 +429,28 @@ export async function drawKeepsake(m, photoSrc, { dates = '', years = '', link =
   g.font = '700 24px "DM Sans", sans-serif';
   g.fillStyle = '#8a6a4c';
   g.fillText(`Encendé una huellita${link ? ` · ${link}` : ''}`, ax, H - 62);
+  if (qrUrl) {
+    const mat = makeQrMatrix(qrUrl);
+    const N = mat.length;
+    const mod = 4.2;
+    const pad = 12;
+    const sizeQr = N * mod + pad * 2;
+    const qx = W - 76 - sizeQr;
+    const qy = H - 76 - sizeQr;
+    g.save();
+    g.fillStyle = '#fffaf0';
+    g.strokeStyle = '#c9973f';
+    g.lineWidth = 3;
+    roundRect(g, qx, qy, sizeQr, sizeQr, 12);
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#2d1c14';
+    for (let r = 0; r < N; r++) {
+      for (let col = 0; col < N; col++) {
+        if (mat[r][col]) g.fillRect(qx + pad + col * mod, qy + pad + r * mod, Math.ceil(mod), Math.ceil(mod));
+      }
+    }
+    g.restore();
+  }
   return c;
 }

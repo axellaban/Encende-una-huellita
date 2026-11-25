@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { glowTexture } from './textures.js';
+import { uTime } from './world.js';
 import { FURS } from '../../server/looks.js';
 
 export { FURS };
@@ -27,7 +28,11 @@ export function lookFor(m) {
   const kind = m.species === 'gato' ? 'gato' : m.species === 'otro' ? 'otro' : 'perro';
   const l = m.look || {};
   const fur = FURS.find((f) => f.id === l.fur)?.hex || FURS[Math.floor(r() * FURS.length)].hex;
-  const ears = ['up', 'down', 'tip', 'big'].includes(l.ears) ? l.ears : kind === 'perro' ? ['down', 'up', 'tip'][Math.floor(r() * 3)] : 'up';
+  const AUTO_PATTERNS = ['solid', 'tuxedo', 'socks', 'spots', 'patches', 'bicolor', 'calico', 'tabby', 'mask', 'eye'];
+  const pattern = l.pattern || (l.fur === 'atigrado' ? 'tabby' : r() < 0.32 ? 'solid' : AUTO_PATTERNS[Math.floor(r() * AUTO_PATTERNS.length)]);
+  const fur2 = FURS.find((f) => f.id === l.fur2)?.hex || (pattern !== 'solid' && r() < 0.5 ? FURS[Math.floor(r() * FURS.length)].hex : null);
+  const coat = ['short', 'normal', 'fluffy', 'curly'].includes(l.coat) ? l.coat : ['normal', 'normal', 'fluffy', 'short', 'curly'][Math.floor(r() * 5)];
+  const ears = ['up', 'down', 'tip', 'big'].includes(l.ears) ? l.ears : kind === 'perro' ? ['down', 'up', 'tip', 'big'][Math.floor(r() * 4)] : 'up';
   // Tamaños bien distintos (de un perrito mini a uno gigante); los gatos y los otros, más chicos.
   const SIZE_SCALE = {
     perro: { xs: 0.5, s: 0.68, m: 0.9, l: 1.15, xl: 1.42 },
@@ -35,13 +40,20 @@ export function lookFor(m) {
     otro: { xs: 0.45, s: 0.55, m: 0.65, l: 0.78, xl: 0.92 },
   };
   const size = SIZE_SCALE[kind][l.size] || (kind === 'gato' ? 0.78 : kind === 'otro' ? 0.6 : 0.72 + r() * 0.4);
+  const defTail = coat === 'fluffy' ? 'fluffy' : kind === 'gato' ? 'thin' : r() < 0.35 ? 'fluffy' : r() < 0.35 ? 'curl' : r() < 0.15 ? 'bob' : 'thin';
+  const VIBES = ['jugueton', 'saltarin', 'mimoso', 'tranquilo', 'curioso', 'timido', 'guardian', 'travieso'];
+  const vibe = VIBES.includes(l.vibe) ? l.vibe : VIBES[Math.floor(r() * VIBES.length)];
   return {
     kind,
     fur,
+    fur2,
+    coat,
     ears,
     size,
-    tail: kind === 'gato' ? 'thin' : r() < 0.45 ? 'fluffy' : r() < 0.5 ? 'curl' : 'thin',
-    pattern: l.pattern || (r() < 0.35 ? 'tuxedo' : r() < 0.3 ? 'socks' : 'solid'),
+    vibe,
+    tail: ['thin', 'fluffy', 'curl', 'bob'].includes(l.tail) ? l.tail : defTail,
+    pattern,
+    eyes: ['honey', 'dark', 'amber', 'green', 'blue', 'odd'].includes(l.eyes) ? l.eyes : (kind === 'gato' ? 'amber' : 'honey'),
     snout: kind === 'perro' ? ({ long: 1.45, mid: 1.0, flat: 0.45 }[l.snout] ?? 0.85 + r() * 0.45) : 0.4,
     rim: RIMS[Math.floor(r() * RIMS.length)],
     seed: r(),
@@ -55,23 +67,31 @@ const TAU = Math.PI * 2;
 
 function spiritMaterial(rim) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const u = { uRim: { value: new THREE.Color(rim) }, uPulse: { value: 0 }, uInner: { value: 0.24 } };
+  const u = { uRim: { value: new THREE.Color(rim) }, uPulse: { value: 0 }, uInner: { value: 0.26 }, uTime };
   mat.userData.u = u;
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = `attribute float aGlow;\nvarying float vGlow;\n${sh.vertexShader}`.replace('#include <color_vertex>', '#include <color_vertex>\n  vGlow = aGlow;');
-    sh.fragmentShader = `uniform vec3 uRim; uniform float uPulse; uniform float uInner; varying float vGlow;\n${sh.fragmentShader}`.replace(
+    sh.vertexShader = `attribute float aGlow;\nvarying float vGlow;\nvarying vec3 vSpiritPos;\n${sh.vertexShader}`.replace(
+      '#include <color_vertex>',
+      '#include <color_vertex>\n  vGlow = aGlow;\n  vSpiritPos = position;',
+    );
+    sh.fragmentShader = `uniform vec3 uRim; uniform float uPulse; uniform float uInner; uniform float uTime; varying float vGlow; varying vec3 vSpiritPos;\n${sh.fragmentShader}`.replace(
       '#include <emissivemap_fragment>',
       `#include <emissivemap_fragment>
-       float fres = pow(1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0), 2.8);
-       totalEmissiveRadiance += diffuseColor.rgb * (uInner + vGlow) + uRim * fres * (0.95 + uPulse);
-       // Brillo de pelaje: luz suave de arriba y un leve ruido como pelitos.
-       float sheen = pow(max(0.0, normal.y), 3.0) * 0.18;
-       float fuzz = fract(sin(dot(floor(vViewPosition.xy * 220.0), vec2(12.9898, 78.233))) * 43758.5453);
-       totalEmissiveRadiance += diffuseColor.rgb * (sheen + (fuzz - 0.5) * 0.06);`,
+       vec3 N = normalize(normal);
+       vec3 V = normalize(vViewPosition);
+       float ndv = clamp(abs(dot(N, V)), 0.0, 1.0);
+       float fres = pow(1.0 - ndv, 2.5);
+       float rimHalo = pow(1.0 - ndv, 4.2);
+       // Brillo aterciopelado de pelaje con luz cálida desde arriba y destellitos estelares que viajan por el cuerpo.
+       float sheen = pow(max(0.0, N.y), 2.4) * 0.24;
+       float furStrand = sin(vSpiritPos.x * 130.0 + vSpiritPos.y * 90.0) * cos(vSpiritPos.z * 120.0) * 0.045;
+       float starMote = smoothstep(0.84, 0.99, sin(vSpiritPos.x * 26.0 + uTime * 2.1) * cos(vSpiritPos.y * 28.0 - uTime * 1.7) * sin(vSpiritPos.z * 24.0 + uTime * 1.5));
+       totalEmissiveRadiance += diffuseColor.rgb * (uInner + vGlow + sheen + furStrand)
+         + uRim * (fres * (0.92 + uPulse) + rimHalo * 0.45 + starMote * 0.42);`,
     );
   };
-  mat.customProgramCacheKey = () => 'spirit-pet-2';
+  mat.customProgramCacheKey = () => 'spirit-pet-3';
   return mat;
 }
 
@@ -89,7 +109,8 @@ export function createPet(look) {
     bones.push(b);
     return b;
   };
-  const torsoR = cat ? 0.105 : bunny ? 0.15 : 0.135;
+  const coatK = look.coat === 'fluffy' ? 1.12 : look.coat === 'curly' ? 1.09 : look.coat === 'short' ? 0.93 : 1;
+  const torsoR = (cat ? 0.105 : bunny ? 0.15 : 0.135) * coatK;
   const H = bunny ? 0.3 : cat ? 0.36 : 0.425;
   const legU = bunny ? 0.12 : cat ? 0.17 : 0.2;
   const legL = bunny ? 0.12 : cat ? 0.15 : 0.18;
@@ -105,7 +126,7 @@ export function createPet(look) {
   const earR = bone('earR', head, -0.07, 0.08, -0.01);
   const tongue = bone('tongue', head, 0, -0.065, 0.12 + (look.snout - 1) * 0.06);
   const tail = [];
-  const tailLen = (cat ? 0.5 : bunny ? 0.05 : look.tail === 'curl' ? 0.26 : 0.32) / 5;
+  const tailLen = (bunny || look.tail === 'bob' ? 0.09 : cat ? 0.5 : look.tail === 'curl' ? 0.26 : 0.32) / 5;
   let tp = bone('tail0', hips, 0, 0.07, -0.13);
   tail.push(tp);
   for (let i = 1; i < 5; i++) { tp = bone(`tail${i}`, tp, 0, 0, -tailLen); tail.push(tp); }
@@ -120,7 +141,7 @@ export function createPet(look) {
   root.updateMatrixWorld(true);
   const at = (b, ox = 0, oy = 0, oz = 0) => b.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(ox * s, oy * s, oz * s));
 
-  // Colores.
+  // Colores y combinación / manchitas.
   const F = new THREE.Color(look.fur);
   const hsl = {};
   F.getHSL(hsl);
@@ -128,7 +149,47 @@ export function createPet(look) {
   const white = new THREE.Color('#fbf6ee');
   const dark = new THREE.Color('#1c1512');
   const pink = new THREE.Color('#f08aa0');
-  const belly = look.pattern === 'tuxedo' ? white : light;
+  const pat = look.pattern || 'solid';
+  const S2 = look.fur2
+    ? new THREE.Color(look.fur2)
+    : (pat === 'mask' || pat === 'tabby')
+      ? F.clone().lerp(new THREE.Color('#1e140e'), hsl.l < 0.22 ? -0.45 : 0.58)
+      : (pat === 'spots' || pat === 'patches' || pat === 'eye') && hsl.l > 0.72
+        ? new THREE.Color('#2e2520')
+        : white;
+  const calicoOrange = new THREE.Color('#d97534');
+  const calicoDark = new THREE.Color('#2b221e');
+  const C3 = hsl.l < 0.35 ? calicoOrange : calicoDark;
+  const belly = ['tuxedo', 'bicolor', 'calico', 'patches'].includes(pat) ? S2 : light;
+
+  // Función de dibujo del pelaje en coordenadas del modelo normalizadas por `s`.
+  const coatColor = (x, y, z, nx, ny, nz, base = F) => {
+    const wx = x / s;
+    const wy = y / s;
+    const wz = z / s;
+    if (pat === 'spots') {
+      const n1 = Math.sin(wx * 23 + 0.9) * Math.cos(wy * 21 - 0.5) * Math.sin(wz * 19 + 1.4);
+      const n2 = Math.sin(wx * 31 - 1.7) * Math.sin(wz * 27 + 0.6);
+      if (n1 > 0.3 || n2 > 0.58) return S2;
+    } else if (pat === 'patches') {
+      const p = Math.sin(wx * 9.5 + 1.1) + Math.cos(wz * 8.2 - 0.7) + Math.sin(wy * 7.5 + 0.4);
+      if (p > 0.78) return S2;
+      if (ny < -0.3) return S2;
+    } else if (pat === 'calico') {
+      if (ny < -0.2 || wy < H * 0.62) return white;
+      const p1 = Math.sin(wx * 9 + 0.8) + Math.cos(wz * 8.5 - 0.5);
+      const p2 = Math.cos(wx * 10 - 1.2) + Math.sin(wz * 9 + 1.4);
+      if (p1 > 0.55) return look.fur2 ? S2 : calicoOrange;
+      if (p2 > 0.55) return C3;
+      return F;
+    } else if (pat === 'tabby') {
+      const stripe = Math.sin(wz * 46 + Math.abs(wx) * 14 + wy * 6);
+      if (stripe > 0.25) return S2;
+    } else if (pat === 'bicolor') {
+      if (ny < -0.05 || wy < H * 0.78 || (wz > 0.12 && Math.abs(wx) < 0.025)) return S2;
+    }
+    return base;
+  };
 
   const parts = [];
   const add = (geo, b, color, glow = 0) => {
@@ -162,24 +223,41 @@ export function createPet(look) {
   const sphere = (r, sx = 1, sy = 1, sz = 1, seg = 14) => new THREE.SphereGeometry(r * s, Math.round(seg * 1.45), Math.max(8, Math.round((seg - 4) * 1.45))).scale(sx, sy, sz);
   const capsule = (r, len, seg = 10) => new THREE.CapsuleGeometry(r * s, len * s, 6, Math.round(seg * 1.5));
   const place = (g, v, rx = 0, ry = 0, rz = 0) => { g.rotateX(rx); g.rotateY(ry); g.rotateZ(rz); g.translate(v.x, v.y, v.z); return g; };
-  const bellyShade = (x, y, z, nx, ny) => (ny < -0.25 ? belly : F.clone().lerp(belly, clamp01((-ny - 0.05) * 2.5)));
-  const chestShade = (x, y, z, nx, ny, nz) => (look.pattern === 'tuxedo' && nz > 0.35 && ny < 0.5 ? white : bellyShade(x, y, z, nx, ny));
+  const bellyShade = (x, y, z, nx, ny, nz) => {
+    const b = ny < -0.25 ? belly : F.clone().lerp(belly, clamp01((-ny - 0.05) * 2.5));
+    return coatColor(x, y, z, nx, ny, nz, b);
+  };
+  const chestShade = (x, y, z, nx, ny, nz) => {
+    if ((pat === 'tuxedo' || pat === 'bicolor' || pat === 'calico') && nz > 0.32 && ny < 0.52) return pat === 'calico' ? white : S2;
+    return bellyShade(x, y, z, nx, ny, nz);
+  };
 
   // Torso: cadera y pecho se superponen para que la columna pueda doblarse sin costuras.
   add(place(capsule(torsoR, bodyL * 0.55), at(hips, 0, 0, bodyL * 0.22), Math.PI / 2), hips, bellyShade);
   add(place(sphere(torsoR * 1.12, 1, 1.05, 1.18), at(chest, 0, 0, -0.03)), chest, chestShade);
   if (bunny) add(place(sphere(0.16, 1.05, 1, 1.1), at(hips, 0, 0.01, 0.02)), hips, bellyShade);
   // Cuello y cabeza.
-  add(place(capsule(cat ? 0.06 : 0.075, 0.1), at(neck, 0, 0.06, 0.02), 0.65), neck, chestShade);
+  add(place(capsule((cat ? 0.06 : 0.075) * coatK, 0.1), at(neck, 0, 0.06, 0.02), 0.65), neck, chestShade);
   const headR = cat ? 0.105 : bunny ? 0.11 : 0.12;
-  add(place(sphere(headR, 1, 0.95, 1.02, 18), at(head)), head, (x, y, z, nx, ny) => (ny < -0.5 ? light : F));
+  const headPos = at(head);
+  const headShade = (x, y, z, nx, ny, nz) => {
+    const lx = (x - headPos.x) / s;
+    const ly = (y - headPos.y) / s;
+    const lz = (z - headPos.z) / s;
+    if (pat === 'eye' && Math.hypot(lx - 0.052, ly - 0.02, lz - 0.08) < 0.065) return S2;
+    if (pat === 'mask' && lz > 0.03 && ly < 0.065) return S2;
+    if (pat === 'bicolor' && (ly < -0.02 || Math.abs(lx) < 0.024)) return S2;
+    return coatColor(x, y, z, nx, ny, nz, ny < -0.5 ? light : F);
+  };
+  add(place(sphere(headR, 1, 0.95, 1.02, 18), headPos), head, headShade);
   if (!bunny) {
     // Hocico: un óvalo que se afina hacia la nariz (no un tubo).
     const sl = cat ? 0.02 : 0.085 * look.snout;
     const sr = cat ? 0.05 : 0.064;
-    const muzzle = (x, y, z, nx, ny) => (ny < 0.15 ? light : F.clone().lerp(light, 0.25));
+    const muzzleCol = pat === 'mask' ? S2 : (pat === 'tuxedo' || pat === 'bicolor') ? S2 : light;
+    const muzzle = (x, y, z, nx, ny) => ( pat === 'mask' ? S2 : ny < 0.15 ? muzzleCol : F.clone().lerp(muzzleCol, 0.35));
     add(place(sphere(sr, 0.92, 0.78, 1 + sl / sr * 0.9, 14), at(head, 0, -0.04, headR * 0.62 + sl * 0.55)), head, muzzle);
-    if (!cat) add(place(sphere(0.05, 1.05, 0.5, 1.1, 10), at(head, 0, -0.075, headR * 0.55 + sl * 0.45)), head, light);
+    if (!cat) add(place(sphere(0.05, 1.05, 0.5, 1.1, 10), at(head, 0, -0.075, headR * 0.55 + sl * 0.45)), head, muzzleCol);
     add(place(sphere(cat ? 0.016 : 0.026, 1.25, 0.8, 0.9, 10), at(head, 0, -0.02 + (cat ? 0.005 : 0), headR * 0.62 + sl * 1.05 + sr * 0.82)), head, cat ? pink : dark, 0.05);
     // Brillito en la nariz húmeda.
     if (!cat) add(place(sphere(0.008, 1.4, 0.7, 1, 6), at(head, 0.006, -0.008, headR * 0.62 + sl * 1.05 + sr * 0.82 + 0.018)), head, white, 0.9);
@@ -187,17 +265,37 @@ export function createPet(look) {
     add(place(sphere(0.05, 1.2, 0.9, 1), at(head, 0, -0.03, 0.085)), head, light);
     add(place(sphere(0.014), at(head, 0, -0.01, 0.13)), head, pink, 0.1);
   }
-  // Mejillas esponjosas.
-  if (look.tail === 'fluffy' || cat) for (const sd of [-1, 1]) add(place(sphere(0.05, 1, 0.8, 1), at(head, sd * 0.07, -0.05, 0.03)), head, light);
-  // Ojos grandes y vivos: iris de color (ámbar en los gatos, marrón miel en los perros), pupila
-  // (rasgada en los gatos), un brillo grande y otro chiquito.
+  const isFluffy = look.coat === 'fluffy' || look.coat === 'curly' || (look.coat !== 'short' && look.tail === 'fluffy');
+  // Mejillas esponjosas (peludos o gatos de pelo normal/largo).
+  if (isFluffy || (cat && look.coat !== 'short')) {
+    const chR = look.coat === 'fluffy' ? 0.058 : 0.05;
+    for (const sd of [-1, 1]) add(place(sphere(chR, 1.1, 0.82, 1), at(head, sd * 0.074, -0.048, 0.03)), head, pat === 'mask' ? S2 : light);
+  }
+  // Rulitos en la coronilla (estilo caniche / bichón).
+  if (look.coat === 'curly') {
+    for (const [ox, oy, oz, rr] of [[0, 0.095, 0.01, 0.048], [-0.042, 0.085, 0.0, 0.04], [0.042, 0.085, 0.0, 0.04], [0, 0.08, -0.035, 0.042]]) {
+      add(place(sphere(rr, 1.05, 0.95, 1.05, 10), at(head, ox, oy, oz)), head, F);
+    }
+  }
+  // Ojos grandes y vivos: color a elección (miel, oscuros, ámbar, verdes, celestes o uno y uno).
   const eyeR = cat ? 0.028 : 0.029;
-  const iris = new THREE.Color(cat ? '#d9a13a' : bunny ? '#3a2a2a' : '#7a4a22');
+  const EYE_HEX = {
+    honey: '#8a5224',
+    dark: '#261a16',
+    amber: '#d9a13a',
+    green: '#489e5a',
+    blue: '#46a0e6',
+  };
   for (const sd of [-1, 1]) {
-    add(place(sphere(eyeR, 1, 1.1, 0.7, 12), at(eyes, sd * 0.052, 0, headR * 0.15)), eyes, iris, 0.12);
+    const irisHex = bunny ? '#3a2a2a' : look.eyes === 'odd' ? (sd > 0 ? '#46a0e6' : '#d9a13a') : (EYE_HEX[look.eyes] || (cat ? '#d9a13a' : '#8a5224'));
+    const iris = new THREE.Color(irisHex);
+    add(place(sphere(eyeR, 1, 1.1, 0.7, 12), at(eyes, sd * 0.052, 0, headR * 0.15)), eyes, iris, 0.16);
     add(place(sphere(eyeR * 0.68, cat ? 0.42 : 1, 1.1, 0.6, 10), at(eyes, sd * 0.052, 0, headR * 0.15 + 0.008)), eyes, dark, 0.02);
     add(place(sphere(0.0095, 1, 1, 1, 6), at(eyes, sd * 0.052 + 0.009, 0.012, headR * 0.15 + 0.019)), eyes, white, 1.6);
     add(place(sphere(0.0045, 1, 1, 1, 6), at(eyes, sd * 0.052 - 0.008, -0.009, headR * 0.15 + 0.02)), eyes, white, 1.2);
+    // Cejas expresivas: le dan mirada tierna y viva de cerca.
+    const browCol = pat === 'tuxedo' || pat === 'bicolor' || pat === 'spots' ? S2 : light;
+    add(place(sphere(0.014, 1.45, 0.55, 0.7, 8), at(head, sd * 0.048, 0.066, headR * 0.72), 0.1, 0, -sd * 0.18), head, browCol, 0.08);
   }
   // Bigotes de gato: tres de cada lado.
   if (cat) {
@@ -208,16 +306,23 @@ export function createPet(look) {
       add(place(w, at(head, sd * 0.075, -0.045 - k * 0.006, headR * 0.72)), head, white, 0.6);
     }
   }
-  // Pechera esponjosa en los de pelo largo.
-  if (look.tail === 'fluffy' || cat) {
-    for (let k = 0; k < 4; k++) add(place(sphere(0.045, 1, 1.1, 0.7, 10), at(chest, (k - 1.5) * 0.03, -0.03 - Math.abs(k - 1.5) * 0.015, 0.1)), chest, light);
+  // Pechera esponjosa en los peludos o con rulitos.
+  if (isFluffy || (cat && look.coat !== 'short')) {
+    const ruffCol = ['tuxedo', 'bicolor', 'calico'].includes(pat) ? (pat === 'calico' ? white : S2) : light;
+    const ruffR = look.coat === 'fluffy' ? 0.054 : 0.045;
+    for (let k = 0; k < 4; k++) add(place(sphere(ruffR, 1, 1.1, 0.75, 10), at(chest, (k - 1.5) * 0.032, -0.03 - Math.abs(k - 1.5) * 0.015, 0.105)), chest, ruffCol);
   }
   // Orejas.
-  const innerEar = (x, y, z, nx, ny, nz) => (nz > 0.2 ? pink.clone().lerp(F, 0.35) : F);
   for (const [eb, sd] of [[earL, 1], [earR, -1]]) {
+    const earOuter = (pat === 'mask' || (pat === 'eye' && sd > 0) || (pat === 'patches' && sd < 0) || (pat === 'calico' && sd > 0))
+      ? (pat === 'calico' ? C3 : S2)
+      : F;
+    const innerEar = (x, y, z, nx, ny, nz) => (nz > 0.2 ? pink.clone().lerp(earOuter, 0.35) : earOuter);
     if (bunny) add(place(sphere(0.045, 0.5, 2.6, 0.32), at(eb, sd * 0.0, 0.1, 0), 0, 0, -sd * 0.12), eb, innerEar);
-    else if (look.ears === 'down') add(place(sphere(0.052, 0.34, 1.55, 0.85), at(eb, sd * 0.02, -0.062, -0.005), 0.12, 0, sd * 0.14), eb, F.clone().multiplyScalar(0.8));
-    else {
+    else if (look.ears === 'down') {
+      const ew = look.coat === 'fluffy' || look.coat === 'curly' ? 0.062 : 0.052;
+      add(place(sphere(ew, 0.36, 1.58, 0.88), at(eb, sd * 0.02, -0.062, -0.005), 0.12, 0, sd * 0.14), eb, earOuter.clone().multiplyScalar(0.86));
+    } else {
       const big = cat ? 1.05 : look.ears === 'big' ? 1.55 : 1;
       const g = new THREE.ConeGeometry(0.048 * s * big, 0.12 * s * big, 4, 1);
       g.scale(1, 1, 0.45);
@@ -228,20 +333,33 @@ export function createPet(look) {
   add(place(capsule(0.024, 0.04, 8).scale(1, 1, 0.45), at(tongue, 0, -0.03, 0.01), -0.3), tongue, pink, 0.15);
   // Cola.
   tail.forEach((b, i) => {
-    let r = cat ? 0.024 - i * 0.002 : look.tail === 'fluffy' ? 0.062 - i * 0.004 : 0.04 - i * 0.004;
-    if (bunny) r = i === 0 ? 0.065 : 0.001;
-    const g = i === 0 && bunny ? sphere(r) : capsule(Math.max(0.004, r), tailLen * 0.8, 8);
-    if (!(i === 0 && bunny)) g.rotateX(Math.PI / 2);
-    add(place(g, at(b, 0, 0, -tailLen * 0.5)), b, i === 4 && look.pattern !== 'solid' ? white : bunny ? white : F.clone().lerp(light, i / 8));
+    const bob = bunny || look.tail === 'bob';
+    let r = bob ? (i === 0 ? 0.058 : 0.001) : cat ? 0.024 - i * 0.002 : (look.tail === 'fluffy' || look.coat === 'fluffy') ? 0.064 - i * 0.003 : 0.04 - i * 0.004;
+    if (look.coat === 'short' && !bob && look.tail !== 'fluffy') r *= 0.78;
+    const g = i === 0 && bob ? sphere(r) : capsule(Math.max(0.004, r), tailLen * 0.8, 8);
+    if (!(i === 0 && bob)) g.rotateX(Math.PI / 2);
+    const tailCol = pat === 'mask' ? S2
+      : (pat === 'tabby' && i % 2 === 1) ? S2
+      : (i === 4 && ['socks', 'tuxedo', 'bicolor', 'patches', 'eye'].includes(pat)) ? S2
+      : bob ? (pat !== 'solid' ? S2 : F.clone().lerp(light, 0.35))
+      : F.clone().lerp(light, i / 8);
+    add(place(g, at(b, 0, 0, -tailLen * 0.5)), b, tailCol);
   });
   // Patas.
   for (const L of legs) {
-    const sock = look.pattern === 'socks' || look.pattern === 'tuxedo';
-    const thick = L.front ? (cat ? 0.034 : 0.044) : cat ? 0.05 : 0.06;
-    if (L.front) add(place(capsule(thick, legU * 0.75), at(L.up, 0, -legU / 2, 0)), L.up, F);
+    const sock = ['socks', 'tuxedo', 'bicolor', 'calico', 'patches', 'eye'].includes(pat);
+    const pawCol = pat === 'mask' ? S2 : pat === 'calico' ? white : sock ? S2 : F.clone().lerp(dark, 0.15);
+    const loCol = pat === 'mask' ? F.clone().lerp(S2, 0.7) : sock ? F.clone().lerp(pawCol, 0.55) : coatColor;
+    const thick = (L.front ? (cat ? 0.034 : 0.044) : cat ? 0.05 : 0.06) * coatK;
+    if (L.front) add(place(capsule(thick, legU * 0.75), at(L.up, 0, -legU / 2, 0)), L.up, bellyShade);
     else add(place(sphere(thick * 1.25, 0.9, 1.6, 1.05), at(L.up, 0, -legU * 0.38, 0.0)), L.up, bellyShade);
-    add(place(capsule(thick * 0.72, legL * 0.85), at(L.lo, 0, -legL / 2, 0)), L.lo, sock ? F.clone().lerp(white, 0.4) : F);
-    add(place(sphere(0.042 * (cat ? 0.85 : 1), 1, 0.55, 1.35, 10), at(L.paw, 0, 0.012, 0.016)), L.paw, sock ? white : F.clone().lerp(dark, 0.15), 0.12);
+    add(place(capsule(thick * 0.72, legL * 0.85), at(L.lo, 0, -legL / 2, 0)), L.lo, loCol);
+    const pawR = 0.042 * (cat ? 0.85 : 1) * (look.coat === 'curly' ? 1.15 : 1);
+    add(place(sphere(pawR, 1, 0.55, 1.35, 10), at(L.paw, 0, 0.012, 0.016)), L.paw, pawCol, 0.12);
+    // Deditos esculpidos adelante de cada patita.
+    for (const td of [-1, 0, 1]) {
+      add(place(sphere(pawR * 0.34, 0.85, 0.65, 1.15, 7), at(L.paw, td * pawR * 0.52, 0.008, pawR * 1.12 - Math.abs(td) * 0.005)), L.paw, pawCol, 0.15);
+    }
   }
 
   // Collar de cuero con medallita dorada (los perros; para engancharle la correa).
@@ -483,7 +601,7 @@ function createAnimator(pet) {
     const set = (i, u, l, p) => { L[i * 3] = u; L[i * 3 + 1] = l; L[i * 3 + 2] = p; };
     if (name === 'sit') {
       const hp = -0.62;
-      Q.hipsY = 0.21 * s * (bunny ? 0.9 : 1);
+      Q.hipsY = 0.235 * s * (bunny ? 0.9 : 1);
       Q.hipsPitch = hp;
       Q.chestPitch = 0.05;
       Q.hipsRoll = 0;
@@ -495,7 +613,7 @@ function createAnimator(pet) {
       Q.tailCarry = -0.25;
       Q.tailCurl = 0.05;
     } else if (name === 'lie') {
-      Q.hipsY = 0.155 * s;
+      Q.hipsY = 0.185 * s;
       Q.hipsPitch = 0.02;
       Q.chestPitch = 0;
       Q.hipsRoll = 0.12;
@@ -510,7 +628,7 @@ function createAnimator(pet) {
       Q.tailFreq = P.tailFreq * 0.5;
     } else if (name === 'bow') {
       const hp = 0.55;
-      Q.hipsY = (H - 0.035) * s + Math.sin(t * 11) * 0.012 * s;
+      Q.hipsY = (H + 0.02) * s + Math.sin(t * 11) * 0.012 * s;
       Q.hipsPitch = hp;
       Q.chestPitch = 0.1;
       for (const i of [0, 1]) set(i, -hp - 0.1 - 1.15, 0.15, 1.0);
@@ -581,6 +699,7 @@ function createAnimator(pet) {
       else if (k < 0.75) roll = Math.PI + Math.sin((k - 0.3) * 30) * 0.3;
       else roll = Math.PI + smooth((k - 0.75) / 0.25) * Math.PI;
       P.hipsRoll += roll * shot.spinDir;
+      P.hipsY += Math.max(0, -Math.cos(roll)) * 0.15 * s;
       if (k > 0.2 && k < 0.85) {
         const kk = Math.sin(t * 13);
         for (let i = 0; i < 4; i++) {
@@ -623,11 +742,13 @@ function createAnimator(pet) {
       lg.lo.rotation.x = L[i * 3 + 1];
       lg.paw.rotation.x = L[i * 3 + 2];
     }
-    // Cola con retraso entre segmentos.
+    // Cola con retraso suave en onda (como un látigo flexible) entre segmentos.
     B.tail.forEach((b, i) => {
-      const a = P.tailAmp * (0.55 + i * 0.15);
-      b.rotation.x = i === 0 ? P.tailCarry : P.tailCurl;
-      b.rotation.y = Math.sin(t * P.tailFreq - i * 0.75) * a + (st.turn || 0) * -0.12 * (i + 1) * 0.3;
+      const a = P.tailAmp * (0.55 + i * 0.18);
+      const wave = Math.sin(t * P.tailFreq - i * 0.68);
+      b.rotation.x = (i === 0 ? P.tailCarry : P.tailCurl) + Math.cos(t * P.tailFreq * 0.5 - i * 0.5) * 0.04 * P.tailAmp;
+      b.rotation.y = wave * a + (st.turn || 0) * -0.12 * (i + 1) * 0.3;
+      b.rotation.z = wave * a * 0.22;
     });
     // Orejas con resorte (rebotan al trotar y al sacudirse).
     const hy = pet.headWorld(tmp).y;

@@ -8,8 +8,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { HALL_CENTER, uTime, rand } from './world.js';
 import { glowTexture } from './textures.js';
 
-// EN PROCESO: apagado hasta que se vea bien (ver PENDIENTES → "Traspaso"). Ponerlo en true para probarlo.
-export const VALLEY_READY = false;
+// Se puede apagar (false) si en algún teléfono pesa demasiado.
+export const VALLEY_READY = true;
 
 const SUN = new THREE.Vector3(-0.45, 0.8, -0.4).normalize();
 
@@ -34,13 +34,17 @@ function hazeMaterial(uHaze, uRise) {
       uniform vec3 uHaze; uniform vec3 uSun; uniform vec2 uCenter;
       varying vec3 vC; varying vec3 vN; varying vec3 vW;
       void main(){
+        if (vW.y < -0.35) discard;
         vec3 n = normalize(vN);
-        float lit = 0.5 + 0.62 * max(dot(n, uSun), 0.0) + 0.12 * max(n.y, 0.0);
+        // Luz de sol con sombra marcada (la piedra tiene volumen) y un poco de cielo desde arriba.
+        float lit = 0.38 + 0.88 * max(dot(n, uSun), 0.0) + 0.18 * max(n.y, 0.0);
         vec3 c = vC * lit;
         float d = length(vW.xz - uCenter);
-        float far = smoothstep(45.0, 270.0, d);
-        float low = 1.0 - smoothstep(-30.0, 10.0, vW.y);
-        c = mix(c, uHaze, clamp(far * 0.78 + low * 0.9, 0.0, 0.94));
+        // Lo lejano se aclara hacia el color del cielo (perspectiva aérea); lo cercano conserva el color.
+        float far = smoothstep(115.0, 350.0, d);
+        // La base se funde suavemente con el mar de nubes (y = -0,4).
+        float low = 1.0 - smoothstep(-0.3, 8.5, vW.y);
+        c = mix(c, uHaze, clamp(max(far * 0.65, low * 0.94), 0.0, 1.0));
         gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -59,10 +63,10 @@ function paint(geo, c) {
 
 // Un pilar de piedra irregular (facetado), con musgo arriba.
 function pillarGeo(r, h, rnd) {
-  const g = new THREE.CylinderGeometry(r * (0.7 + rnd() * 0.25), r, h, 7, 7, false).toNonIndexed();
+  const g = new THREE.CylinderGeometry(r * (0.72 + rnd() * 0.25), r, h, 8, 7, false).toNonIndexed();
   const p = g.attributes.position;
-  const rock = [col('#8f8aa6'), col('#7d7894'), col('#a39cb3')];
-  const moss = col('#7fae6a');
+  const rock = [col('#7b6d90'), col('#5d5375'), col('#9c8870')];
+  const moss = col('#629c4e');
   const cs = new Float32Array(p.count * 3);
   const seed = rnd() * 100;
   for (let i = 0; i < p.count; i++) {
@@ -74,8 +78,8 @@ function pillarGeo(r, h, rnd) {
     const top = y > h / 2 - 0.1;
     p.setXYZ(i, x * (top ? 1 : k), y + (top ? Math.sin(a * 4 + seed) * r * 0.08 : 0), z * (top ? 1 : k));
     const yk = (y + h / 2) / h;
-    const c = (yk > 0.9 || top ? moss : rock[Math.floor((Math.sin(seed + i * 0.37) * 0.5 + 0.5) * 2.99)]).clone();
-    if (!top && yk > 0.78) c.lerp(moss, (yk - 0.78) * 3);
+    const c = (yk > 0.88 || top ? moss : rock[Math.floor((Math.sin(seed + i * 0.37) * 0.5 + 0.5) * 2.99)]).clone();
+    if (!top && yk > 0.74) c.lerp(moss, (yk - 0.74) * 3.2);
     c.toArray(cs, i * 3);
   }
   g.setAttribute('color', new THREE.BufferAttribute(cs, 3));
@@ -86,22 +90,22 @@ function pillarGeo(r, h, rnd) {
 // Árboles en flor arriba de un pilar: tronquitos y copas facetadas en masas de color.
 function bloomGeo(r, topY, rnd) {
   const parts = [];
-  const PALS = [['#f6b3cf', '#f9cfe0'], ['#c9a7f0', '#e0cbfa'], ['#fbeef4', '#ffffff'], ['#f29ab8', '#f7c0d4']];
-  const n = 2 + Math.floor(rnd() * 4);
+  const PALS = [['#f07eb0', '#f7b2d2'], ['#b486e8', '#d6b6fa'], ['#f9d8e8', '#fff0f7'], ['#e86fa0', '#f5a8c8']];
+  const n = 5 + Math.floor(rnd() * 4);
   for (let i = 0; i < n; i++) {
     const a = rnd() * Math.PI * 2;
-    const d = rnd() * r * 0.55;
+    const d = Math.sqrt(rnd()) * r * 0.65;
     const x = Math.cos(a) * d;
     const z = Math.sin(a) * d;
-    const s = r * (0.28 + rnd() * 0.22);
-    const trunk = paint(new THREE.CylinderGeometry(s * 0.08, s * 0.12, s * 0.9, 5).translate(x, topY + s * 0.45, z).toNonIndexed(), col('#5a3e34'));
+    const s = r * (0.46 + rnd() * 0.32);
+    const trunk = paint(new THREE.CylinderGeometry(s * 0.08, s * 0.13, s * 0.95, 5).translate(x, topY + s * 0.45, z).toNonIndexed(), col('#52362c'));
     parts.push(trunk);
     const pal = PALS[Math.floor(rnd() * PALS.length)];
     for (let j = 0; j < 3; j++) {
-      const cs = s * (0.55 + rnd() * 0.35);
-      const cg = new THREE.IcosahedronGeometry(cs, 0).toNonIndexed();
-      cg.scale(1, 0.78, 1);
-      cg.translate(x + (rnd() - 0.5) * s * 0.7, topY + s * (0.95 + rnd() * 0.35), z + (rnd() - 0.5) * s * 0.7);
+      const cs = s * (0.62 + rnd() * 0.38);
+      const cg = new THREE.IcosahedronGeometry(cs, 1).toNonIndexed();
+      cg.scale(1.08, 0.82, 1.08);
+      cg.translate(x + (rnd() - 0.5) * s * 0.7, topY + s * (0.98 + rnd() * 0.38), z + (rnd() - 0.5) * s * 0.7);
       parts.push(paint(cg, col(pal[j % 2])));
     }
   }
@@ -150,13 +154,14 @@ function fallMaterial(uRise) {
       uniform float uTime; varying vec2 vUv; varying float vY;
       float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       void main(){
+        if (vY < -0.35) discard;
         float x = vUv.x;
         float col = floor(x * 14.0);
         float sp = 0.5 + h(vec2(col, 3.0)) * 0.6;
         float s = fract(vUv.y * 5.0 + uTime * sp + h(vec2(col, 7.0)));
         float streak = smoothstep(0.0, 0.25, s) * (1.0 - smoothstep(0.55, 1.0, s));
         float edge = smoothstep(0.0, 0.18, x) * (1.0 - smoothstep(0.82, 1.0, x));
-        float bottom = smoothstep(-24.0, 4.0, vY);
+        float bottom = smoothstep(-0.35, 6.5, vY);
         float a = edge * bottom * (0.35 + 0.5 * streak);
         gl_FragColor = vec4(vec3(0.92, 0.97, 1.0) * (0.95 + 0.25 * streak), clamp(a, 0.0, 0.85));
         #include <tonemapping_fragment>
@@ -182,12 +187,12 @@ export function createValley(scene, { tier } = {}) {
   for (let i = 0; i < N; i++) {
     // Cada vez más lejos (y más grandes), repartidos alrededor.
     const layer = i / N;
-    const dist = 62 + layer * 150 + rnd() * 25;
+    const dist = 78 + layer * 150 + rnd() * 22;
     const ang = i * 2.399 + rnd() * 0.4; // ángulo áureo: bien repartidos
     const x = HALL_CENTER.x + Math.cos(ang) * dist;
     const z = HALL_CENTER.z + Math.sin(ang) * dist;
-    const r = 6 + rnd() * 7 + layer * 8;
-    const topY = 10 + rnd() * 30 + layer * 22;
+    const r = 7 + rnd() * 7 + layer * 8;
+    const topY = 8 + rnd() * 11 + layer * 18;
     const h = topY + 45;
     const g = pillarGeo(r, h, rnd);
     g.translate(x, topY - h / 2, z);
@@ -201,7 +206,7 @@ export function createValley(scene, { tier } = {}) {
 
   // Puentes colgantes entre pilares cercanos entre sí (y no demasiado lejos tuyo).
   const bridges = [];
-  const near = pillars.filter((p) => p.dist < 150);
+  const near = pillars.filter((p) => p.dist < 185);
   const used = new Set();
   for (const a of near) {
     let best = null;
@@ -260,15 +265,15 @@ export function createValley(scene, { tier } = {}) {
     // k: 0 en el jardín, 1 en el piso 99. El valle aparece desde los primeros pisos del cielo:
     // los pilares suben desde el mar de nubes y la bruma toma el color del cielo de ese piso.
     setK(k, fogColor) {
-      const vis = VALLEY_READY && k > 0.03;
+      const vis = VALLEY_READY && k > 0.02;
       group.visible = vis;
       if (!vis) return;
-      const e = Math.min(1, (k - 0.03) / 0.22);
+      const e = Math.min(1, (k - 0.02) / 0.16);
       uRise.value = (1 - e * e * (3 - 2 * e)) * 55;
-      if (fogColor) uHaze.value.copy(fogColor).lerp(tmp.set('#ffffff'), 0.25);
+      if (fogColor) uHaze.value.copy(fogColor).lerp(tmp.set('#ffffff'), 0.18);
       for (const m of mists) {
-        m.material.color.copy(uHaze.value).lerp(tmp.set('#ffffff'), 0.4);
-        m.material.opacity = 0.42 * e;
+        m.material.color.copy(uHaze.value).lerp(tmp.set('#ffffff'), 0.35);
+        m.material.opacity = 0.28 * e;
       }
     },
     update(t) {

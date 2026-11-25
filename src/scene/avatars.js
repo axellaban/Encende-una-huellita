@@ -49,6 +49,17 @@ export function createAvatars(scene) {
         seen.add(o.sid);
         let p = people.get(o.sid);
         if (!p) { p = make(o); people.set(o.sid, p); }
+        else if ((o.hue ?? 30) !== (p.data.hue ?? 30)) {
+          const old = p.ch;
+          p.ch = createCharacter({ hue: o.hue ?? 30 });
+          p.ch.group.position.copy(p.g.position);
+          p.ch.group.rotation.y = p.g.rotation.y;
+          p.ch.group.add(p.name, p.bubble);
+          group.remove(p.g);
+          old.dispose();
+          p.g = p.ch.group;
+          group.add(p.g);
+        }
         p.target.set(o.x, 0, o.z);
         p.ry = o.ry || 0;
         p.data = o;
@@ -74,6 +85,10 @@ export function createAvatars(scene) {
       for (const [sid, p] of people) {
         if (!seen.has(sid)) {
           group.remove(p.g);
+          p.name.material.map?.dispose();
+          p.name.material.dispose();
+          p.bubble.material.map?.dispose();
+          p.bubble.material.dispose();
           p.ch.dispose();
           people.delete(sid);
         }
@@ -100,18 +115,22 @@ export function createAvatars(scene) {
       const nowMs = performance.now();
       for (const p of people.values()) {
         const g = p.g;
-        const d = g.position.distanceTo(p.target);
-        if (d > 25) g.position.copy(p.target);
-        const before = g.position.clone();
+        const dx = p.target.x - g.position.x;
+        const dz = p.target.z - g.position.z;
+        const d = Math.hypot(dx, dz);
+        if (d > 25) { g.position.x = p.target.x; g.position.z = p.target.z; }
+        const bx = g.position.x;
+        const bz = g.position.z;
         // Camina hacia donde está (a ritmo de caminata, no deslizándose).
-        if (d > 0.04) {
+        if (d > 0.04 && d <= 25) {
           const step = Math.min(d, Math.max(1.2, d * 1.6) * dt);
-          g.position.addScaledVector(p.target.clone().sub(g.position).normalize(), step);
+          g.position.x += (dx / d) * step;
+          g.position.z += (dz / d) * step;
         }
-        g.position.y = groundY(g.position.x, g.position.z);
-        const moved = g.position.distanceTo(before) / Math.max(dt, 1e-3);
+        g.position.y = groundY(g.position.x, g.position.z, (p.data.fl || 0) > 0);
+        const moved = Math.hypot(g.position.x - bx, g.position.z - bz) / Math.max(dt, 1e-3);
         p.speed += (moved - p.speed) * Math.min(1, dt * 6);
-        const face = d > 0.15 ? Math.atan2(p.target.x - g.position.x, p.target.z - g.position.z) : p.ry;
+        const face = d > 0.15 ? Math.atan2(dx, dz) : p.ry;
         const diff = Math.atan2(Math.sin(face - g.rotation.y), Math.cos(face - g.rotation.y));
         g.rotation.y += diff * Math.min(1, dt * 6);
         p.ch.update(dt, { speed: p.speed, turn: diff * 2 });

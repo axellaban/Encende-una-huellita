@@ -45,7 +45,6 @@
           </button>
         </div>
         <nav class="chips filters desk" aria-label="Explorar">
-          <button class="chip featured-chip" data-featured>🕯️ Visitar a <span class="featured-name">Luca</span></button>
           <button class="chip today-chip" data-today>✨ Hoy <b class="today-count">0/4</b></button>
           <button class="chip" data-list="all">🐾 Todas las huellitas</button>
           <button class="chip" data-list="waiting">🌙 Esperando una vela</button>
@@ -55,6 +54,7 @@
         <button class="bday" id="bday" hidden></button>
       </div>
       <div class="top-right">
+        <button class="chip desk" id="top-me-chip" title="Cambiar tu nombre y personaje"><span class="avatar" id="top-me-initial">·</span><span id="top-me-name">…</span>&nbsp;✏️</button>
         <button class="btn primary desk" id="add-btn">＋ Sumar a mi mascota</button>
         <button class="btn ghost round" id="music-btn" aria-pressed="false" aria-label="Música">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9 18.5A2.5 2.5 0 1 1 6.5 16c.53 0 1.02.17 1.42.45V5.6l11-2.2v12.1A2.5 2.5 0 1 1 16.5 13c.53 0 1.02.17 1.42.45V6.27L9.92 7.87V18.5H9z"/></svg>
@@ -89,10 +89,12 @@
     <!-- paseo con el espíritu de tu mascota -->
     <div class="walk-hud" id="walk-hud" hidden>
       <button class="walk-who" id="walk-who" aria-label="Ver su lugar"><img id="walk-photo" alt="" /><span><small>Paseando con</small><b id="walk-name"></b></span></button>
+      <button class="walk-act" id="walk-treat" aria-label="Darle un mimo o premio" title="Darle un mimo">🦴</button>
       <button class="walk-act" id="walk-photo-btn" aria-label="Sacar una foto juntos">📸</button>
       <button class="walk-act" id="walk-call" aria-label="Llamarlo">📣</button>
       <button class="walk-act x-act" id="walk-stop" aria-label="Terminar el paseo">✕</button>
     </div>
+    <button class="return-hall" id="return-hall" hidden aria-label="Volver al salón">🏛️ <span>Volver al salón</span> <b id="return-dist"></b></button>
     <div class="confetti" id="confetti" aria-hidden="true"></div>
 
     <div class="hint" id="hint"><span class="hand">👆</span><span id="hint-text">Tocá el piso para caminar · Arrastrá para mirar</span></div>
@@ -124,8 +126,10 @@
       </div>
       <h1>Encendé una huellita</h1>
       <p class="splash-quote">Mientras los recordemos, siguen con nosotros.<br /><span>Seguí los pétalos hasta su ofrenda.</span></p>
+      <p class="splash-night" id="splash-night" hidden></p>
       <button class="btn primary big" id="enter" disabled><span id="enter-label">Preparando el jardín…</span></button>
-      <p class="splash-sub">Con sonido 🔊 · Gratis y sin registro</p>
+      <p id="connection-error" class="splash-sub" role="alert" hidden></p>
+      <button id="backup-demo" class="btn soft" hidden>Guardar una copia de mis recuerdos</button>
     </div>
 
     <!-- ---------- sin WebGL ---------- -->
@@ -147,7 +151,7 @@
         <li><span>🖼️</span><div><b>Dale un lugar.</b> Tocá un marco libre para sumar a tu mascota.</div></li>
         <li><span>🐾</span><div><b>Sacalo a pasear.</b> Su espíritu te acompaña y juega en el Prado.</div></li>
       </ul>
-      <button class="btn primary wide" data-close data-then="featured">🕯️ Conocer a <span class="featured-name">Luca</span></button>
+      <button class="btn primary wide" data-close data-then="featured">🕯️ Visitar una huellita</button>
       <button class="btn soft wide" data-close data-then="add">🐾 Darle un lugar a mi mascota</button>
       <button class="btn soft wide" data-close data-then="guide">🕯️ La sexta etapa del duelo</button>
       <button class="btn link wide" data-close>Explorar el jardín</button>
@@ -212,6 +216,7 @@
             <button class="voice-btn" id="s-voice" hidden>🔊 Escuchar su voz</button>
           </div>
         </div>
+        <p class="msg" id="s-msg"></p>
         <div class="counts">
           <span><i>🕯️</i><b id="s-candles">0</b> velas</span>
           <span><i>🌸</i><b id="s-flowers">0</b> flores</span>
@@ -229,11 +234,11 @@
           </div>
         </div>
         <div class="gathering" id="s-gathering" hidden></div>
+        <div class="candles-who" id="s-candles-who" hidden></div>
         <div class="eternal" id="s-eternal"></div>
         <div class="glow-card" id="s-glow" hidden></div>
         <div class="shelf-row" id="s-shelf" hidden></div>
         <div class="gifts-row" id="s-gifts" hidden></div>
-        <p class="msg" id="s-msg"></p>
         <figure class="estampita" id="s-card" hidden><img alt="" /></figure>
         <button class="btn pass-btn wide" id="s-pass" hidden><span>✨</span><span id="s-pass-label">Pasá la luz</span></button>
         <button class="btn walk-btn wide" id="s-walk" hidden><span class="paw">🐾</span><span id="s-walk-label">Sacar a pasear</span></button>
@@ -249,6 +254,7 @@
             <button data-tool="gathering"><i>🗓️</i>Encuentro</button>
             <button data-tool="invite"><i>👨‍👩‍👧</i>Invitar</button>
             <button data-tool="diary"><i>📖</i>Escribir</button>
+            <button data-tool="gb-toggle" id="tool-gb-toggle"><i>🔒</i><span id="tool-gb-label">Cerrar libro</span></button>
           </div>
           <input type="file" accept="image/*" id="extra-photo-input" class="sr" />
         </section>
@@ -259,6 +265,7 @@
         </section>
         <section class="guestbook">
           <h3>Libro de visitas</h3>
+          <p class="tiny" id="gb-closed-msg" hidden>🔒 La familia cerró el libro de visitas.</p>
           <form id="gb-form">
             <textarea name="text" maxlength="280" rows="2" required placeholder="¿Le dejás unas palabras a su familia?"></textarea>
             <div class="ideas" id="gb-ideas"></div>
@@ -270,6 +277,7 @@
           <ul id="gb-list"></ul>
         </section>
         <button class="btn link danger" id="s-delete" hidden>Quitar esta huellita del muro</button>
+        <button class="btn link subtle" id="s-report" hidden>🚩 Denunciar u ocultar esta huellita</button>
       </div>
     </aside>
 
@@ -295,7 +303,7 @@
       <button class="x" data-close aria-label="Cerrar">✕</button>
       <p class="eyebrow">Ascensor</p>
       <h2>¿A qué <em>piso</em>?</h2>
-      <p class="sub">99 pisos, del jardín al cielo. Cuanto más alto, más luz. Cada piso tiene lugar para 90 huellitas.</p>
+      <p class="sub">99 pisos, del jardín al cielo. Cuanto más alto, más luz. Cada piso tiene lugar para 270 huellitas.</p>
       <p class="floor-here" id="floor-here"></p>
       <div class="floor-list" id="floor-list"></div>
     </dialog>
@@ -304,13 +312,13 @@
     <dialog class="modal hub" id="hub" aria-label="Menú">
       <div class="hub-grab" aria-hidden="true"><span></span></div>
       <div class="hub-head">
-        <button class="chip" id="me-chip" title="Así te ven los demás"><span class="avatar" id="me-initial">·</span><span id="me-name">…</span></button>
+        <button class="chip" id="me-chip" title="Cambiar tu nombre y personaje"><span class="avatar" id="me-initial">·</span><span id="me-name">…</span>&nbsp;✏️</button>
         <span class="chip here-chip"><i class="dot"></i><b id="here">1</b>&nbsp;<span>acá ahora</span></span>
         <button class="chip round-chip" id="hub-music" aria-pressed="false" aria-label="Música">🎵</button>
       </div>
       <div class="hub-grid">
         <button data-list="all"><span class="ic">🐾</span><span>Huellitas</span></button>
-        <button data-featured><span class="ic">🕯️</span><span class="featured-name">Luca</span></button>
+        <button data-featured><span class="ic">🕯️</span><span>Visitar</span></button>
         <button data-today><span class="ic">✨<i class="badge today-count">0/4</i></span><span>Hoy</span></button>
         <button class="hub-add" data-then="add"><span class="ic">＋</span><span>Sumar mascota</span></button>
         <button data-then="floors"><span class="ic">🛗</span><span>Piso <b class="floor-num">1</b></span></button>
@@ -326,6 +334,7 @@
         <button data-then="comfort"><span>💌</span>Consuelo</button>
       </div>
       <div class="hub-links">
+        <button data-then="me">👤 Mi nombre y personaje</button>
         <button data-list="waiting">🌙 Esperando una vela</button>
         <button data-list="birthday">🎂 Cumpleaños</button>
         <button data-then="help">💡 Cómo funciona</button>
@@ -349,6 +358,14 @@
             <button data-q="high">Alta</button>
             <button data-q="mid">Media</button>
             <button data-q="low">Ahorro</button>
+          </div>
+        </div>
+        <div class="quality">
+          <span>🌙 Cielo del jardín</span>
+          <div class="seg" id="opt-sky">
+            <button data-sky="night">Noche</button>
+            <button data-sky="sunset">Atardecer</button>
+            <button data-sky="meteors">Estrellas</button>
           </div>
         </div>
         <label class="toggle"><span>🙈 Modo tranquilo (ocultar visitantes)</span><input type="checkbox" id="opt-quiet" /><i></i></label>
@@ -404,7 +421,7 @@
     </dialog>
 
     <!-- ---------- herramientas de la familia ---------- -->
-    <dialog class="modal" id="edit">
+    <dialog class="modal full-mobile" id="edit">
       <button class="x" data-close aria-label="Cerrar">✕</button>
       <h2>✏️ Editar</h2>
       <p class="sub">Cambiá la foto o las palabras. Sólo la familia puede hacerlo.</p>
@@ -469,11 +486,20 @@
     <!-- ---------- farolillo, consuelo y compartir ---------- -->
     <dialog class="modal small-modal" id="me-dialog">
       <button class="x" data-close aria-label="Cerrar">✕</button>
-      <p class="eyebrow">Así te ven los demás</p>
+      <p class="eyebrow">Tu personaje</p>
       <h2><span id="me-dialog-name"></span></h2>
-      <p class="sub">Elegí el color de tu sarape, qué llevás en la cabeza y tu peinado. Los demás visitantes te ven así.</p>
+      <p class="sub">Poné tu nombre y elegí tu ropa, color, qué llevás en la cabeza y tu peinado. Así te ven los demás en el jardín.</p>
+      <label class="field">Tu nombre
+        <input type="text" id="me-name-input" maxlength="30" placeholder="Tu nombre o apodo…" autocomplete="nickname" />
+      </label>
       <div class="look">
-        <fieldset class="look-row"><legend>Tu sarape</legend><div id="me-hues" class="look-inline"></div></fieldset>
+        <fieldset class="look-row"><legend>Tu color</legend><div id="me-hues" class="look-inline"></div></fieldset>
+        <fieldset class="look-row"><legend>Tu ropa</legend>
+          <label><input type="radio" name="me-outfit" value="0" /><span>🧣 Sarape</span></label>
+          <label><input type="radio" name="me-outfit" value="1" /><span>🧶 Con rebozo</span></label>
+          <label><input type="radio" name="me-outfit" value="2" /><span>🧥 Poncho</span></label>
+          <label><input type="radio" name="me-outfit" value="3" /><span>🦺 Chaleco</span></label>
+        </fieldset>
         <fieldset class="look-row"><legend>En la cabeza</legend>
           <label><input type="radio" name="me-head" value="crown" /><span>🌼 Corona de flores</span></label>
           <label><input type="radio" name="me-head" value="hat" /><span>👒 Sombrero</span></label>
@@ -519,7 +545,7 @@
       <button class="x" data-close aria-label="Cerrar">✕</button>
       <h2>📸 Tu <em>foto</em></h2>
       <p class="sub" id="photo-dialog-sub">Un recuerdo de tu visita al jardín.</p>
-      <img class="photo-polaroid" id="photo-preview" alt="Tu foto en el jardín" />
+      <img class="photo-polaroid" id="polaroid-preview" alt="Tu foto en el jardín" />
       <button class="btn primary wide" id="photo-share">💌 Compartir en historias</button>
       <button class="btn soft wide" id="photo-again">🔄 Sacar otra</button>
     </dialog>
@@ -531,7 +557,7 @@
       <h2>Su <em>estampita</em></h2>
       <p class="sub">Para guardar, imprimir o compartir en tus historias.</p>
       <div class="keep-img"><img id="keep-img" alt="Estampita de recuerdo" /><p id="keep-wait">Pintándola…</p></div>
-      <div class="keep-acts"><a class="btn soft" id="keep-save" download="recuerdo.png">⬇️ Guardar</a><button class="btn primary" id="keep-share">💌 Compartir</button></div>
+      <div class="keep-acts"><a class="btn soft" id="keep-save" download="recuerdo.png">⬇️ Guardar</a><button class="btn soft" id="keep-qr" aria-pressed="false">📱 Con QR</button><button class="btn primary" id="keep-share">💌 Compartir</button></div>
     </dialog>
 
     <dialog class="modal small-modal" id="share">

@@ -16,6 +16,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const URL0 = process.argv[2] || 'http://localhost:8787';
 const ONLY = (process.argv[3] || 'celular,se,acostado,compu,demo,sinwebgl').split(',');
 const GL = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+const CHROME = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {};
 const PHOTO = path.join(ROOT, 'public/huellitas/luca-2.jpg');
 
 let fails = 0;
@@ -113,9 +114,10 @@ async function full(b, tag, dev) {
   await p.evaluate(() => document.querySelector('#s-candle').click());
   await wait(p, 1500);
   check(tag, 'vela (una sola por día)', Number(c1) === c0 + 1 && (await text(p, '#s-candles')) === c1, `velas ${c0} → ${c1} → ${await text(p, '#s-candles')}`);
+  const f0 = Number(await text(p, '#s-flowers'));
   await p.evaluate(() => document.querySelector('#s-flower').click());
   await wait(p, 1500);
-  check(tag, 'flor', (await text(p, '#s-flowers')) === '1');
+  check(tag, 'flor', Number(await text(p, '#s-flowers')) === f0 + 1);
   await p.evaluate(() => document.querySelector('#s-hug').click());
   await wait(p, 1500);
   check(tag, 'abrazo', await toastIs(p, /abrazo/));
@@ -125,6 +127,9 @@ async function full(b, tag, dev) {
   await p.evaluate(() => document.querySelector('#gift-grid button')?.click());
   await wait(p, 2500);
   check(tag, 'regalito dejado', (await toastIs(p, /regalito|ya tiene tu/)) && !(await isOpen(p, '#gifts')), await toastText(p));
+  await p.evaluate(() => document.querySelector('#s-shelf .shelf-item')?.click());
+  await wait(p, 600);
+  check(tag, 'repisa: tocar regalito muestra quién lo dejó', await toastIs(p, /le dej/), await toastText(p));
   await p.fill('#gb-form textarea', 'Qué lindo eras, Luca 🤍');
   await p.evaluate(() => document.querySelector('#gb-form').requestSubmit());
   await wait(p, 1500);
@@ -135,7 +140,9 @@ async function full(b, tag, dev) {
   await closeTop(p);
   await p.evaluate(() => document.querySelector('#s-keep').click());
   await wait(p, 3000);
-  check(tag, 'recuerdo (estampita)', await isOpen(p, '#keepsake'));
+  await p.evaluate(() => document.querySelector('#keep-qr')?.click());
+  await wait(p, 1200);
+  check(tag, 'recuerdo (estampita con QR)', (await isOpen(p, '#keepsake')) && (await p.evaluate(() => document.querySelector('#keep-qr')?.getAttribute('aria-pressed') === 'true')));
   await closeTop(p);
   await p.evaluate(() => document.querySelector('#sheet-x').click());
   await wait(p, 2500);
@@ -147,18 +154,35 @@ async function full(b, tag, dev) {
   await p.setInputFiles('#photo-input', PHOTO);
   await wait(p, 1500);
   await p.fill('#add-form input[name="name"]', 'Nieve');
-  await p.evaluate(() => { document.querySelector('#add-form input[name="species"][value="gato"]').click(); const r = document.querySelectorAll('#add-look input[type="radio"]'); r[r.length - 1]?.click(); });
+  await p.evaluate(() => {
+    document.querySelector('#add-form input[name="species"][value="gato"]').click();
+    document.querySelector('#add-look input[name="look-vibe"][value="saltarin"]')?.click();
+    document.querySelector('#add-look input[name="look-fur"][value="blanco"]')?.click();
+    document.querySelector('#add-look input[name="look-pattern"][value="spots"]')?.click();
+    document.querySelector('#add-look input[name="look-fur2"][value="negro"]')?.click();
+    document.querySelector('#add-look input[name="look-coat"][value="fluffy"]')?.click();
+    document.querySelector('#add-look input[name="look-eyes"][value="odd"]')?.click();
+  });
   await p.evaluate(() => document.querySelector('#add-form').requestSubmit());
   await wait(p, 8000);
   check(tag, 'sumar mascota con foto', (await visible(p, '#sheet')) && (await text(p, '#s-name')) === 'Nieve', await text(p, '#s-name'));
 
-  // Editar y diario (herramientas de la familia).
+  // Editar, agradecer velas, cerrar/abrir libro y diario (herramientas de la familia).
   await p.evaluate(() => document.querySelector('[data-tool="edit"]').click());
   await wait(p, 800);
   await p.fill('#edit-form input[name="name"]', 'Nievecita');
   await p.evaluate(() => document.querySelector('#edit-form').requestSubmit());
   await wait(p, 2500);
   check(tag, 'editar', (await text(p, '#s-name')) === 'Nievecita');
+  await p.evaluate(() => document.querySelector('#s-thanks-btn')?.click());
+  await wait(p, 1500);
+  check(tag, 'agradecer las velas', await toastIs(p, /agradecimiento/));
+  await p.evaluate(() => document.querySelector('#tool-gb-toggle')?.click());
+  await wait(p, 1500);
+  const closedOk = await p.evaluate(() => !document.querySelector('#gb-closed-msg').hidden && document.querySelector('#gb-form').hidden);
+  await p.evaluate(() => document.querySelector('#tool-gb-toggle')?.click());
+  await wait(p, 1500);
+  check(tag, 'cerrar y reabrir libro de visitas', closedOk && (await p.evaluate(() => !document.querySelector('#gb-form').hidden)));
   await p.evaluate(() => document.querySelector('[data-tool="diary"]').click());
   await wait(p, 800);
   await p.fill('#diary-form textarea', 'Dormía al sol todas las tardes.');
@@ -210,14 +234,13 @@ async function full(b, tag, dev) {
   await wait(p, 6000);
   check(tag, 'menú → Prado', await p.evaluate(() => { const P = window.__huellita.controls.player.pos; return Math.hypot(P.x - 24, P.z - 20) < 14; }));
   await p.evaluate(() => { const H = window.__huellita; H.controls.placePlayer(new H.THREE.Vector3(12, 0, 30), new H.THREE.Vector3(30, 0, 30)); H.controls.snapFollow(); });
-  await wait(p, 2500);
+  // Con SwiftShader el reloj de la escena avanza más despacio que el reloj real.
+  await p.waitForFunction(() => !document.body.classList.contains('moving'), null, { timeout: 20000 });
   if ((await p.evaluate(() => document.querySelector('#act-btn').dataset.kind)) === 'gestures') await tap(p, tag, '#act-btn', 'gestos');
   else await tap(p, tag, '#emote-btn', 'gestos');
-  await wait(p, 600);
-  const trayOpen = await visible(p, '#emote-tray');
-  await p.evaluate(() => document.querySelector('#sayings button')?.click());
-  await wait(p, 600);
-  check(tag, 'gestos y frases', trayOpen && (await p.locator('.self-say').count()) >= 1);
+  const trayOpen = await p.waitForSelector('#emote-tray', { state: 'visible', timeout: 10000 }).then(() => true, () => false);
+  const said = await p.evaluate(() => { document.querySelector('#sayings button')?.click(); return !!document.querySelector('.self-say'); });
+  check(tag, 'gestos y frases', trayOpen && said);
 
   // Guía, frasco, farolillo, consuelo, "Así te ven los demás".
   await hub(p, tag, '[data-guide]', 'La sexta etapa');
@@ -248,7 +271,14 @@ async function full(b, tag, dev) {
   await closeTop(p);
   await hub(p, tag, '#me-chip', 'Así te ven los demás');
   await wait(p, 700);
-  check(tag, '"Así te ven los demás"', await isOpen(p, '#me-dialog'));
+  await p.fill('#me-name-input', 'Valentina');
+  await p.evaluate(() => document.querySelector('input[name="me-outfit"][value="2"]')?.click());
+  await wait(p, 300);
+  check(tag, '"Así te ven los demás": nombre y ropa', (await isOpen(p, '#me-dialog')) && (await text(p, '#me-name')) === 'Valentina' && (await p.evaluate(() => Math.floor(Number(localStorage.getItem('huellita.hue')) / 360) === 2)));
+  await closeTop(p);
+  await hub(p, tag, '[data-then="photo"]', 'Foto');
+  await p.waitForFunction(() => document.querySelector('#photo-dialog')?.open, null, { timeout: 25000 }).catch(() => {});
+  check(tag, 'modo foto (polaroid)', (await isOpen(p, '#photo-dialog')) && (await p.evaluate(() => (document.querySelector('#polaroid-preview')?.getAttribute('src') || '').startsWith('data:image/jpeg'))));
   await closeTop(p);
 
   // Pisos: el ascensor (caminás hasta la puerta, entrás, la botonera; al cerrarla salís caminando).
@@ -265,7 +295,7 @@ async function full(b, tag, dev) {
   check(tag, 'ascensor: cerrar la botonera y salir caminando', await p.evaluate(() => !document.body.classList.contains('riding')));
   await p.evaluate(() => window.__huellita.goFloor(5));
   await wait(p, 2500);
-  check(tag, 'ir a otro piso (directo)', (await text(p, '.floor-num')) === '6');
+  check(tag, 'ir a otro piso (directo) con 3 ascensores y espíritus', (await text(p, '.floor-num')) === '6' && (await p.evaluate(() => window.__huellita.elevator.lifts.length === 3 && window.__huellita.spirits.pack.length >= 6)));
   await p.evaluate(() => window.__huellita.goFloor(0));
   await wait(p, 2500);
   await hub(p, tag, '[data-list="all"]', 'Huellitas');
@@ -297,7 +327,7 @@ async function demo(b) {
 
 async function noGL() {
   const tag = 'sin WebGL';
-  const b = await chromium.launch({ args: ['--disable-webgl', '--disable-webgl2'] });
+  const b = await chromium.launch({ ...CHROME, args: ['--disable-webgl', '--disable-webgl2'] });
   const ctx = await b.newContext({ ...devices['iPhone 13'] });
   await ctx.addInitScript(() => localStorage.setItem('huellita.welcomed', '1'));
   const p = await ctx.newPage();
@@ -314,7 +344,7 @@ async function noGL() {
   await b.close();
 }
 
-const b = await chromium.launch({ args: GL });
+const b = await chromium.launch({ ...CHROME, args: GL });
 if (ONLY.includes('celular')) await full(b, 'celular', 'iPhone 13');
 if (ONLY.includes('se')) await full(b, 'iPhone SE', 'iPhone SE');
 if (ONLY.includes('acostado')) await full(b, 'acostado', 'iPhone 13 landscape');

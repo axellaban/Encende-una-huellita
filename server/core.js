@@ -18,6 +18,21 @@ export function cleanText(v, max) {
 
 const MMDD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
+// Filtro básico de moderación: rechaza insultos agresivos, agravios y enlaces de spam.
+const BAD_WORDS = /\b(put[oa]s?|mierdas?|carajo|pelotud[oa]s?|bolud[oa]s?|imb[eé]cil(?:es)?|est[uú]pid[oa]s?|pendej[oa]s?|forr[oa]s?|concha|vergas?|pijas?|ortos?|maric[oó]n(?:es)?|trolos?|matate|m[aá]tate|suicidate|hdp|hij[oa]s?\s+de\s+puta|porno|viagra|casino)\b/i;
+const SPAM_LINK = /(https?:\/\/|www\.[a-z0-9-]+\.[a-z]{2,}|\b(?:bit\.ly|t\.me|tinyurl\.com)\/)/i;
+
+export function checkModeration(...texts) {
+  for (const raw of texts) {
+    if (typeof raw !== 'string' || !raw) continue;
+    const norm = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (BAD_WORDS.test(raw) || BAD_WORDS.test(norm) || SPAM_LINK.test(raw)) {
+      return 'Cuidemos que el jardín sea un lugar amable y respetuoso 🤍';
+    }
+  }
+  return null;
+}
+
 export function validateMemorial(body) {
   const name = cleanText(body.name, 30);
   if (!name) return { error: 'Contanos su nombre.' };
@@ -25,6 +40,8 @@ export function validateMemorial(body) {
   const birthday = MMDD.test(body.birthday || '') ? body.birthday : null;
   const passedDay = MMDD.test(body.passedDay || '') ? body.passedDay : null;
   const message = cleanText(body.message, 200);
+  const modErr = checkModeration(name, message);
+  if (modErr) return { error: modErr };
   const slot = Number.isInteger(body.slot) ? body.slot : undefined;
   return { name, species, birthday, passedDay, message, slot, look: cleanLook(body.look) };
 }
@@ -83,6 +100,11 @@ export async function handleApi(req, store) {
 
   if (path === '/api/health') return ok({ ok: true, storage: store.kind });
 
+  if (path === '/api/import' && method === 'POST') {
+    if (await store.limited(`im:${ip}`, 80)) return fail(429, 'Estamos guardando muchos recuerdos. Esperá un minuto y volvé a intentar.');
+    return ok(await store.importBatch(await req.json(), ip));
+  }
+
   if (path === '/api/memorials' && method === 'GET') {
     const memorials = await store.list();
     return ok({
@@ -96,7 +118,6 @@ export async function handleApi(req, store) {
   }
 
   if (path === '/api/memorials' && method === 'POST') {
-    if (await store.limited(`c:${ip}`, 12)) return fail(429, 'Demasiados intentos. Probá en un minuto.');
     const body = await req.json();
     const input = validateMemorial(body);
     if (input.error) return fail(400, input.error);
@@ -106,6 +127,7 @@ export async function handleApi(req, store) {
       if (!photo) return fail(400, 'La foto tiene un formato no soportado (usá JPG, PNG o WebP).');
       if (photo.bytes.length > MAX_PHOTO) return fail(400, 'La foto es demasiado grande.');
     }
+    if (await store.limited(`c:${ip}`, 12)) return fail(429, 'Demasiados intentos. Probá en un minuto.');
     return ok(await store.create(input, photo, cleanText(body.visitor, 40), body.pendingGlow), 201);
   }
 
@@ -140,7 +162,7 @@ export async function handleApi(req, store) {
   }
 
   // ---------- herramientas de dueños (token en X-Edit-Token) ----------
-  m = path.match(/^\/api\/memorials\/([\w-]{3,24})\/(edit|photos|voice|diary|gathering|og)$/);
+  m = path.match(/^\/api\/memorials\/([\w-]{3,24})\/(edit|photos|voice|diary|gathering|og|del-gb|thanks)$/);
   if (m && method === 'POST') {
     const [, id, what] = m;
     if (await store.limited(`o:${ip}`, 20)) return fail(429, 'Más despacio, por favor 🤍');
@@ -155,7 +177,10 @@ export async function handleApi(req, store) {
         if (!patch.name) return fail(400, 'Contanos su nombre.');
       }
       if (body.message !== undefined) patch.message = cleanText(body.message, 200);
+      const modErr = checkModeration(patch.name, patch.message);
+      if (modErr) return fail(400, modErr);
       if (body.look !== undefined) patch.look = cleanLook(body.look);
+      if (body.gbClosed !== undefined) patch.gbClosed = !!body.gbClosed;
       if (body.species !== undefined && ['perro', 'gato', 'otro'].includes(body.species)) patch.species = body.species;
       for (const k of ['birthday', 'passedDay']) if (body[k] !== undefined) patch[k] = MMDD.test(body[k] || '') ? body[k] : null;
       if (body.bg !== undefined) {
@@ -168,6 +193,14 @@ export async function handleApi(req, store) {
         if (!photo || photo.bytes.length > MAX_PHOTO) return fail(400, 'Esa foto no funcionó. Probá con otra.');
       }
       r = await store.edit(id, token, patch, photo);
+    }
+    if (what === 'del-gb') {
+      const entryId = cleanText(body.entryId, 40);
+      if (!entryId) return fail(400, 'Elegí qué firma borrar.');
+      r = await store.deleteGuestbook(id, token, entryId);
+    }
+    if (what === 'thanks') {
+      r = await store.thankCandles(id, token);
     }
     if (what === 'og') {
       const img = parseDataUrl(body.image);
@@ -195,6 +228,8 @@ export async function handleApi(req, store) {
       if (!allowed('diaryPages')) return fail(402, 'Más páginas es parte del plan familiar.');
       const text = cleanText(body.text, 1200);
       if (text.length < 2) return fail(400, 'Escribí unas palabras.');
+      const modErr = checkModeration(text);
+      if (modErr) return fail(400, modErr);
       r = await store.addDiary(id, token, { text, prompt: cleanText(body.prompt, 120) || null });
     }
     if (what === 'gathering') {
@@ -244,10 +279,28 @@ export async function handleApi(req, store) {
       if (action === 'guestbook') {
         const text = cleanText(body.text, 280);
         if (!text) return fail(400, 'Escribí unas palabras.');
-        r = await store.sign(id, { name: cleanText(body.name, 40) || who.visitor, text }, who);
+        const name = cleanText(body.name, 40) || who.visitor;
+        const modErr = checkModeration(text, name);
+        if (modErr) return fail(400, modErr);
+        r = await store.sign(id, { name, text }, who);
       }
       return r ? ok(r, action === 'guestbook' ? 201 : 200) : fail(404, 'No encontramos esa huellita.');
     }
+  }
+
+  if (path === '/api/report' && method === 'POST') {
+    if (await store.limited(`rep:${ip}`, 15)) return fail(429, 'Más despacio, por favor 🤍');
+    const body = await req.json();
+    const kind = ['memorial', 'guestbook', 'note'].includes(body.kind) ? body.kind : 'memorial';
+    const targetId = cleanText(body.targetId, 40);
+    if (!targetId) return fail(400, 'Falta indicar qué querés reportar.');
+    return ok(await store.report({
+      kind,
+      targetId,
+      subId: cleanText(body.subId, 40) || null,
+      reason: cleanText(body.reason, 160),
+      sid: cleanText(body.sid, 40) || null,
+    }), 201);
   }
 
   if (path === '/api/now' && method === 'POST') {
@@ -272,11 +325,14 @@ export async function handleApi(req, store) {
   m = path.match(/^\/api\/(jar|comfort)$/);
   if (m && method === 'GET') return ok(await store.board(m[1]));
   if (m && method === 'POST') {
-    if (await store.limited(`j:${ip}`, 4)) return fail(429, 'Más despacio, por favor 🤍');
     const body = await req.json();
     const text = cleanText(body.text, m[1] === 'jar' ? 140 : 220);
     if (text.length < 3) return fail(400, m[1] === 'jar' ? 'Escribí por qué das las gracias.' : 'Escribí unas palabras.');
-    return ok(await store.boardAdd(m[1], text, cleanText(body.visitor, 40)), 201);
+    const visitor = cleanText(body.visitor, 40);
+    const modErr = checkModeration(text, visitor);
+    if (modErr) return fail(400, modErr);
+    if (await store.limited(`j:${ip}`, 4)) return fail(429, 'Más despacio, por favor 🤍');
+    return ok(await store.boardAdd(m[1], text, visitor), 201);
   }
 
   return fail(404, 'Ruta desconocida');

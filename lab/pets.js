@@ -34,6 +34,7 @@ composer.addPass(new OutputPass());
 const POSES = ['idle', 'walk', 'trot', 'gallop', 'sit', 'lie', 'bow', 'rear', 'sniff', 'roll', 'shake', 'jump'];
 const pick = q.get('pose');
 const kinds = [
+  { id: 'luca', species: 'perro', look: { fur: 'caramelo', ears: 'down', size: 'l', snout: 'mid', pattern: 'solid' } }, // Luca
   { id: 'a', species: 'perro', look: { fur: 'dorado', ears: 'tip', size: 'm' } },
   { id: 'b', species: 'perro', look: { fur: 'negro', ears: 'down', size: 'l' } },
   { id: 'c', species: 'perro', look: { fur: 'blanco', ears: 'up', size: 's' } },
