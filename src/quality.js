@@ -2,9 +2,9 @@
 const KEY = 'huellita.quality.v2';
 
 export const TIERS = {
-  high: { label: 'Alta', maxPixelRatio: 2.5, bloom: true, grass: 44000, flowers: 1100, lights: 6, bulbsPerStrand: 18, fireflies: 380 },
-  mid: { label: 'Media', maxPixelRatio: 1.85, bloom: true, grass: 21000, flowers: 600, lights: 4, bulbsPerStrand: 14, fireflies: 240 },
-  low: { label: 'Ahorro', maxPixelRatio: 1.35, bloom: false, grass: 7500, flowers: 260, lights: 2, bulbsPerStrand: 9, fireflies: 130 },
+  high: { label: 'Alta', maxPixelRatio: 2.25, bloom: true, grass: 18000, flowers: 800, lights: 6, bulbsPerStrand: 18, fireflies: 320 },
+  mid: { label: 'Media', maxPixelRatio: 1.75, bloom: true, grass: 11000, flowers: 500, lights: 4, bulbsPerStrand: 14, fireflies: 220 },
+  low: { label: 'Ahorro', maxPixelRatio: 1.35, bloom: false, grass: 6000, flowers: 240, lights: 2, bulbsPerStrand: 9, fireflies: 120 },
 };
 
 export function isMobile() {

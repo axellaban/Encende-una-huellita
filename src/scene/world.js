@@ -782,9 +782,9 @@ export function buildWorld(scene, tier) {
   const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 2.0, 0.9) });
   const lampSpots = [
     [-2.35, 33.2], [2.35, 33.2], [-2.55, 25.3], [2.45, 17.5], [-2.45, 9.8], [2.45, 4.5],
-    // Adentro del salón amplio: dos a los lados de la ofrenda y dos acompañando el living central.
-    [HALL_CENTER.x - 9.4, HALL_CENTER.z + 6.4], [HALL_CENTER.x + 9.4, HALL_CENTER.z + 6.4],
-    [HALL_CENTER.x - 5.8, HALL_CENTER.z - 3.4], [HALL_CENTER.x + 5.8, HALL_CENTER.z - 3.4],
+    // Adentro del salón amplio: cerca de la ofrenda y del cantero central (lejos de las vitrinas de las paredes).
+    [HALL_CENTER.x - 4.8, HALL_CENTER.z + 6.4], [HALL_CENTER.x + 4.8, HALL_CENTER.z + 6.4],
+    [HALL_CENTER.x - 4.6, HALL_CENTER.z - 2.6], [HALL_CENTER.x + 4.6, HALL_CENTER.z - 2.6],
   ];
   const lampParts = [];
   const hallLampParts = [];

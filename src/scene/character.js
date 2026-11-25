@@ -286,6 +286,8 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
   head.add(smile);
   let happy = 0;
   let gk = 0; // cuánto está planeando (0..1, suave)
+  let sk = 0; // cuánto está sentado descansando (0..1, suave)
+  let sitting = false;
   // Cachetes rosados.
   const cheekMat = new THREE.MeshBasicMaterial({ color: '#ff7aa8', transparent: true, opacity: 0.32, depthWrite: false });
   for (const sd of [-1, 1]) {
@@ -347,13 +349,17 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
     smile(sec = 2) { happy = Math.max(happy, sec); },
     // Agacharse a acariciar al espíritu.
     pet() { act = { kind: 'pet', t: 0, dur: 1.8 }; },
+    set sitting(v) { sitting = !!v; if (sitting) happy = Math.max(happy, 2.5); },
+    get sitting() { return sitting; },
     get busy() { return !!act; },
     // Con la cámara muy cerca (adentro del ascensor): el farolito sin halo ni luz, para no encandilar.
     set close(v) { halo.visible = !v; lb.material.color.setRGB(v ? 1.1 : 2.0, v ? 0.8 : 1.45, v ? 0.5 : 0.9); if (lanternLight) lanternLight.visible = !v; },
     // `speed` en m/s; `turn` en rad/s.
     update(dt, { speed = 0, turn = 0, gliding = false } = {}) {
       t += dt;
+      if (speed > 0.18 && sitting) sitting = false;
       gk += ((gliding ? 1 : 0) - gk) * Math.min(1, dt * 6);
+      sk += (((sitting && !gliding) ? 1 : 0) - sk) * Math.min(1, dt * 7);
       const k = Math.min(1, speed / 1.2);
       phase += dt * (speed > 0.05 ? 3.2 + speed * 1.35 : 0);
       const swing = Math.sin(phase) * (0.38 + 0.36 * Math.min(1, speed / 4)) * k;
@@ -450,6 +456,22 @@ export function createCharacter({ hue = 30, hat = null, light = false } = {}) {
         body.rotation.z = THREE.MathUtils.lerp(body.rotation.z, THREE.MathUtils.clamp(-turn * 0.22, -0.45, 0.45), gk);
         head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, -0.2, gk);
         happy = Math.max(happy, 0.5 * gk);
+      }
+      // Sentado descansando en un sillón o banquito: piernas flexionadas hacia adelante, manos relajadas y sonrisa tranquila.
+      if (sk > 0.01) {
+        const kick = Math.sin(t * 1.6) * 0.06;
+        hips.position.y = THREE.MathUtils.lerp(hips.position.y, 0.34, sk);
+        hips.position.z = THREE.MathUtils.lerp(0, 0.08, sk);
+        legs[0].rotation.x = THREE.MathUtils.lerp(legs[0].rotation.x, -1.38 + kick, sk);
+        legs[1].rotation.x = THREE.MathUtils.lerp(legs[1].rotation.x, -1.38 - kick, sk);
+        torso.rotation.x = THREE.MathUtils.lerp(torso.rotation.x, -0.1, sk);
+        arms[0].rotation.x = THREE.MathUtils.lerp(arms[0].rotation.x, -0.48, sk);
+        arms[1].rotation.x = THREE.MathUtils.lerp(arms[1].rotation.x, -0.42, sk);
+        arms[0].rotation.z = THREE.MathUtils.lerp(arms[0].rotation.z, -0.18, sk);
+        arms[1].rotation.z = THREE.MathUtils.lerp(arms[1].rotation.z, 0.18, sk);
+        happy = Math.max(happy, 0.35 * sk);
+      } else {
+        hips.position.z = 0;
       }
     },
     dispose() {

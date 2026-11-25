@@ -27,46 +27,324 @@ function toTexture(c, { repeat, crisp = false } = {}) {
 
 // Re-dibuja los carteles apenas terminan de cargar las tipografías web (Caveat, Young Serif, Nunito).
 const fontRedraws = [];
+let fontsDone = false;
 if (typeof document !== 'undefined' && document.fonts?.ready) {
   document.fonts.ready.then(() => {
+    fontsDone = true;
     while (fontRedraws.length) fontRedraws.pop()();
-  }).catch(() => {});
+  }).catch(() => { fontsDone = true; });
+} else {
+  fontsDone = true;
 }
 function onFontsReady(fn) {
-  if (typeof document !== 'undefined' && document.fonts && document.fonts.status !== 'loaded') {
+  if (!fontsDone && fontRedraws.length < 120) {
     fontRedraws.push(fn);
   }
 }
 
-const EMOJI = { perro: '🐶', gato: '🐱', otro: '🐾' };
+// Retrato pintado al óleo/acuarela para huellitas sin foto subida (perritos y gatitos detallados en un paisaje suave, sin emojis).
+const BREED_PALETTES = [
+  // Perritos: dorado, border collie, ovejero, beagle, caniche blanco, chocolate, mestizo canela, negro fuego
+  { fur: '#d89b48', furDark: '#9e6420', furLight: '#f4cf8e', muzzle: '#f7e4be', ears: 'down', spots: false, collar: '#c82838' },
+  { fur: '#262428', furDark: '#141216', furLight: '#48444c', muzzle: '#f4f0e8', ears: 'up', blaze: true, chest: '#f4f0e8', collar: '#2b72b8' },
+  { fur: '#b87638', furDark: '#4a2e18', furLight: '#e0a868', muzzle: '#382418', ears: 'up', saddle: true, collar: '#2e8b57' },
+  { fur: '#c47e3a', furDark: '#7a4418', furLight: '#f2eadc', muzzle: '#f5eee2', ears: 'down', blaze: true, patches: '#3a281c', collar: '#b8324f' },
+  { fur: '#ede4d4', furDark: '#c4b49c', furLight: '#fbf7f0', muzzle: '#f7f2e8', ears: 'fluffy', curly: true, collar: '#d97a2b' },
+  { fur: '#5c3824', furDark: '#382012', furLight: '#85563c', muzzle: '#72462e', ears: 'down', collar: '#d49b2a' },
+  { fur: '#d49a64', furDark: '#8c5a30', furLight: '#f0cfa4', muzzle: '#f6e6ce', ears: 'half', blaze: true, collar: '#7b3fb2' },
+  { fur: '#282322', furDark: '#141110', furLight: '#463d3a', muzzle: '#b87338', ears: 'up', eyebrows: '#c88040', collar: '#c93b2b' },
+];
+const CAT_PALETTES = [
+  // Gatitos: naranja atigrado, smoking blanco y negro, siamés, gris azulado, calicó, crema
+  { fur: '#df8638', furDark: '#9e4e14', furLight: '#f7c488', muzzle: '#f8ebd8', tabby: true, eyes: '#52a448', collar: '#2e86ab' },
+  { fur: '#252428', furDark: '#121214', furLight: '#45444a', muzzle: '#f5f2eb', blaze: true, chest: '#f5f2eb', eyes: '#d9a438', collar: '#c82e4b' },
+  { fur: '#e8dcc8', furDark: '#523a2c', furLight: '#faf4e8', muzzle: '#463024', mask: true, eyes: '#3b8ed8', collar: '#9b4dca' },
+  { fur: '#767c86', furDark: '#4a5058', furLight: '#a4aab4', muzzle: '#8e949e', tabby: true, eyes: '#d49a2a', collar: '#d65a31' },
+  { fur: '#f2ece2', furDark: '#c8b8a4', furLight: '#ffffff', muzzle: '#faf6f0', calico: true, eyes: '#5aa852', collar: '#e05282' },
+];
 
-// Retrato ilustrado para huellitas sin foto.
-export function portraitCanvas(m, size = 384) {
-  const [c, g] = canvas(size, Math.round(size * 1.25));
-  const hue = m.hue ?? 30;
-  const grad = g.createLinearGradient(0, 0, 0, c.height);
-  grad.addColorStop(0, `hsl(${hue} 55% 82%)`);
-  grad.addColorStop(1, `hsl(${(hue + 30) % 360} 45% 62%)`);
-  g.fillStyle = grad;
-  g.fillRect(0, 0, c.width, c.height);
-  // Halo suave.
-  const halo = g.createRadialGradient(c.width / 2, c.height * 0.42, 10, c.width / 2, c.height * 0.42, c.width * 0.6);
-  halo.addColorStop(0, 'rgba(255,250,235,0.8)');
-  halo.addColorStop(1, 'rgba(255,250,235,0)');
+export function portraitCanvas(m, size = 512) {
+  const W = size;
+  const H = Math.round(size * 1.25);
+  const [c, g] = canvas(W, H);
+  const nameStr = String(m?.name || 'Huellita');
+  let hash = (m?.hue ?? 37) | 0;
+  for (let i = 0; i < nameStr.length; i++) hash = ((hash * 31) + nameStr.charCodeAt(i)) | 0;
+  hash = Math.abs(hash);
+  const isCat = m?.species === 'gato' || (!m?.species && hash % 3 === 1);
+  const pal = isCat ? CAT_PALETTES[hash % CAT_PALETTES.length] : BREED_PALETTES[hash % BREED_PALETTES.length];
+  const bgKind = hash % 4;
+
+  // 1. Paisaje de fondo suave (pradera soleada, cielo de atardecer, jardín con bokeh o colinas).
+  const sky = g.createLinearGradient(0, 0, 0, H);
+  if (bgKind === 0) {
+    sky.addColorStop(0, '#78aed6');
+    sky.addColorStop(0.55, '#c2e0ec');
+    sky.addColorStop(1, '#76a862');
+  } else if (bgKind === 1) {
+    sky.addColorStop(0, '#c896b8');
+    sky.addColorStop(0.52, '#f0cba8');
+    sky.addColorStop(1, '#7ea466');
+  } else if (bgKind === 2) {
+    sky.addColorStop(0, '#88b8a8');
+    sky.addColorStop(0.55, '#dce8cf');
+    sky.addColorStop(1, '#689c5a');
+  } else {
+    sky.addColorStop(0, '#8fa8d6');
+    sky.addColorStop(0.55, '#e6d6bc');
+    sky.addColorStop(1, '#7ca668');
+  }
+  g.fillStyle = sky;
+  g.fillRect(0, 0, W, H);
+
+  // Colinas de pradera desenfocadas y bokeh de luz solar.
+  g.fillStyle = 'rgba(92, 145, 76, 0.55)';
+  g.beginPath();
+  g.moveTo(0, H * 0.64);
+  g.bezierCurveTo(W * 0.3, H * 0.55, W * 0.7, H * 0.7, W, H * 0.6);
+  g.lineTo(W, H);
+  g.lineTo(0, H);
+  g.closePath();
+  g.fill();
+
+  for (let i = 0; i < 18; i++) {
+    const bx = ((i * 97 + hash * 19) % W);
+    const by = ((i * 73 + hash * 11) % Math.round(H * 0.75));
+    const br = (0.04 + (i % 4) * 0.022) * W;
+    const bk = g.createRadialGradient(bx, by, 1, bx, by, br);
+    bk.addColorStop(0, 'rgba(255, 250, 230, 0.28)');
+    bk.addColorStop(1, 'rgba(255, 250, 230, 0)');
+    g.fillStyle = bk;
+    g.beginPath();
+    g.arc(bx, by, br, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  const cx = W * 0.5 + ((hash % 5) - 2) * W * 0.012;
+  const cy = H * 0.48;
+  const R = W * 0.24;
+
+  // Halo cálido detrás de la cabecita.
+  const halo = g.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 1.9);
+  halo.addColorStop(0, 'rgba(255, 248, 225, 0.55)');
+  halo.addColorStop(1, 'rgba(255, 248, 225, 0)');
   g.fillStyle = halo;
-  g.fillRect(0, 0, c.width, c.height);
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.font = `${Math.round(size * 0.45)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-  g.fillText(EMOJI[m.species] || '🐾', c.width / 2, c.height * 0.43);
-  g.fillStyle = 'rgba(40,28,24,0.85)';
-  g.font = `700 ${Math.round(size * 0.15)}px Caveat, cursive`;
-  g.fillText(m.name, c.width / 2, c.height * 0.82, c.width * 0.9);
+  g.fillRect(0, 0, W, H);
+
+  // 2. Cuerpo, pecho y hombros.
+  const bodyGrad = g.createLinearGradient(cx - R, cy + R * 0.4, cx + R, H);
+  bodyGrad.addColorStop(0, pal.furLight);
+  bodyGrad.addColorStop(0.5, pal.fur);
+  bodyGrad.addColorStop(1, pal.furDark);
+  g.fillStyle = bodyGrad;
+  g.beginPath();
+  g.ellipse(cx, cy + R * 1.55, R * 1.18, R * 1.35, 0, 0, Math.PI * 2);
+  g.fill();
+
+  // Pechera blanca o clara.
+  g.fillStyle = pal.chest || pal.muzzle;
+  g.beginPath();
+  g.ellipse(cx, cy + R * 1.35, R * 0.68, R * 0.82, 0, 0, Math.PI * 2);
+  g.fill();
+
+  // Collar con medallita dorada.
+  g.strokeStyle = pal.collar || '#c82838';
+  g.lineWidth = R * 0.16;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.arc(cx, cy + R * 0.58, R * 0.78, 0.22 * Math.PI, 0.78 * Math.PI);
+  g.stroke();
+  g.fillStyle = '#f2c448';
+  g.beginPath();
+  g.arc(cx, cy + R * 1.42, R * 0.13, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = '#9c6e14';
+  g.lineWidth = 2;
+  g.stroke();
+
+  // 3. Orejas (atrás o a los costados de la cabeza).
+  for (const sd of [-1, 1]) {
+    g.save();
+    if (isCat) {
+      g.fillStyle = pal.mask ? pal.furDark : pal.fur;
+      g.beginPath();
+      g.moveTo(cx + sd * R * 0.34, cy - R * 0.62);
+      g.lineTo(cx + sd * R * 0.96, cy - R * 1.38);
+      g.lineTo(cx + sd * R * 0.92, cy - R * 0.22);
+      g.closePath();
+      g.fill();
+      g.fillStyle = '#e8a2a8';
+      g.beginPath();
+      g.moveTo(cx + sd * R * 0.44, cy - R * 0.64);
+      g.lineTo(cx + sd * R * 0.84, cy - R * 1.2);
+      g.lineTo(cx + sd * R * 0.82, cy - R * 0.32);
+      g.closePath();
+      g.fill();
+    } else if (pal.ears === 'up') {
+      g.fillStyle = pal.furDark;
+      g.beginPath();
+      g.moveTo(cx + sd * R * 0.35, cy - R * 0.65);
+      g.quadraticCurveTo(cx + sd * R * 0.95, cy - R * 1.55, cx + sd * R * 1.02, cy - R * 1.35);
+      g.quadraticCurveTo(cx + sd * R * 1.05, cy - R * 0.45, cx + sd * R * 0.82, cy - R * 0.18);
+      g.closePath();
+      g.fill();
+      g.fillStyle = '#d8988e';
+      g.beginPath();
+      g.ellipse(cx + sd * R * 0.72, cy - R * 0.82, R * 0.18, R * 0.36, sd * 0.28, 0, Math.PI * 2);
+      g.fill();
+    } else {
+      // Orejas caídas o suaves.
+      g.fillStyle = pal.patches || pal.furDark;
+      g.beginPath();
+      g.ellipse(cx + sd * R * 0.94, cy + R * 0.05, R * 0.36, R * 0.76, -sd * 0.22, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.restore();
+  }
+
+  // 4. Cabeza con sombreado volumétrico.
+  const headGrad = g.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.1, cx, cy, R * 1.08);
+  headGrad.addColorStop(0, pal.furLight);
+  headGrad.addColorStop(0.65, pal.fur);
+  headGrad.addColorStop(1, pal.furDark);
+  g.fillStyle = headGrad;
+  g.beginPath();
+  g.ellipse(cx, cy, R * (isCat ? 0.96 : 0.94), R * (isCat ? 0.88 : 0.92), 0, 0, Math.PI * 2);
+  g.fill();
+
+  // Manchitas, antifaz o rayas tabby en la cabeza.
+  g.save();
+  g.beginPath();
+  g.ellipse(cx, cy, R * (isCat ? 0.96 : 0.94), R * (isCat ? 0.88 : 0.92), 0, 0, Math.PI * 2);
+  g.clip();
+  if (pal.patches || pal.calico) {
+    g.fillStyle = pal.patches || '#d87a2e';
+    g.beginPath();
+    g.arc(cx - R * 0.55, cy - R * 0.25, R * 0.55, 0, Math.PI * 2);
+    g.fill();
+    if (pal.calico) {
+      g.fillStyle = '#2a2422';
+      g.beginPath();
+      g.arc(cx + R * 0.62, cy - R * 0.35, R * 0.48, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  if (pal.blaze) {
+    g.fillStyle = '#f7f3eb';
+    g.beginPath();
+    g.ellipse(cx, cy - R * 0.15, R * 0.22, R * 0.72, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  if (pal.tabby) {
+    g.strokeStyle = pal.furDark;
+    g.lineWidth = R * 0.08;
+    for (const dx of [-0.24, 0, 0.24]) {
+      g.beginPath();
+      g.moveTo(cx + dx * R, cy - R * 0.78);
+      g.lineTo(cx + dx * R * 0.7, cy - R * 0.38);
+      g.stroke();
+    }
+  }
+  if (pal.mask) {
+    const maskG = g.createRadialGradient(cx, cy + R * 0.18, R * 0.05, cx, cy + R * 0.12, R * 0.68);
+    maskG.addColorStop(0, pal.furDark);
+    maskG.addColorStop(1, 'rgba(82,58,44,0)');
+    g.fillStyle = maskG;
+    g.fillRect(cx - R, cy - R, R * 2, R * 2);
+  }
+  g.restore();
+
+  // 5. Hocico y mejillas.
+  const muzY = cy + R * (isCat ? 0.22 : 0.28);
+  g.fillStyle = pal.muzzle;
+  g.beginPath();
+  g.ellipse(cx, muzY, R * (isCat ? 0.44 : 0.52), R * (isCat ? 0.34 : 0.42), 0, 0, Math.PI * 2);
+  g.fill();
+
+  // Cejas expresivas.
+  if (pal.eyebrows) {
+    g.fillStyle = pal.eyebrows;
+    for (const sd of [-1, 1]) {
+      g.beginPath();
+      g.ellipse(cx + sd * R * 0.36, cy - R * 0.3, R * 0.13, R * 0.08, -sd * 0.2, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+
+  // 6. Ojos brillantes con doble reflejo de vida.
+  const eyeColor = pal.eyes || '#5a3418';
+  for (const sd of [-1, 1]) {
+    const ex = cx + sd * R * 0.38;
+    const ey = cy - R * 0.1;
+    const er = R * (isCat ? 0.17 : 0.155);
+    g.fillStyle = '#181210';
+    g.beginPath();
+    g.arc(ex, ey, er * 1.12, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = eyeColor;
+    g.beginPath();
+    g.arc(ex, ey, er, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#120d0c';
+    g.beginPath();
+    if (isCat) g.ellipse(ex, ey, er * 0.42, er * 0.82, 0, 0, Math.PI * 2);
+    else g.arc(ex, ey, er * 0.62, 0, Math.PI * 2);
+    g.fill();
+    // Brillos de luz en la mirada.
+    g.fillStyle = '#ffffff';
+    g.beginPath();
+    g.arc(ex - er * 0.28, ey - er * 0.28, er * 0.28, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.arc(ex + er * 0.25, ey + er * 0.22, er * 0.12, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // 7. Nariz húmeda, boquita tierna y bigotes.
+  const ny = muzY - R * 0.08;
+  g.fillStyle = isCat ? '#d87282' : '#1e1614';
+  g.beginPath();
+  if (isCat) {
+    g.moveTo(cx - R * 0.13, ny - R * 0.05);
+    g.lineTo(cx + R * 0.13, ny - R * 0.05);
+    g.lineTo(cx, ny + R * 0.11);
+    g.closePath();
+  } else {
+    g.ellipse(cx, ny, R * 0.2, R * 0.15, 0, 0, Math.PI * 2);
+  }
+  g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.35)';
+  g.beginPath();
+  g.ellipse(cx - R * 0.05, ny - R * 0.04, R * 0.07, R * 0.035, -0.2, 0, Math.PI * 2);
+  g.fill();
+
+  g.strokeStyle = 'rgba(40, 24, 18, 0.75)';
+  g.lineWidth = R * 0.045;
+  g.lineCap = 'round';
+  for (const sd of [-1, 1]) {
+    g.beginPath();
+    g.moveTo(cx, ny + R * 0.1);
+    g.quadraticCurveTo(cx + sd * R * 0.12, ny + R * 0.26, cx + sd * R * 0.24, ny + R * 0.16);
+    g.stroke();
+  }
+  if (isCat) {
+    g.strokeStyle = 'rgba(255, 250, 242, 0.7)';
+    g.lineWidth = 2;
+    for (const sd of [-1, 1]) {
+      for (const wy of [-0.04, 0.04, 0.12]) {
+        g.beginPath();
+        g.moveTo(cx + sd * R * 0.28, muzY + wy * R);
+        g.lineTo(cx + sd * R * 0.95, muzY + (wy - 0.04) * R);
+        g.stroke();
+      }
+    }
+  }
+
   return c;
 }
 
 export function portraitTexture(m) {
-  return toTexture(portraitCanvas(m, 512), { crisp: true });
+  return toTexture(portraitCanvas(m, 384), { crisp: true });
 }
 
 // Foto real: la recortamos a 4:5 en un canvas de alta definición para que se vea bien nítida en el marco.

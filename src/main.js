@@ -203,10 +203,12 @@ function setupRenderer() {
   }, { once: true });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.16;
-  const minRatio = tierName === 'high' ? Math.min(window.devicePixelRatio || 1, 1.75) : tierName === 'mid' ? 1.15 : 0.75;
-  adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: tier.maxPixelRatio, min: minRatio });
+  const maxRatio = coarse ? Math.min(tier.maxPixelRatio, 1.85) : tier.maxPixelRatio;
+  const minRatio = tierName === 'high' ? Math.min(window.devicePixelRatio || 1, coarse ? 1.25 : 1.75) : tierName === 'mid' ? 1.0 : 0.75;
+  adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: maxRatio, min: minRatio });
   if (tier.bloom) {
-    const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: tierName === 'high' ? 4 : 2 });
+    // En celulares evitamos MSAA 4x sobre HalfFloatType (consume ~150 MB de VRAM y hace que iOS recargue la pestaña).
+    const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: (!coarse && tierName === 'high') ? 4 : 0 });
     composer = new EffectComposer(renderer, rt);
     composer.setPixelRatio(adaptive.ratio);
     composer.setSize(innerWidth, innerHeight);
@@ -352,6 +354,7 @@ async function buildScene() {
     // Un muro: caminar hacia él (no abrir lo que haya del otro lado).
     if (hit.object.userData.kind === 'wall') { controls.walkTo(hit.point.clone().setY(0)); hideHint(); return; }
     if (hit.object.userData.kind === 'jar') { clink(); return openJar(); }
+    if (hit.object.userData.kind === 'sofa') return sitOnSofa(hit.object.userData.sofa);
     if (hit.object.userData.kind === 'elevator') return callElevator(hit.object.userData.liftIdx);
     if (hit.object.userData.kind === 'spirit') return tapSpirit(spirits.spiritOf(hit.object));
     if (hit.object.userData.kind === 'ball') {
@@ -2523,9 +2526,35 @@ function startGlide() {
   haptic(12);
   hideHint();
 }
+function sitOnSofa(sofa) {
+  if (!controls || !me || !sofa) return;
+  if (me.sitting) {
+    me.sitting = false;
+    haptic(6);
+    return;
+  }
+  const facing = new THREE.Vector3(
+    sofa.seat.x + Math.sin(sofa.heading) * 2,
+    sofa.seat.y,
+    sofa.seat.z + Math.cos(sofa.heading) * 2,
+  );
+  controls.placePlayer(sofa.seat, facing);
+  me.sitting = true;
+  me.smile(4);
+  haptic(8);
+  hideHint();
+  if (spirits?.companion) {
+    spirits.companion.state = 'rest';
+    spirits.companion.timer = 8;
+  }
+  toast('🛋️ Descansando un ratito en el salón…', null, true);
+}
 function computeAction() {
   if (!controls || !hall || !introDone) return null;
   const P = controls.player;
+  if (me?.sitting) return { kind: 'sofa', ic: '🛋️', lbl: 'Levantarse', key: 'stand', run: () => { me.sitting = false; haptic(6); } };
+  const nearSofa = hall.nearestSofa?.(P.pos);
+  if (nearSofa) return { kind: 'sofa', ic: '🛋️', lbl: 'Sentarse', key: 'sit', run: () => sitOnSofa(nearSofa) };
   const b = spirits?.ball;
   if (b && !b.held && !b.inAir && P.pos.distanceTo(_v.set(b.pos.x, 0, b.pos.z)) < 2.6) return { kind: 'ball', ic: '🎾', lbl: 'Tirar', key: 'ball', run: throwBall };
   // La ofrenda central del salón: se la ofrece desde la entrada si la mirás.

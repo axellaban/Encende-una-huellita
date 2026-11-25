@@ -552,6 +552,8 @@ export function buildHall(scene, colliders, tier) {
   const bulbs = []; // lucecitas de las guirnaldas (pérgola y pasillos)
   const wallCells = []; // obituarios en las vitrinas de madera de las paredes del salón
   const standingEasels = []; // atriles de madera con cuadritos en el centro del salón
+  const sofas = []; // sillones del salón donde el personaje puede sentarse y descansar
+  const wallTexCache = new Map(); // caché de retratos y plaquitas para no duplicar texturas en memoria móvil
 
   // ---------- el muro del salón ----------
   // Cada tramo es una serie de paredes rectas (cuerdas del círculo): por fuera pintadas, por dentro
@@ -565,9 +567,11 @@ export function buildHall(scene, colliders, tier) {
     const cornices = [];
     const T = 0.4;
     const outerMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture('#c9663a'), emissive: '#2a0e06' });
-    const cabMat = new THREE.MeshLambertMaterial({ map: darkWood, color: '#382012', emissive: '#1a0d06' });
-    const cabBackMat = new THREE.MeshLambertMaterial({ color: '#f5ebd8', emissive: '#4a3824', emissiveIntensity: 0.55 });
-    const darkFrameMat = new THREE.MeshLambertMaterial({ color: '#22150e', emissive: '#0c0704' });
+    const cabMat = new THREE.MeshLambertMaterial({ map: darkWood, color: '#331d10', emissive: '#170b05' });
+    // Interior crema cálido de cada nicho de la vitrina (debajo del umbral de bloom para que se vea nítido y luminoso).
+    const cabAlcoveMat = new THREE.MeshBasicMaterial({ color: '#ddd3c2' });
+    const cabShelfMat = new THREE.MeshLambertMaterial({ color: '#ebe1d0', emissive: '#594836', emissiveIntensity: 0.55 });
+    const darkFrameMat = new THREE.MeshLambertMaterial({ color: '#1b120c', emissive: '#0a0604' });
     const VITRINE_TITLES = [
       'Siempre en nuestro corazón',
       'Huellitas de luz eterna',
@@ -578,78 +582,110 @@ export function buildHall(scene, colliders, tier) {
     ];
     let vitrineIdx = 0;
 
-    // Vitrina de madera oscura con 12 obituarios iluminados (3 columnas x 4 filas) y cartel superior.
-    const makeWallVitrine = (deg, w = 3.25, h = 3.42) => {
+    // Vitrina de madera oscura con 12 obituarios iluminados (3 columnas x 4 filas) y cartel superior,
+    // ubicada completamente delante del muro curvo y del friso de talavera para que nada la corte.
+    const makeWallVitrine = (deg, w = 3.24, h = 3.44) => {
       const vIdx = vitrineIdx++;
       const g = new THREE.Group();
-      const pos = onRing(deg, ROOM_R - 0.25, 0.16);
+      const pos = onRing(deg, ROOM_R - 0.82, 0.16);
       g.position.copy(pos);
       g.lookAt(HALL_CENTER.x, 0.16, HALL_CENTER.z);
-      const D = 0.28;
+      const D = 0.34;
       const cols = 3;
       const rows = 4;
-      const cellW = (w - 0.32) / cols;
-      const cellH = (h - 0.36) / rows;
+      const innerW = w - 0.24;
+      const innerH = h - 0.28;
+      const cellW = innerW / cols;
+      const cellH = innerH / rows;
       const cabParts = [
-        // Fondo, techo con cornisa y zócalo inferior de la vitrina.
-        box(w, h, 0.04, 0, h / 2, -D / 2),
-        box(w + 0.18, 0.14, D + 0.12, 0, h + 0.05, 0.02),
-        box(w + 0.1, 0.14, D + 0.06, 0, 0.07, 0.01),
+        // Cuerpo macizo hacia atrás (hasta tocar la pared), cornisa superior y zócalo inferior.
+        box(w + 0.08, h + 0.06, 0.48, 0, h / 2, -D / 2 - 0.22),
+        box(w + 0.22, 0.15, D + 0.16, 0, h + 0.06, 0.03),
+        box(w + 0.14, 0.14, D + 0.1, 0, 0.07, 0.02),
       ];
       for (let c = 0; c <= cols; c++) {
-        const x = -w / 2 + 0.06 + c * ((w - 0.12) / cols);
-        cabParts.push(box(0.08, h, D, x, h / 2, 0));
+        const x = -innerW / 2 + c * cellW;
+        cabParts.push(box(0.085, h, D, x, h / 2, 0));
       }
       for (let rIdx = 0; rIdx <= rows; rIdx++) {
-        const y = 0.12 + rIdx * ((h - 0.2) / rows);
-        cabParts.push(box(w, 0.07, D, 0, y, 0));
+        const y = 0.14 + rIdx * cellH;
+        cabParts.push(box(w, 0.075, D, 0, y, 0));
       }
       g.add(new THREE.Mesh(mergeGeometries(cabParts), cabMat));
-      // Cartel claro arriba de la vitrina.
+      // Cartel claro arriba de la vitrina (sin banderitas adelante que lo tapen).
       const banner = new THREE.Mesh(
-        new THREE.PlaneGeometry(w * 0.92, 0.36),
+        new THREE.PlaneGeometry(w * 0.94, 0.38),
         new THREE.MeshBasicMaterial({
           map: labelTexture(VITRINE_TITLES[vIdx % VITRINE_TITLES.length], {
-            w: 820, h: 120, font: '400 52px "Young Serif", Georgia, serif', bg: 'rgba(246,238,225,0.96)', fg: '#3b2618',
+            w: 760, h: 112, font: '400 48px "Young Serif", Georgia, serif', bg: 'rgba(228,218,202,0.98)', fg: '#2b1b10',
           }),
           transparent: true,
         }),
       );
-      banner.position.set(0, h + 0.32, 0.06);
+      banner.position.set(0, h + 0.34, 0.08);
       g.add(banner);
-      // Halo cálido general de la vitrina.
-      const vGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.26, color: new THREE.Color(1.35, 0.98, 0.55),
-      }));
-      vGlow.scale.set(w * 1.25, h * 1.15, 1);
-      vGlow.position.set(0, h * 0.52, 0.18);
-      g.add(vGlow);
 
-      const bgs = ['jardin', 'crema', 'cielo', 'atardecer', 'cempasuchil', 'estrellas'];
+      const alcoveParts = [];
+      const shelfParts = [];
+      const frameParts = [];
+      const goldParts = [];
+      const cw = cellW - 0.085;
+      const ch = cellH - 0.075;
+      const pw = cw * 0.54;
+      const ph = ch * 0.64;
+      const photoGeo = new THREE.PlaneGeometry(pw, ph);
+      const plaqueGeo = new THREE.PlaneGeometry(cw * 0.62, 0.088);
+
       for (let rIdx = 0; rIdx < rows; rIdx++) {
         for (let c = 0; c < cols; c++) {
-          const cx = -w / 2 + 0.16 + (c + 0.5) * cellW;
-          const cy = 0.16 + (rows - 1 - rIdx + 0.5) * cellH;
-          const back = new THREE.Mesh(
-            new THREE.PlaneGeometry(cellW - 0.07, cellH - 0.07),
-            new THREE.MeshLambertMaterial({ map: backgroundTexture(bgs[(vIdx + rIdx + c) % bgs.length]), emissive: '#4a3824', emissiveIntensity: 0.52 }),
+          const cx = -innerW / 2 + (c + 0.5) * cellW;
+          const cy = 0.14 + (rows - 1 - rIdx + 0.5) * cellH;
+          alcoveParts.push(
+            box(cw, ch, 0.02, cx, cy, -D / 2 + 0.04),
+            box(0.015, ch, D - 0.06, cx - cw / 2 + 0.008, cy, 0),
+            box(0.015, ch, D - 0.06, cx + cw / 2 - 0.008, cy, 0),
           );
-          back.position.set(cx, cy, -D / 2 + 0.03);
-          const pw = cellW * 0.54;
-          const ph = cellH * 0.64;
-          const pFrame = new THREE.Mesh(new THREE.BoxGeometry(pw + 0.06, ph + 0.06, 0.025), (rIdx + c) % 3 === 0 ? goldMat : darkFrameMat);
-          pFrame.position.set(cx, cy + 0.04, -0.02);
-          const photo = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.93, 0.9) }));
-          photo.position.set(cx, cy + 0.04, -0.004);
+          shelfParts.push(box(cw, 0.024, D - 0.04, cx, cy - ch / 2 + 0.012, 0.01));
+
+          const isSpecial = (rIdx === 3 && c === 1) || (rIdx === 2 && c === 1);
+          if (isSpecial) {
+            const bgPlane = new THREE.Mesh(
+              new THREE.PlaneGeometry(cw - 0.01, ch - 0.01),
+              new THREE.MeshBasicMaterial({ map: backgroundTexture(rIdx === 3 ? 'cempasuchil' : 'jardin'), color: new THREE.Color(0.88, 0.86, 0.82) }),
+            );
+            bgPlane.position.set(cx, cy, -D / 2 + 0.055);
+            g.add(bgPlane);
+          }
+
+          const fBox = box(pw + 0.065, ph + 0.065, 0.03, cx, cy + 0.035, -0.02);
+          if (isSpecial) goldParts.push(fBox);
+          else frameParts.push(fBox);
+
+          // Soporte de bronce de la plaquita (unido en una sola malla por vitrina).
+          goldParts.push(
+            new THREE.BoxGeometry(cw * 0.64, 0.095, 0.022)
+              .rotateX(-0.15)
+              .translate(cx, cy - ch / 2 + 0.045, D / 2 - 0.01)
+              .toNonIndexed(),
+          );
+
+          const photo = new THREE.Mesh(photoGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.88, 0.86, 0.84) }));
+          photo.position.set(cx, cy + 0.035, -0.002);
           photo.userData = { kind: 'featured' };
           pickables.push(photo);
-          const plaqueMesh = new THREE.Mesh(new THREE.PlaneGeometry(cellW * 0.68, 0.095), new THREE.MeshBasicMaterial({ transparent: true }));
-          plaqueMesh.position.set(cx, cy - cellH * 0.37, 0.045);
-          plaqueMesh.rotation.x = -0.18;
-          g.add(back, pFrame, photo, plaqueMesh);
+
+          const plaqueMesh = new THREE.Mesh(plaqueGeo, new THREE.MeshBasicMaterial({ transparent: true }));
+          plaqueMesh.position.set(cx, cy - ch / 2 + 0.046, D / 2 + 0.003);
+          plaqueMesh.rotation.x = -0.15;
+
+          g.add(photo, plaqueMesh);
           wallCells.push({ photo, plaque: plaqueMesh, seed: vIdx * 12 + rIdx * 3 + c });
         }
       }
+      g.add(new THREE.Mesh(mergeGeometries(alcoveParts), cabAlcoveMat));
+      g.add(new THREE.Mesh(mergeGeometries(shelfParts), cabShelfMat));
+      if (frameParts.length) g.add(new THREE.Mesh(mergeGeometries(frameParts), darkFrameMat));
+      if (goldParts.length) g.add(new THREE.Mesh(mergeGeometries(goldParts), goldMat));
       scene.add(g);
     };
 
@@ -677,22 +713,17 @@ export function buildHall(scene, colliders, tier) {
       const paint = new THREE.Mesh(mergeGeometries(inner), new THREE.MeshLambertMaterial({ map: paintedWallTexture(WALL_COLORS[ai % WALL_COLORS.length]), emissive: '#1a0c08' }));
       scene.add(paint);
       if (a1 - a0 > 30) {
-        // Tramos largos de la entrada: dos vitrinas grandes de obituarios por pared, coronas y papel picado.
+        // Tramos largos de la entrada: dos vitrinas grandes de obituarios por pared, centradas a cada lado del pilar central del tramo.
         for (let k = 0; k < 2; k++) {
-          const ta = a0 + 5 + k * ((a1 - a0 - 10) / 2);
-          const tb = ta + (a1 - a0 - 10) / 2;
-          const midDeg = (ta + tb) / 2;
-          const b = picadoBanner(onRing(ta, ROOM_R - 0.35, ROOM_WALL_H - 0.28), onRing(tb, ROOM_R - 0.35, ROOM_WALL_H - 0.28), { sag: 0.36, flags: 9, size: 0.34, seed: ai * 3 + k });
-          scene.add(b);
-          animators.push(b.userData.flutter);
-          makeWallVitrine(midDeg, 3.35, 3.42);
+          const ta = a0 + 3 + k * ((a1 - a0 - 6) / 2);
+          const tb = ta + (a1 - a0 - 6) / 2;
+          makeWallVitrine((ta + tb) / 2, 3.24, 3.44);
         }
       } else if (a1 - a0 > 14) {
         // Tramos entre pasillos sin ascensor: vitrina completa de 3x4 obituarios.
-        makeWallVitrine((a0 + a1) / 2, 3.35, 3.42);
+        makeWallVitrine((a0 + a1) / 2, 3.24, 3.44);
       }
     });
-    void cabBackMat;
     const walls = new THREE.Mesh(mergeGeometries(outer), outerMat);
     walls.userData.kind = 'wall';
     blockers.push(walls);
@@ -755,8 +786,30 @@ export function buildHall(scene, colliders, tier) {
   const winGlassGeoR = new THREE.PlaneGeometry(winW - winBar * 2, winH - winBar * 2).translate(-winW / 2, 0, 0);
   const darkPictureFrameMat = new THREE.MeshLambertMaterial({ color: '#1e1612', emissive: '#0c0806' });
   const shelfWoodMat = new THREE.MeshLambertMaterial({ map: trimWood, color: '#c48d56', emissive: '#3d2410', emissiveIntensity: 0.45 });
-  const pillBadgeMat = new THREE.MeshBasicMaterial({ color: '#faf3e6' });
+  const pillBadgeMat = new THREE.MeshBasicMaterial({ color: '#e2d8c8' });
   const DEFAULT_SHELF_GIFTS = ['🧸', '🎾', '🦴', '🧁', '🧶', '🦆'];
+  // Geometrías únicas compartidas por los 270 nichos para ahorrar memoria gráfica en celulares.
+  const SHELF_SPOTS = [
+    [-0.36, 0.145, -DEPTH * 0.56],
+    [-0.36, -0.055, -DEPTH * 0.56],
+    [0.36, 0.145, -DEPTH * 0.56],
+    [0.36, -0.055, -DEPTH * 0.56],
+  ];
+  const slotMatGeo = new THREE.PlaneGeometry(OW - 0.02, OH - 0.02);
+  const slotPhotoGeo = new THREE.PlaneGeometry(PW, PH);
+  const slotNameGeo = new THREE.PlaneGeometry(0.68, 0.125);
+  const slotInnerNameGeo = new THREE.PlaneGeometry(0.44, 0.098);
+  const slotPickGeo = new THREE.PlaneGeometry(OW + 0.1, OH + 0.1);
+  const slotShelvesGeo = mergeGeometries(
+    SHELF_SPOTS.map(([sx, sy, sz]) => box(0.22, 0.024, DEPTH * 0.44, sx, sy, sz)),
+  );
+  const slotCreamStaticGeo = mergeGeometries([
+    box(OW - 0.03, 0.036, DEPTH - 0.03, 0, -OH / 2 + 0.018, -DEPTH / 2),
+    new THREE.BoxGeometry(0.46, 0.11, 0.024).rotateX(-0.22).translate(0, -OH / 2 + 0.068, -DEPTH * 0.36).toNonIndexed(),
+    ...SHELF_SPOTS.map(([sx, sy, sz]) => box(0.058, 0.024, 0.012, sx + (sx < 0 ? 0.04 : -0.04), sy + 0.002, sz + DEPTH * 0.225)),
+  ]);
+  void glassMat;
+  void pillBadgeMat;
 
   // ---------- los pasillos ----------
   {
@@ -949,21 +1002,23 @@ export function buildHall(scene, colliders, tier) {
           cg.add(chain);
         }
         corridorLabels.push(label);
-        // Cuadros verticales con retrato y nombre en las jambas de entrada a cada pasillo (como en las imágenes de referencia).
+        // Cuadros verticales con retrato y nombre en las jambas de entrada a cada pasillo (sin brillo que encandile).
         for (const [si, sd] of [[0, -1], [1, 1]]) {
           const pg = new THREE.Group();
           pg.position.set(sd * (HW - 0.03), 1.98, 0.02);
           pg.rotation.y = -sd * Math.PI / 2;
-          const pFrame = new THREE.Mesh(new THREE.BoxGeometry(0.76, 1.38, 0.04), trimMat);
-          const pMat = new THREE.Mesh(new THREE.PlaneGeometry(0.68, 1.3), new THREE.MeshBasicMaterial({ color: '#faf4ea' }));
+          const pFrame = new THREE.Mesh(new THREE.BoxGeometry(0.76, 1.38, 0.04), nicheMat);
+          const pMat = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 1.28), new THREE.MeshBasicMaterial({ color: '#d8cfc0' }));
           pMat.position.z = 0.022;
-          const pPhoto = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.88), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.93, 0.9) }));
-          pPhoto.position.set(0, 0.14, 0.025);
+          const pInnerBorder = new THREE.Mesh(new THREE.PlaneGeometry(0.575, 0.895), new THREE.MeshBasicMaterial({ color: '#2b1c12' }));
+          pInnerBorder.position.set(0, 0.14, 0.024);
+          const pPhoto = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.87), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.88, 0.86, 0.84) }));
+          pPhoto.position.set(0, 0.14, 0.026);
           pPhoto.userData = { kind: 'featured' };
           pickables.push(pPhoto);
-          const pName = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.14), new THREE.MeshBasicMaterial({ transparent: true }));
+          const pName = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.2), new THREE.MeshBasicMaterial({ transparent: true }));
           pName.position.set(0, -0.44, 0.026);
-          pg.add(pFrame, pMat, pPhoto, pName);
+          pg.add(pFrame, pMat, pInnerBorder, pPhoto, pName);
           cg.add(pg);
           wallCells.push({ photo: pPhoto, plaque: pName, seed: 80 + c * 2 + si, lightPlaque: true });
         }
@@ -1017,35 +1072,38 @@ export function buildHall(scene, colliders, tier) {
     scene.add(marigoldCluster(flowerPts, { r: 0.07, rnd: r }));
   }
 
-  // Arma un nicho: la caja de adentro (fondo ilustrado, marco central, 4 repisitas de madera a los costados
-  // para apoyar regalitos, repisa inferior blanca con florero, plaquita inclinada y velas) y las dos
-  // ventanitas batientes de vidrio a izquierda y derecha.
+  // Arma un nicho liviano al inicio; el interior detallado (velas, flores, repisitas, ventanitas y efectos)
+  // se construye recién cuando el nicho se ocupa (fillSlot), ahorrando >11.000 objetos 3D en celulares.
   function makeSlot(g, local) {
-    const mat = new THREE.Mesh(new THREE.PlaneGeometry(OW - 0.02, OH - 0.02), new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#4a3828', emissiveIntensity: 0.42 }));
-    mat.position.z = -DEPTH + 0.01;
-    const border = new THREE.Mesh(frameGeo, darkPictureFrameMat);
-    border.position.set(0, PHOTO_Y, -DEPTH * 0.65 - 0.006);
-    const photo = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.94, 0.94, 0.94) }));
-    photo.position.set(0, PHOTO_Y, -DEPTH * 0.65);
-    const cloth = new THREE.Mesh(new THREE.BoxGeometry(OW - 0.03, 0.036, DEPTH - 0.03), clothMat);
-    cloth.position.set(0, -OH / 2 + 0.018, -DEPTH / 2);
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(OW, OH), glassMat);
-    glass.position.z = -0.015;
-    glass.renderOrder = 4;
-    glass.visible = false; // al abrirse quedan las dos ventanitas batientes a los costados
-    const name = new THREE.Mesh(new THREE.PlaneGeometry(0.68, 0.125), new THREE.MeshBasicMaterial({ transparent: true }));
-    name.position.set(0, -OH / 2 - 0.055, 0.048);
-    // Plaquita grande apoyada e inclinada en el centro de la repisa inferior (como en la imagen de referencia).
-    const innerPlaqueStand = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.11, 0.024), creamMat);
-    innerPlaqueStand.position.set(0, -OH / 2 + 0.068, -DEPTH * 0.36);
-    innerPlaqueStand.rotation.x = -0.22;
-    const innerName = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.098), new THREE.MeshBasicMaterial({ transparent: true }));
-    innerName.position.set(0, -OH / 2 + 0.07, -DEPTH * 0.36 + 0.014);
-    innerName.rotation.x = -0.22;
-    const pick = new THREE.Mesh(new THREE.PlaneGeometry(OW + 0.1, OH + 0.1), pickMat);
+    const inside = new THREE.Group();
+    inside.visible = false;
+    const pick = new THREE.Mesh(slotPickGeo, pickMat);
     pick.position.z = 0.05;
     pick.userData = { kind: 'slot', local };
     pickables.push(pick);
+    g.add(inside, pick);
+    return {
+      group: g, inside, pick, photo: pick,
+      built: false, memorial: null, textures: [], open: 0, openTarget: 0, openDelay: 0, local,
+    };
+  }
+
+  function buildSlotInside(s) {
+    if (s.built) return;
+    s.built = true;
+    const { inside, local } = s;
+    const mat = new THREE.Mesh(slotMatGeo, new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#4a3828', emissiveIntensity: 0.42 }));
+    mat.position.z = -DEPTH + 0.01;
+    const border = new THREE.Mesh(frameGeo, darkPictureFrameMat);
+    border.position.set(0, PHOTO_Y, -DEPTH * 0.65 - 0.006);
+    const photo = new THREE.Mesh(slotPhotoGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.92, 0.92, 0.92) }));
+    photo.position.set(0, PHOTO_Y, -DEPTH * 0.65);
+    const creamStatic = new THREE.Mesh(slotCreamStaticGeo, clothMat);
+    const name = new THREE.Mesh(slotNameGeo, new THREE.MeshBasicMaterial({ transparent: true }));
+    name.position.set(0, -OH / 2 - 0.055, 0.048);
+    const innerName = new THREE.Mesh(slotInnerNameGeo, new THREE.MeshBasicMaterial({ transparent: true }));
+    innerName.position.set(0, -OH / 2 + 0.07, -DEPTH * 0.36 + 0.014);
+    innerName.rotation.x = -0.22;
 
     const shelf = new THREE.Group();
     shelf.position.set(0, -OH / 2 + 0.032, -DEPTH / 2 + 0.02);
@@ -1057,37 +1115,22 @@ export function buildHall(scene, colliders, tier) {
       shelf.add(c);
       return c;
     });
-    // Florero con el ramo de flores a la izquierda de la repisa inferior.
     const jar = new THREE.Group();
     jar.position.set(-0.32, 0.0, 0.03);
     jar.scale.setScalar(1.22);
     jar.add(new THREE.Mesh(jarGeo, jarMat), new THREE.Mesh(jarRimGeo, jarMat), new THREE.Mesh(jarLeafGeo, leafMat));
     jar.visible = false;
     shelf.add(jar);
-    const flowers = BOUQUET.map(([x, y, z, s], i) => {
+    const flowers = BOUQUET.map(([x, y, z, sc], i) => {
       const f = new THREE.Mesh(marigoldGeo, flowerMats[(local + i) % flowerMats.length]);
       f.position.set(x, y, z);
-      f.scale.setScalar(s);
+      f.scale.setScalar(sc);
       f.rotation.set(x * 4, i, z * 4);
       f.visible = false;
       jar.add(f);
       return f;
     });
-    // 4 repisitas de madera flotantes a los costados de la foto (2 a la izquierda y 2 a la derecha) con sus apoyos.
-    const inside = new THREE.Group();
-    const SHELF_SPOTS = [
-      [-0.36, 0.145, -DEPTH * 0.56],
-      [-0.36, -0.055, -DEPTH * 0.56],
-      [0.36, 0.145, -DEPTH * 0.56],
-      [0.36, -0.055, -DEPTH * 0.56],
-    ];
-    const sideShelves = new THREE.Mesh(mergeGeometries(
-      SHELF_SPOTS.map(([sx, sy, sz]) => box(0.22, 0.024, DEPTH * 0.44, sx, sy, sz)),
-    ), shelfWoodMat);
-    // Pastillitas blancas de conteo en el frente de las repisitas (como en la foto de referencia).
-    const pills = new THREE.Mesh(mergeGeometries(
-      SHELF_SPOTS.map(([sx, sy, sz]) => box(0.058, 0.024, 0.012, sx + (sx < 0 ? 0.04 : -0.04), sy + 0.002, sz + DEPTH * 0.225)),
-    ), pillBadgeMat);
+    const sideShelves = new THREE.Mesh(slotShelvesGeo, shelfWoodMat);
     const gifts = [0, 1, 2, 3, 4].map((i) => {
       const h = giftHolder(i < 4 ? 0.125 : 0.145);
       if (i < 4) {
@@ -1102,7 +1145,6 @@ export function buildHall(scene, colliders, tier) {
       }
       return h;
     });
-    // Dos ventanitas batientes de vidrio (izquierda y derecha) que se abren hacia afuera al abrirse el nicho.
     const winL = new THREE.Group();
     winL.position.set(-OW / 2 + 0.006, 0, 0.01);
     winL.add(new THREE.Mesh(winLeafGeoL, casementFrameMat), new THREE.Mesh(winGlassGeoL, casementGlassMat));
@@ -1116,10 +1158,8 @@ export function buildHall(scene, colliders, tier) {
     warmHalo.scale.set(0.98, 0.9, 1);
     warmHalo.position.set(0, -0.02, -DEPTH * 0.45);
     warmHalo.visible = false;
-    inside.add(mat, border, photo, cloth, sideShelves, pills, innerPlaqueStand, innerName, winL, winR, glass, name, shelf, warmHalo, fx.group);
-    inside.visible = false;
-    g.add(inside, pick);
-    return { group: g, inside, border, mat, photo, name, innerName, winL, winR, shelf, candles, jar, flowers, gifts, warmHalo, fx, memorial: null, textures: [], open: 0, openTarget: 0, openDelay: 0, local };
+    inside.add(mat, border, photo, creamStatic, sideShelves, innerName, winL, winR, name, shelf, warmHalo, fx.group);
+    Object.assign(s, { border, mat, photo, name, innerName, winL, winR, shelf, candles, jar, flowers, gifts, warmHalo, fx });
   }
 
   // ---------- puertitas de los nichos (todas en un solo dibujo) ----------
@@ -1246,12 +1286,11 @@ export function buildHall(scene, colliders, tier) {
   const corridorBulbs = bulbs.length;
 
   // ---------- pérgola y guirnaldas ----------
-  // Pilares en los bordes de cada boca de pasillo y de la entrada (y cada tanto en los tramos largos).
+  // Pilares sólo en los bordes de cada boca de pasillo/entrada y en el centro exacto entre las dos vitrinas de los tramos largos (para que ningún pilar tape una vitrina).
   const postDeg = [];
   for (const [a0, a1] of ROOM_ARCS) {
     postDeg.push(a0);
-    const n = Math.floor((a1 - a0) / 22);
-    for (let k = 1; k <= n; k++) postDeg.push(a0 + ((a1 - a0) * k) / (n + 1));
+    if (a1 - a0 > 30) postDeg.push((a0 + a1) / 2);
     postDeg.push(a1);
   }
   const posts = postDeg.map((d) => onRing(d, ROOM_R - 0.38));
@@ -1432,7 +1471,7 @@ export function buildHall(scene, colliders, tier) {
     const potWhiteMat = new THREE.MeshLambertMaterial({ color: '#f4eee4', emissive: '#3b3228', emissiveIntensity: 0.45 });
     const plantGreenMat = new THREE.MeshLambertMaterial({ color: '#589c48', emissive: '#183312', emissiveIntensity: 0.35 });
 
-    // Arma un sillón acolchado de dos cuerpos (como los del centro del salón de referencia).
+    // Arma un sillón acolchado de dos cuerpos donde el personaje puede sentarse y descansar.
     const makeSofa = (x, z, rotY, width = 2.2) => {
       const sg = new THREE.Group();
       sg.position.set(x, 0.16, z);
@@ -1460,7 +1499,21 @@ export function buildHall(scene, colliders, tier) {
         sg.add(seatC, backC);
       }
       scene.add(sg);
-      colliders.circles.push({ x, z, r: 0.95 });
+      sg.updateMatrixWorld(true);
+      // Choques sólo en el respaldo para que el asiento delantero quede libre al sentarse.
+      for (const lx of [-width * 0.32, width * 0.32]) {
+        const bp = sg.localToWorld(new THREE.Vector3(lx, 0, -0.36));
+        colliders.circles.push({ x: bp.x, z: bp.z, r: 0.38 });
+      }
+      const seatPos = sg.localToWorld(new THREE.Vector3(0, 0, 0.18));
+      seatPos.y = 0.16;
+      const sofaInfo = { seat: seatPos, heading: rotY };
+      sofas.push(sofaInfo);
+      const hit = new THREE.Mesh(new THREE.BoxGeometry(width + 0.2, 1.0, 1.1), pickMat);
+      hit.position.set(0, 0.5, 0);
+      hit.userData = { kind: 'sofa', sofa: sofaInfo };
+      sg.add(hit);
+      pickables.push(hit);
     };
 
     // Living principal entre el cantero central y las vitrinas del fondo (como en la tercera foto).
@@ -1523,26 +1576,23 @@ export function buildHall(scene, colliders, tier) {
       const topOrn = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.028, 8, 24, Math.PI), goldMat);
       topOrn.position.set(0, 2.1, 0.04);
       topOrn.rotation.x = -0.06;
-      // Paspartú blanco con encabezado "Luz de hoy", foto central y plaquita con el nombre abajo.
+      // Paspartú crema cálido (sin bloom que encandile) con encabezado "Luz de hoy", foto central y plaquita con el nombre abajo.
       const cardBg = new THREE.Mesh(
         new THREE.PlaneGeometry(fw - 0.1, fh - 0.1),
-        new THREE.MeshBasicMaterial({
-          map: labelTexture('✨ Luz de hoy', { w: 512, h: 640, font: '700 34px "Young Serif", Georgia, serif', bg: '#faf5ec', fg: '#7a5c3e' }),
-        }),
+        new THREE.MeshBasicMaterial({ color: '#d8cfc0' }),
       );
       cardBg.position.set(0, 1.42, 0.11);
       cardBg.rotation.x = -0.06;
-      // Movemos el título arriba dibujando la foto en el centro y el nombre abajo.
       const headerLbl = new THREE.Mesh(
         new THREE.PlaneGeometry(0.84, 0.13),
         new THREE.MeshBasicMaterial({
-          map: labelTexture('✨ Luz de hoy ✨', { w: 520, h: 84, font: '400 38px "Young Serif", Georgia, serif', bg: 'rgba(250,245,236,0.98)', fg: '#6b4e32' }),
+          map: labelTexture('✨ Luz de hoy ✨', { w: 520, h: 84, font: '400 38px "Young Serif", Georgia, serif', bg: 'rgba(216,207,192,0.98)', fg: '#4a331e' }),
           transparent: true,
         }),
       );
       headerLbl.position.set(0, 1.92, 0.115);
       headerLbl.rotation.x = -0.06;
-      const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.78), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.93, 0.9) }));
+      const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.78), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.88, 0.86, 0.84) }));
       photo.position.set(0, 1.44, 0.116);
       photo.rotation.x = -0.06;
       photo.userData = { kind: 'featured' };
@@ -1802,12 +1852,15 @@ export function buildHall(scene, colliders, tier) {
     s.textures.forEach((t) => t.dispose());
     s.textures = [];
     s.memorial = null;
+    if (!s.built) return;
     s.shelf.visible = false;
     s.fx.group.visible = false;
     s.name.visible = false;
+    if (s.innerName) s.innerName.visible = false;
   }
 
   function fillSlot(s, m) {
+    if (!s.built) buildSlotInside(s);
     const prev = s.memorial;
     // Al llegar una huellita nueva (o al cambiar de piso) las puertitas se abren de a una.
     if (!prev || prev.id !== m.id) { s.open = 0; s.drawn = false; s.openDelay = Math.random() * 0.9; }
@@ -2018,22 +2071,25 @@ export function buildHall(scene, colliders, tier) {
         const real = idx < memorials.length ? memorials[idx] : memorials[idx % memorials.length];
         const useReal = idx < memorials.length;
         const item = useReal ? real : COMPANIONS[idx % COMPANIONS.length];
-        const key = useReal ? `${real.id}:${real.photo || ''}:${real.name}` : `comp:${item.name}:${idx}`;
+        const key = `${useReal ? `${real.id}:${real.photo || ''}:${real.name}` : `comp:${item.name}`}:${cell.lightPlaque ? 'L' : 'G'}`;
         if (cell.key === key) return;
         cell.key = key;
-        cell.tex?.dispose();
-        cell.lt?.dispose();
-        cell.tex = (useReal && real.photo) ? photoTexture(real.photo) : portraitTexture(item);
-        cell.lt = labelTexture(item.name, {
-          w: 360, h: 72,
-          font: '400 42px "Young Serif", Georgia, serif',
-          bg: cell.lightPlaque ? 'rgba(250,244,234,0.98)' : 'rgba(201,151,63,0.98)',
-          fg: '#3a2410',
-        });
-        cell.photo.material.map = cell.tex;
+        let cached = wallTexCache.get(key);
+        if (!cached) {
+          const tex = (useReal && real.photo) ? photoTexture(real.photo) : portraitTexture(item);
+          const lt = labelTexture(item.name, {
+            w: 360, h: 74,
+            font: '400 44px "Young Serif", Georgia, serif',
+            bg: cell.lightPlaque ? 'rgba(216,207,192,0.98)' : 'rgba(201,151,63,0.98)',
+            fg: '#26160a',
+          });
+          cached = { tex, lt };
+          wallTexCache.set(key, cached);
+        }
+        cell.photo.material.map = cached.tex;
         cell.photo.material.needsUpdate = true;
         cell.photo.userData = real ? { kind: 'spot', id: real.id } : { kind: 'featured' };
-        cell.plaque.material.map = cell.lt;
+        cell.plaque.material.map = cached.lt;
         cell.plaque.material.needsUpdate = true;
       });
       standingEasels.forEach((ea, idx) => {
@@ -2046,7 +2102,7 @@ export function buildHall(scene, colliders, tier) {
         ea.lt?.dispose();
         ea.tex = m.photo ? photoTexture(m.photo) : portraitTexture(m);
         ea.lt = labelTexture(`🐾 ${m.name}`, {
-          w: 480, h: 96, font: '700 54px "Young Serif", Georgia, serif', bg: 'rgba(250,245,236,0.98)', fg: '#2b1b10',
+          w: 480, h: 96, font: '700 54px "Young Serif", Georgia, serif', bg: 'rgba(216,207,192,0.98)', fg: '#26160a',
         });
         ea.photo.material.map = ea.tex;
         ea.photo.material.needsUpdate = true;
@@ -2077,6 +2133,16 @@ export function buildHall(scene, colliders, tier) {
   return {
     slots,
     blockers,
+    sofas,
+    nearestSofa(pos) {
+      let best = null;
+      let bestD = Infinity;
+      for (const s of sofas) {
+        const d = Math.hypot(pos.x - s.seat.x, pos.z - s.seat.z);
+        if (d < bestD) { bestD = d; best = s; }
+      }
+      return best && bestD < 2.6 ? best : null;
+    },
     get featured() { return featured; },
     get floor() { return floor; },
     setFloor(n, memorials) {
@@ -2183,6 +2249,7 @@ export function buildHall(scene, colliders, tier) {
       }
       const s = slots[key];
       if (!s) return null;
+      if (!s.built) buildSlotInside(s);
       s.group.updateMatrixWorld(true);
       if (kind === 'candle') return s.shelf.localToWorld(v.set(0.31, 0.15, 0.03));
       if (kind === 'flower') return s.jar.localToWorld(v.set(0, 0.13, 0));

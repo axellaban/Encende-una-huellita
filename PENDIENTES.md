@@ -63,6 +63,8 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
   - Dos hojas de ventana batientes con marco claro, bisagras y vidrio esmerilado que se abren hacia los costados; paisaje de pradera ilustrada en el fondo; 4 repisitas de madera flotantes a los lados del retrato con regalitos 3D y pastillitas de conteo; florero a la izquierda, plaquita grande inclinada en el centro y velas a la derecha.
 - [x] **Living central con sillones y atriles de pie con cuadritos (`src/scene/hall.js`)**:
   - Alfombra circular con sillones acolchados enfrentados y centro luminoso en el salón, más 3 atriles de madera con cuadritos (*"✨ Luz de hoy"*) y macetas blancas con plantas.
+- [x] **Sentarse y descansar en los sillones (`src/scene/character.js`, `src/scene/hall.js`, `src/main.js`), retratos pintados al óleo/acuarela (`src/scene/textures.js`), vitrinas sin recortes y optimización de memoria en celular (`buildSlotInside`)**:
+  - Pose de sentarse en los sillones (`🛋️ Sentarse` / `🛋️ Levantarse` o tocando el sillón, y tu mascota descansa al lado); retratos ilustrados completos de perritos y gatitos (sin emojis ni texto duplicado); vitrinas ubicadas delante del muro y la talavera sin pilares ni banderitas que las tapen; construcción diferida de interiores de nichos (`buildSlotInside`) y caché de texturas para que en celular no se agote la VRAM ni recargue la página.
 
 ---
 
