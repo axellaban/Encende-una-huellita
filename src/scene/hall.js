@@ -159,7 +159,7 @@ function canvasTex(w, h, draw, { repeat = false, srgb = true } = {}) {
   draw(c.getContext('2d'), w, h);
   const t = new THREE.CanvasTexture(c);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }
@@ -169,74 +169,82 @@ function canvasTex(w, h, draw, { repeat = false, srgb = true } = {}) {
 let doorTex = null;
 function doorTextures() {
   if (doorTex) return doorTex;
-  const W = 256;
-  const H = 232;
-  const panel = (g, inset) => rrect(g, inset, inset, W - inset * 2, H - inset * 2, 6);
-  const plaque = (g) => rrect(g, W / 2 - 46, H / 2 - 15, 92, 30, 5);
+  const W = 512;
+  const H = 464;
+  const panel = (g, inset) => rrect(g, inset, inset, W - inset * 2, H - inset * 2, 12);
+  const plaque = (g) => rrect(g, W / 2 - 92, H / 2 - 30, 184, 60, 10);
   const map = canvasTex(W, H, (g) => {
-    g.fillStyle = '#3e2618';
+    const bg = g.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#462a1a');
+    bg.addColorStop(0.5, '#3b2315');
+    bg.addColorStop(1, '#311c10');
+    g.fillStyle = bg;
     g.fillRect(0, 0, W, H);
-    // Veta de la madera.
-    for (let i = 0; i < 70; i++) {
-      g.strokeStyle = `rgba(${Math.random() < 0.5 ? '120,80,50' : '20,10,5'},${0.08 + Math.random() * 0.1})`;
-      g.lineWidth = 1 + Math.random() * 2;
+    // Veta de la madera de nogal en alta definición.
+    for (let i = 0; i < 140; i++) {
+      g.strokeStyle = `rgba(${Math.random() < 0.5 ? '135,90,55' : '18,9,4'},${0.08 + Math.random() * 0.11})`;
+      g.lineWidth = 1.5 + Math.random() * 3.5;
       const y = Math.random() * H;
       g.beginPath();
       g.moveTo(0, y);
-      g.bezierCurveTo(W * 0.3, y + (Math.random() - 0.5) * 10, W * 0.6, y + (Math.random() - 0.5) * 10, W, y + (Math.random() - 0.5) * 6);
+      g.bezierCurveTo(W * 0.3, y + (Math.random() - 0.5) * 20, W * 0.6, y + (Math.random() - 0.5) * 20, W, y + (Math.random() - 0.5) * 12);
       g.stroke();
     }
-    // Marco: la luz viene de arriba a la izquierda (bisel claro arriba, oscuro abajo).
-    g.lineWidth = 6;
-    g.strokeStyle = 'rgba(255,214,160,0.28)';
-    g.beginPath(); g.moveTo(5, H - 5); g.lineTo(5, 5); g.lineTo(W - 5, 5); g.stroke();
-    g.strokeStyle = 'rgba(0,0,0,0.55)';
-    g.beginPath(); g.moveTo(W - 5, 5); g.lineTo(W - 5, H - 5); g.lineTo(5, H - 5); g.stroke();
-    // Panel central rehundido y biselado.
-    g.fillStyle = 'rgba(0,0,0,0.18)';
-    panel(g, 30);
+    // Marco exterior biselado.
+    g.lineWidth = 12;
+    g.strokeStyle = 'rgba(255,218,165,0.3)';
+    g.beginPath(); g.moveTo(10, H - 10); g.lineTo(10, 10); g.lineTo(W - 10, 10); g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,0.58)';
+    g.beginPath(); g.moveTo(W - 10, 10); g.lineTo(W - 10, H - 10); g.lineTo(10, H - 10); g.stroke();
+    // Panel central rehundido y biselado con filete dorado.
+    g.fillStyle = 'rgba(0,0,0,0.2)';
+    panel(g, 60);
     g.fill();
-    g.lineWidth = 9;
-    g.strokeStyle = 'rgba(0,0,0,0.5)';
-    g.beginPath(); g.moveTo(30, H - 30); g.lineTo(30, 30); g.lineTo(W - 30, 30); g.stroke();
-    g.strokeStyle = 'rgba(255,210,150,0.24)';
-    g.beginPath(); g.moveTo(W - 30, 30); g.lineTo(W - 30, H - 30); g.lineTo(30, H - 30); g.stroke();
-    g.strokeStyle = 'rgba(255,220,170,0.14)';
-    g.lineWidth = 2;
-    panel(g, 40);
+    g.lineWidth = 18;
+    g.strokeStyle = 'rgba(0,0,0,0.52)';
+    g.beginPath(); g.moveTo(60, H - 60); g.lineTo(60, 60); g.lineTo(W - 60, 60); g.stroke();
+    g.strokeStyle = 'rgba(255,214,155,0.26)';
+    g.beginPath(); g.moveTo(W - 60, 60); g.lineTo(W - 60, H - 60); g.lineTo(60, H - 60); g.stroke();
+    g.strokeStyle = 'rgba(255,224,175,0.2)';
+    g.lineWidth = 3.5;
+    panel(g, 80);
     g.stroke();
-    // La plaquita de bronce con sus tornillitos y una florcita grabada.
-    const gr = g.createLinearGradient(0, H / 2 - 15, 0, H / 2 + 15);
-    gr.addColorStop(0, '#f6dc8e');
-    gr.addColorStop(0.5, '#c9973f');
-    gr.addColorStop(1, '#8a5f22');
+    // La plaquita de bronce bruñido con sus tornillitos y una florcita grabada.
+    const gr = g.createLinearGradient(0, H / 2 - 30, 0, H / 2 + 30);
+    gr.addColorStop(0, '#fae39c');
+    gr.addColorStop(0.45, '#d4a146');
+    gr.addColorStop(1, '#8c6022');
     g.fillStyle = gr;
     plaque(g);
     g.fill();
     g.strokeStyle = '#5a3a14';
-    g.lineWidth = 2;
+    g.lineWidth = 3.5;
     g.stroke();
     g.fillStyle = '#6a4416';
-    for (const x of [W / 2 - 38, W / 2 + 38]) { g.beginPath(); g.arc(x, H / 2, 2.6, 0, Math.PI * 2); g.fill(); }
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2;
-      g.beginPath(); g.arc(W / 2 + Math.cos(a) * 5, H / 2 + Math.sin(a) * 5, 3, 0, Math.PI * 2); g.fill();
+    for (const x of [W / 2 - 76, W / 2 + 76]) { g.beginPath(); g.arc(x, H / 2, 5.2, 0, Math.PI * 2); g.fill(); }
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      g.beginPath(); g.arc(W / 2 + Math.cos(a) * 11, H / 2 + Math.sin(a) * 11, 5.5, 0, Math.PI * 2); g.fill();
     }
-    // Tirador.
-    g.fillStyle = '#d8a94c';
-    g.beginPath(); g.arc(W - 18, H / 2, 6, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fae39c';
+    g.beginPath(); g.arc(W / 2, H / 2, 4, 0, Math.PI * 2); g.fill();
+    // Tirador de bronce con sombra.
+    g.fillStyle = 'rgba(0,0,0,0.45)';
+    g.beginPath(); g.arc(W - 34, H / 2 + 3, 12, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#e6b85c';
+    g.beginPath(); g.arc(W - 36, H / 2, 12, 0, Math.PI * 2); g.fill();
   });
   const glow = canvasTex(W, H, (g) => {
     g.fillStyle = '#1c130d';
     g.fillRect(0, 0, W, H);
-    g.lineWidth = 4;
+    g.lineWidth = 8;
     g.strokeStyle = '#4a3420';
-    g.beginPath(); g.moveTo(32, H - 32); g.lineTo(32, 32); g.lineTo(W - 32, 32); g.stroke();
+    g.beginPath(); g.moveTo(64, H - 64); g.lineTo(64, 64); g.lineTo(W - 64, 64); g.stroke();
     g.fillStyle = '#d6a852';
     plaque(g);
     g.fill();
     g.fillStyle = '#b8873a';
-    g.beginPath(); g.arc(W - 18, H / 2, 6, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(W - 36, H / 2, 12, 0, Math.PI * 2); g.fill();
   });
   doorTex = { map, glow };
   return doorTex;
@@ -258,57 +266,77 @@ function glassTexture() {
 
 // El vitral del fondo de cada pasillo: un rosetón de vidrios de colores con una huellita en el medio.
 function vitralTexture(hue) {
-  return canvasTex(256, 256, (g) => {
-    const cx = 128;
-    const R = 126;
-    const cols = ['#ff9a1f', '#e0457b', '#2bb3a8', '#8b5cc7', '#ffcf3a', '#3f8fd8'].map((c, i) => (i + hue) % 6).map((i) => ['#ff9a1f', '#e0457b', '#2bb3a8', '#8b5cc7', '#ffcf3a', '#3f8fd8'][i]);
+  return canvasTex(512, 512, (g) => {
+    const cx = 256;
+    const R = 252;
+    const baseCols = ['#ff9a1f', '#e0457b', '#2bb3a8', '#8b5cc7', '#ffcf3a', '#3f8fd8'];
+    const cols = baseCols.map((_, i) => baseCols[(i + hue) % 6]);
     g.fillStyle = '#1a0f0a';
-    g.fillRect(0, 0, 256, 256);
-    // Anillo de 12 pétalos.
-    for (let i = 0; i < 12; i++) {
-      const a0 = (i / 12) * Math.PI * 2;
-      const a1 = ((i + 1) / 12) * Math.PI * 2;
+    g.fillRect(0, 0, 512, 512);
+    // Anillo de 16 pétalos luminosos con degradé interior.
+    for (let i = 0; i < 16; i++) {
+      const a0 = (i / 16) * Math.PI * 2;
+      const a1 = ((i + 1) / 16) * Math.PI * 2;
       g.fillStyle = cols[i % 3];
-      g.beginPath(); g.moveTo(cx, cx); g.arc(cx, cx, R - 6, a0 + 0.03, a1 - 0.03); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(cx, cx); g.arc(cx, cx, R - 10, a0 + 0.025, a1 - 0.025); g.closePath(); g.fill();
       g.fillStyle = cols[3 + (i % 3)];
-      g.beginPath(); g.moveTo(cx, cx); g.arc(cx, cx, R * 0.66, a0 + 0.04, a1 - 0.04); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(cx, cx); g.arc(cx, cx, R * 0.68, a0 + 0.032, a1 - 0.032); g.closePath(); g.fill();
     }
+    // Luz radial que atraviesa el vitral.
+    const rad = g.createRadialGradient(cx, cx, 30, cx, cx, R);
+    rad.addColorStop(0, 'rgba(255,248,220,0.38)');
+    rad.addColorStop(0.55, 'rgba(255,220,160,0.12)');
+    rad.addColorStop(1, 'rgba(15,8,5,0.28)');
+    g.fillStyle = rad;
+    g.beginPath(); g.arc(cx, cx, R - 8, 0, Math.PI * 2); g.fill();
     // Plomo entre vidrios.
     g.strokeStyle = '#1a0f0a';
-    g.lineWidth = 5;
-    for (const r of [R * 0.4, R * 0.66, R - 6]) { g.beginPath(); g.arc(cx, cx, r, 0, Math.PI * 2); g.stroke(); }
-    // Centro: una huellita clara sobre ámbar.
+    g.lineWidth = 9;
+    for (const r of [R * 0.4, R * 0.68, R - 10]) { g.beginPath(); g.arc(cx, cx, r, 0, Math.PI * 2); g.stroke(); }
+    // Centro: una huellita clara sobre ámbar dorado.
     g.fillStyle = '#ffd27a';
     g.beginPath(); g.arc(cx, cx, R * 0.38, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#fff6e2';
-    g.beginPath(); g.ellipse(cx, cx + 10, 20, 17, 0, 0, Math.PI * 2); g.fill();
-    for (const [dx, dy] of [[-24, -14], [-9, -28], [9, -28], [24, -14]]) { g.beginPath(); g.ellipse(cx + dx, cx + dy, 7.5, 9.5, dx * 0.02, 0, Math.PI * 2); g.fill(); }
-    // Un poco de textura de vidrio soplado.
-    for (let i = 0; i < 260; i++) {
-      g.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`;
-      g.beginPath(); g.arc(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 3, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff8e8';
+    g.beginPath(); g.ellipse(cx, cx + 20, 40, 34, 0, 0, Math.PI * 2); g.fill();
+    for (const [dx, dy] of [[-48, -28], [-18, -56], [18, -56], [48, -28]]) {
+      g.beginPath(); g.ellipse(cx + dx, cx + dy, 15, 19, dx * 0.01, 0, Math.PI * 2); g.fill();
+    }
+    // Textura de vidrio soplado artesanal.
+    for (let i = 0; i < 480; i++) {
+      g.fillStyle = `rgba(255,255,255,${Math.random() * 0.09})`;
+      g.beginPath(); g.arc(Math.random() * 512, Math.random() * 512, 1.5 + Math.random() * 5, 0, Math.PI * 2); g.fill();
     }
   });
 }
 
-// Alfombra del pasillo: roja con guarda dorada y cempasúchiles.
+// Alfombra del pasillo: roja tejida con guarda dorada y medallones de cempasúchil.
 function runnerTexture() {
-  return canvasTex(128, 256, (g) => {
+  return canvasTex(256, 512, (g) => {
     g.fillStyle = '#7a1630';
-    g.fillRect(0, 0, 128, 256);
-    g.fillStyle = '#e0a634';
-    g.fillRect(6, 0, 7, 256);
-    g.fillRect(115, 0, 7, 256);
+    g.fillRect(0, 0, 256, 512);
+    // Trama textil suave.
+    for (let y = 0; y < 512; y += 4) {
+      g.fillStyle = y % 8 === 0 ? 'rgba(255,215,175,0.04)' : 'rgba(20,4,10,0.06)';
+      g.fillRect(0, y, 256, 2);
+    }
+    g.fillStyle = '#e5ad3a';
+    g.fillRect(12, 0, 14, 512);
+    g.fillRect(230, 0, 14, 512);
     g.fillStyle = '#3a0a18';
-    g.fillRect(16, 0, 3, 256);
-    g.fillRect(109, 0, 3, 256);
-    for (let y = 32; y < 256; y += 64) {
+    g.fillRect(32, 0, 6, 512);
+    g.fillRect(218, 0, 6, 512);
+    for (let y = 64; y < 512; y += 128) {
       g.fillStyle = '#ff9a1f';
-      for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; g.beginPath(); g.arc(64 + Math.cos(a) * 11, y + Math.sin(a) * 11, 7, 0, Math.PI * 2); g.fill(); }
-      g.fillStyle = '#ffd23a';
-      g.beginPath(); g.arc(64, y, 7, 0, Math.PI * 2); g.fill();
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        g.beginPath(); g.arc(128 + Math.cos(a) * 22, y + Math.sin(a) * 22, 13, 0, Math.PI * 2); g.fill();
+      }
+      g.fillStyle = '#ffd645';
+      g.beginPath(); g.arc(128, y, 14, 0, Math.PI * 2); g.fill();
       g.fillStyle = '#e0457b';
-      for (const dx of [-34, 34]) { g.beginPath(); g.moveTo(64 + dx, y - 10); g.lineTo(64 + dx + 7, y); g.lineTo(64 + dx, y + 10); g.lineTo(64 + dx - 7, y); g.fill(); }
+      for (const dx of [-68, 68]) {
+        g.beginPath(); g.moveTo(128 + dx, y - 20); g.lineTo(128 + dx + 14, y); g.lineTo(128 + dx, y + 20); g.lineTo(128 + dx - 14, y); g.fill();
+      }
     }
   }, { repeat: true });
 }
@@ -735,15 +763,22 @@ export function buildHall(scene, colliders, tier) {
         const e1 = P(-HW, LEN);
         const e2 = P(HW, LEN);
         colliders.segments.push([e1.x, e1.z, e2.x, e2.z]);
-        const vit = new THREE.Mesh(new THREE.CircleGeometry(0.82, 40), new THREE.MeshBasicMaterial({ map: vitralTexture(c), color: tier.bloom ? new THREE.Color(1.08, 1.0, 0.95) : new THREE.Color(0.95, 0.9, 0.85) }));
+        const vitTex = vitralTexture(c);
+        const vit = new THREE.Mesh(new THREE.CircleGeometry(0.82, 40), new THREE.MeshBasicMaterial({ map: vitTex, color: tier.bloom ? new THREE.Color(1.12, 1.04, 0.96) : new THREE.Color(0.95, 0.9, 0.85) }));
         vit.position.set(0, 2.3, LEN - 0.006);
         vit.rotation.y = Math.PI;
         const ring = new THREE.Mesh(new THREE.TorusGeometry(0.84, 0.06, 8, 40), goldMat);
         ring.position.copy(vit.position).setZ(LEN - 0.02);
         const gl = new THREE.Sprite(vitralGlow);
-        gl.scale.setScalar(2.2);
+        gl.scale.setScalar(2.4);
         gl.position.set(0, 2.3, LEN - 0.3);
-        cg.add(vit, ring, gl);
+        // Reflejo multicolor del vitral proyectado sobre el piso del pasillo.
+        const floorProj = new THREE.Mesh(
+          new THREE.CircleGeometry(1.15, 32).rotateX(-Math.PI / 2),
+          new THREE.MeshBasicMaterial({ map: vitTex, transparent: true, opacity: 0.19, blending: THREE.AdditiveBlending, depthWrite: false }),
+        );
+        floorProj.position.set(0, 0.016, LEN - 1.35);
+        cg.add(vit, ring, gl, floorProj);
         // Cuadros decorativos a los lados del vitral del fondo y en los tramos libres al final del pasillo.
         for (const [si, sx] of [[-1, -1.52], [1, 1.52]]) {
           const pw = 0.78;

@@ -144,6 +144,10 @@ export function createCozy(scene, tier, colliders, ground = scene) {
     ground.add(new THREE.Mesh(mergeGeometries(stems), new THREE.MeshLambertMaterial({ color: '#e8dccb', emissive: '#3a3030' })));
     const capMesh = new THREE.Mesh(mergeGeometries(caps), new THREE.MeshBasicMaterial({ vertexColors: true }));
     ground.add(capMesh);
+    animated.push((t) => {
+      const p = 0.92 + Math.sin(t * 1.6) * 0.12;
+      capMesh.material.color.setRGB(p, p, p);
+    });
   }
 
   // ---------- el cuenco y la pelota de Luca (en el piso 1, al lado de su ofrenda) ----------
@@ -372,6 +376,10 @@ export function createCozy(scene, tier, colliders, ground = scene) {
     stars.count = 0;
   }
   jar.add(stars);
+  animated.push((t) => {
+    stars.rotation.y = t * 0.18;
+    stars.position.y = Math.sin(t * 1.4) * 0.015;
+  });
 
   return {
     pickables,

@@ -34,11 +34,14 @@ function rrect(g, x, y, w, h, r) {
 // El indicador de piso: "PISO" chiquito, el número grande y la flechita si está viajando.
 function floorDisplay() {
   const c = document.createElement('canvas');
-  c.width = 256;
-  c.height = 128;
+  c.width = 512;
+  c.height = 256;
   const g = c.getContext('2d');
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = false;
   let last = null;
   return {
     texture: t,
@@ -46,6 +49,7 @@ function floorDisplay() {
       const key = `${n}:${dir}`;
       if (key === last) return;
       last = key;
+      g.setTransform(2, 0, 0, 2, 0, 0);
       g.clearRect(0, 0, 256, 128);
       g.fillStyle = '#1e0f06';
       rrect(g, 4, 4, 248, 120, 22);
@@ -55,7 +59,7 @@ function floorDisplay() {
       g.stroke();
       g.fillStyle = '#ffd27a';
       g.shadowColor = '#ff9a2e';
-      g.shadowBlur = 16;
+      g.shadowBlur = 12;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.font = '800 24px "DM Sans", Nunito, sans-serif';

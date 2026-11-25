@@ -1,10 +1,10 @@
 // Calidad gráfica según el dispositivo, con ajuste dinámico de resolución según los FPS reales.
-const KEY = 'huellita.quality';
+const KEY = 'huellita.quality.v2';
 
 export const TIERS = {
-  high: { label: 'Alta', maxPixelRatio: 2, bloom: true, grass: 44000, flowers: 1100, lights: 6, bulbsPerStrand: 18, fireflies: 380 },
-  mid: { label: 'Media', maxPixelRatio: 1.75, bloom: true, grass: 21000, flowers: 600, lights: 4, bulbsPerStrand: 14, fireflies: 240 },
-  low: { label: 'Ahorro', maxPixelRatio: 1.3, bloom: false, grass: 7500, flowers: 260, lights: 2, bulbsPerStrand: 9, fireflies: 130 },
+  high: { label: 'Alta', maxPixelRatio: 2.5, bloom: true, grass: 44000, flowers: 1100, lights: 6, bulbsPerStrand: 18, fireflies: 380 },
+  mid: { label: 'Media', maxPixelRatio: 1.85, bloom: true, grass: 21000, flowers: 600, lights: 4, bulbsPerStrand: 14, fireflies: 240 },
+  low: { label: 'Ahorro', maxPixelRatio: 1.35, bloom: false, grass: 7500, flowers: 260, lights: 2, bulbsPerStrand: 9, fireflies: 130 },
 };
 
 export function isMobile() {
@@ -16,7 +16,7 @@ export function reducedMotion() {
 }
 
 export function savedQuality() {
-  try { return localStorage.getItem(KEY) || 'auto'; } catch { return 'auto'; }
+  try { return localStorage.getItem(KEY) || 'high'; } catch { return 'high'; }
 }
 
 export function saveQuality(v) {
@@ -24,31 +24,24 @@ export function saveQuality(v) {
 }
 
 export function autoTier() {
-  const mem = navigator.deviceMemory || 8;
-  const cores = navigator.hardwareConcurrency || 8;
-  // Por defecto, calidad alta (la resolución adaptativa baja los píxeles si el equipo no da);
-  // sólo los equipos muy justos arrancan en media.
-  if (!isMobile()) return cores <= 2 ? 'mid' : 'high';
-  return mem <= 2 || cores <= 2 ? 'mid' : 'high';
+  // Por defecto siempre calidad Alta.
+  return 'high';
 }
 
 export function pickTier() {
   const s = savedQuality();
-  return TIERS[s] ? s : autoTier();
+  return TIERS[s] ? s : 'high';
 }
 
-// Baja la resolución si la escena va lenta y la sube de a poco si sobra rendimiento.
-//
-// Ojo: cambiar la resolución cambia el tamaño del lienzo y eso lo BORRA. Si pasa después de dibujar,
-// ese cuadro se ve negro (era el parpadeo que veía el dueño en el celular). Por eso tick() sólo decide
-// y apply() lo aplica al empezar el cuadro siguiente, antes de dibujar. Y para que no suba y baje en
-// ciclo (40 → 60 → 40 cuadros por segundo), si al subir se pone lenta, ése pasa a ser el techo.
-export function createAdaptiveResolution(renderer, onChange, { max, min = 0.75 }) {
+// Baja la resolución sólo si la escena va muy lenta de forma sostenida y la sube si sobra rendimiento.
+// En calidad Alta mantiene un piso alto de resolución para que los carteles y bordes nunca se vean borrosos.
+export function createAdaptiveResolution(renderer, onChange, { max, min = 1.25 }) {
   let ratio = Math.min(window.devicePixelRatio || 1, max);
   let ceiling = ratio;
   let frames = 0;
   let acc = 0;
   let calm = 0;
+  let slow = 0;
   let pending = null;
   let raisedAt = -1e9;
   let clock = 0;
@@ -60,25 +53,32 @@ export function createAdaptiveResolution(renderer, onChange, { max, min = 0.75 }
       frames++;
       acc += dt;
       clock += dt;
-      if (acc < 1.5) return;
+      if (acc < 1.8) return;
       const fps = frames / acc;
       frames = 0;
       acc = 0;
       if (document.hidden) return;
-      if (fps < 42 && ratio > min) {
-        // Si recién habíamos subido y ya no da, no volver a intentar más arriba de esto.
-        if (clock - raisedAt < 6) ceiling = Math.max(min, ratio - 0.1);
-        want(Math.max(min, ratio - (fps < 28 ? 0.3 : 0.15)));
-        calm = 0;
-      } else if (fps > 58) {
+      if (fps < 28 && ratio > min) {
+        slow++;
+        if (slow >= 2) {
+          if (clock - raisedAt < 6) ceiling = Math.max(min, ratio - 0.1);
+          want(Math.max(min, ratio - 0.15));
+          slow = 0;
+          calm = 0;
+        }
+      } else if (fps > 52) {
+        slow = 0;
         calm++;
         const target = Math.min(window.devicePixelRatio || 1, max, ceiling);
-        if (calm >= 5 && ratio + 0.05 < target) {
-          want(Math.min(target, ratio + 0.1));
+        if (calm >= 3 && ratio + 0.05 < target) {
+          want(Math.min(target, ratio + 0.15));
           raisedAt = clock;
           calm = 0;
         }
-      } else calm = 0;
+      } else {
+        slow = 0;
+        calm = 0;
+      }
     },
     // Llamar al principio del cuadro, antes de dibujar.
     apply() {

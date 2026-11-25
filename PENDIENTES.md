@@ -49,6 +49,10 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
   - Pasto (`512x512`) con manchones de musgo, rocío y briznas detalladas; madera (`512x512`) con vetas curvas y nudos suaves; lajas de piedra (`512x512`) con sombras de relieve y bisel iluminado; piso de tablones del salón (`512x512`) con vetas y clavitos de bronce; luna (`512x512`) y farolitos de seda (`256x512`) en alta definición.
 - [x] **Arte de Día de Muertos y materiales (`src/scene/muertos.js`, `src/scene/world.js`)**:
   - Azulejos de Talavera (`256x256`), calaveritas de azúcar (`512x512`) con corona de pétalos y filigrana dorada, muros artesanales (`512x512`), shader aterciopelado en pétalos de cempasúchil y sombreado cálido con claro de luna en el suelo del jardín.
+- [x] **Salón HD, proyección de vitrales, regalitos 3D con luz de vela y flora luminosa (`src/scene/hall.js`, `src/scene/gifts3d.js`, `src/scene/river.js`, `src/scene/cozy.js`)**:
+  - Puertitas de nogal (`512x464`), vitrales (`512x512`) con proyección multicolor en el piso del pasillo, alfombras tejidas (`256x512`), shader con *rim-light* cálido y brillo especular en los 36 regalitos 3D, flores de loto de doble capa en el río y pulso vivo en hongos bioluminiscentes y estrellitas del Frasco de gracias.
+- [x] **Carteles ultra nítidos (supersampling 2x sin mipmap blur) y calidad Alta por defecto (`src/quality.js`, `src/scene/textures.js`, `src/scene/elevator.js`, `src/main.js`)**:
+  - Calidad **Alta** (`high`, hasta `2.5x` Retina y piso de `1.75x`) por defecto en todos los dispositivos; carteles (`labelTexture`, `chalkboardTexture`, `bubbleTexture`, `floorDisplay`) renderizados al doble de resolución (`2x`) con `LinearFilter` (`generateMipmaps = false`), filete de contraste anti-bloom y re-dibujado automático al terminar de cargar `document.fonts.ready`.
 
 ---
 

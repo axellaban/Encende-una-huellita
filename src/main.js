@@ -203,7 +203,8 @@ function setupRenderer() {
   }, { once: true });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.16;
-  adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: tier.maxPixelRatio, min: tierName === 'low' ? 0.7 : 0.85 });
+  const minRatio = tierName === 'high' ? Math.min(window.devicePixelRatio || 1, 1.75) : tierName === 'mid' ? 1.15 : 0.75;
+  adaptive = createAdaptiveResolution(renderer, (r) => { composer?.setPixelRatio(r); sizeWatercolor(); }, { max: tier.maxPixelRatio, min: minRatio });
   if (tier.bloom) {
     const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: tierName === 'high' ? 4 : 2 });
     composer = new EffectComposer(renderer, rt);

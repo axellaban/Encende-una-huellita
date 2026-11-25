@@ -258,13 +258,16 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
     ground.add(reeds);
   }
 
-  // ---------- nenúfares con flores ----------
+  // ---------- nenúfares con flores de loto luminosas ----------
   {
     const N = Math.round(90 * density);
-    const pad = new THREE.CircleGeometry(0.28, 14, 0.4, Math.PI * 2 - 0.4).rotateX(-Math.PI / 2);
-    const pads = new THREE.InstancedMesh(pad, new THREE.MeshLambertMaterial({ color: '#3f6b35', emissive: '#0f2410', side: THREE.DoubleSide }), N);
-    const flowerGeo = new THREE.ConeGeometry(0.07, 0.09, 6, 1, true).rotateX(Math.PI);
-    const flowers = new THREE.InstancedMesh(flowerGeo, new THREE.MeshLambertMaterial({ color: '#f2a6c4', emissive: '#5a2034', side: THREE.DoubleSide }), N);
+    const pad = new THREE.CircleGeometry(0.28, 16, 0.38, Math.PI * 2 - 0.38).rotateX(-Math.PI / 2);
+    const pads = new THREE.InstancedMesh(pad, new THREE.MeshLambertMaterial({ color: '#3f6b35', emissive: '#112812', side: THREE.DoubleSide }), N);
+    const outerLotus = new THREE.ConeGeometry(0.082, 0.085, 8, 1, true).rotateX(Math.PI);
+    const innerLotus = new THREE.ConeGeometry(0.052, 0.095, 7, 1, true).rotateX(Math.PI).rotateY(0.4).translate(0, 0.012, 0);
+    const lotusCore = new THREE.SphereGeometry(0.022, 6, 4).translate(0, 0.02, 0);
+    const flowerGeo = mergeGeometries([outerLotus.toNonIndexed(), innerLotus.toNonIndexed(), lotusCore.toNonIndexed()]);
+    const flowers = new THREE.InstancedMesh(flowerGeo, new THREE.MeshLambertMaterial({ color: '#f7b2ce', emissive: '#7a2a48', side: THREE.DoubleSide }), N);
     const data = [];
     const m = new THREE.Object3D();
     let nf = 0;

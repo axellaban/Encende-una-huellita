@@ -8,15 +8,34 @@ function canvas(w, h) {
   return [c, c.getContext('2d')];
 }
 
-function toTexture(c, { repeat } = {}) {
+function toTexture(c, { repeat, crisp = false } = {}) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
+  t.anisotropy = 16;
+  if (crisp) {
+    // Sin mipmaps trilineales: evita que los carteles rectangulares caigan a un mipmap bajo y se vean borrosos.
+    t.minFilter = THREE.LinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    t.generateMipmaps = false;
+  }
   if (repeat) {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.repeat.set(repeat[0], repeat[1]);
   }
   return t;
+}
+
+// Re-dibuja los carteles apenas terminan de cargar las tipografías web (Caveat, Young Serif, Nunito).
+const fontRedraws = [];
+if (typeof document !== 'undefined' && document.fonts?.ready) {
+  document.fonts.ready.then(() => {
+    while (fontRedraws.length) fontRedraws.pop()();
+  }).catch(() => {});
+}
+function onFontsReady(fn) {
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.status !== 'loaded') {
+    fontRedraws.push(fn);
+  }
 }
 
 const EMOJI = { perro: '🐶', gato: '🐱', otro: '🐾' };
@@ -47,7 +66,7 @@ export function portraitCanvas(m, size = 384) {
 }
 
 export function portraitTexture(m) {
-  return toTexture(portraitCanvas(m));
+  return toTexture(portraitCanvas(m, 512), { crisp: true });
 }
 
 // Foto real: la recortamos a 4:5 en un canvas de alta definición para que se vea bien nítida en el marco.
@@ -79,35 +98,57 @@ export function photoTexture(url, onReady) {
 let emptyTex;
 export function emptySlotTexture() {
   if (emptyTex) return emptyTex;
-  const [c, g] = canvas(256, 320);
+  const [c, g] = canvas(512, 640);
   g.fillStyle = 'rgba(255,244,228,0.08)';
   g.fillRect(0, 0, c.width, c.height);
-  g.setLineDash([14, 10]);
-  g.lineWidth = 6;
+  g.setLineDash([28, 20]);
+  g.lineWidth = 10;
   g.strokeStyle = 'rgba(255,226,190,0.55)';
-  g.strokeRect(12, 12, c.width - 24, c.height - 24);
-  g.fillStyle = 'rgba(255,226,190,0.8)';
+  g.strokeRect(24, 24, c.width - 48, c.height - 48);
+  g.fillStyle = 'rgba(255,226,190,0.85)';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.font = '300 110px Nunito, sans-serif';
-  g.fillText('+', c.width / 2, c.height / 2 - 10);
-  g.font = '700 24px Nunito, sans-serif';
-  g.fillText('Lugar libre', c.width / 2, c.height / 2 + 62);
-  emptyTex = toTexture(c);
+  g.font = '300 210px Nunito, sans-serif';
+  g.fillText('+', c.width / 2, c.height / 2 - 20);
+  g.font = '700 48px Nunito, sans-serif';
+  g.fillText('Lugar libre', c.width / 2, c.height / 2 + 124);
+  emptyTex = toTexture(c, { crisp: true });
   return emptyTex;
 }
 
 export function labelTexture(text, { w = 512, h = 96, bg = 'rgba(250,240,226,0.95)', fg = '#4a3428', font = '700 50px Caveat, cursive' } = {}) {
-  const [c, g] = canvas(w, h);
-  g.fillStyle = bg;
-  roundRect(g, 4, 4, w - 8, h - 8, 18);
-  g.fill();
-  g.fillStyle = fg;
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.font = font;
-  g.fillText(text, w / 2, h / 2 + 2, w - 30);
-  return toTexture(c);
+  const S = 2;
+  const [c, g] = canvas(w * S, h * S);
+  const draw = () => {
+    g.setTransform(S, 0, 0, S, 0, 0);
+    g.clearRect(0, 0, w, h);
+    if (bg && bg !== 'rgba(0,0,0,0)' && bg !== 'transparent') {
+      g.fillStyle = bg;
+      roundRect(g, 4, 4, w - 8, h - 8, 18);
+      g.fill();
+      g.strokeStyle = 'rgba(235, 195, 130, 0.28)';
+      g.lineWidth = 2.5;
+      roundRect(g, 7, 7, w - 14, h - 14, 15);
+      g.stroke();
+    }
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = font;
+    // Filete de contraste para que las letras se lean con nitidez perfecta y sin halo de bloom.
+    const lightText = fg.startsWith('#f') || fg.startsWith('#e') || fg.startsWith('rgb(2');
+    g.lineJoin = 'round';
+    g.miterLimit = 2;
+    g.strokeStyle = lightText ? 'rgba(22, 11, 5, 0.82)' : 'rgba(255, 245, 225, 0.65)';
+    g.lineWidth = lightText ? 4.5 : 3;
+    g.strokeText(text, w / 2, h / 2 + 2, w - 28);
+    // Bajamos apenas el brillo máximo del texto claro para que el bloom no lo vuelva borroso.
+    g.fillStyle = fg === '#f6e3c4' ? '#ecd4ae' : fg;
+    g.fillText(text, w / 2, h / 2 + 2, w - 28);
+  };
+  draw();
+  const t = toTexture(c, { crisp: true });
+  onFontsReady(() => { draw(); t.needsUpdate = true; });
+  return t;
 }
 
 function roundRect(g, x, y, w, h, r) {
@@ -436,46 +477,64 @@ export function bubbleTexture(text, { bg = 'rgba(251,244,234,0.96)', fg = '#3b2a
   const w = Math.min(560, Math.ceil(mg.measureText(text).width) + 44);
   void m;
   const h = tail ? 76 : 60;
-  const [c, g] = canvas(w, h);
-  g.fillStyle = bg;
-  roundRect(g, 2, 2, w - 4, 56, 26);
-  g.fill();
-  if (tail) {
-    g.beginPath();
-    g.moveTo(w / 2 - 10, 56);
-    g.lineTo(w / 2, 72);
-    g.lineTo(w / 2 + 10, 56);
+  const S = 2;
+  const [c, g] = canvas(w * S, h * S);
+  const draw = () => {
+    g.setTransform(S, 0, 0, S, 0, 0);
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = bg;
+    roundRect(g, 2, 2, w - 4, 56, 26);
     g.fill();
-  }
-  g.fillStyle = fg;
-  g.font = font;
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(text, w / 2, 31, w - 24);
-  const t = toTexture(c);
+    if (tail) {
+      g.beginPath();
+      g.moveTo(w / 2 - 10, 56);
+      g.lineTo(w / 2, 72);
+      g.lineTo(w / 2 + 10, 56);
+      g.fill();
+    }
+    g.fillStyle = fg;
+    g.font = font;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, w / 2, 31, w - 24);
+  };
+  draw();
+  const t = toTexture(c, { crisp: true });
   t.userData = { aspect: w / h };
+  onFontsReady(() => { draw(); t.needsUpdate = true; });
   return t;
 }
 
 // Pizarrón de bienvenida escrito con tiza.
 export function chalkboardTexture(lines) {
-  const [c, g] = canvas(512, 384);
-  g.fillStyle = '#2f3a33';
-  g.fillRect(0, 0, 512, 384);
-  for (let i = 0; i < 400; i++) {
-    g.fillStyle = `rgba(255,255,255,${Math.random() * 0.04})`;
-    g.fillRect(Math.random() * 512, Math.random() * 384, 30 * Math.random(), 2);
-  }
-  g.strokeStyle = '#7a5434';
-  g.lineWidth = 22;
-  g.strokeRect(0, 0, 512, 384);
-  g.fillStyle = 'rgba(250,244,230,0.92)';
-  g.textAlign = 'center';
-  lines.forEach(([text, size, y]) => {
-    g.font = `700 ${size}px Caveat, cursive`;
-    g.fillText(text, 256, y);
-  });
-  return toTexture(c);
+  const S = 2;
+  const [c, g] = canvas(512 * S, 384 * S);
+  const draw = () => {
+    g.setTransform(S, 0, 0, S, 0, 0);
+    g.fillStyle = '#253029';
+    g.fillRect(0, 0, 512, 384);
+    for (let i = 0; i < 400; i++) {
+      g.fillStyle = `rgba(255,255,255,${Math.random() * 0.035})`;
+      g.fillRect(Math.random() * 512, Math.random() * 384, 30 * Math.random(), 2);
+    }
+    g.strokeStyle = '#7a5434';
+    g.lineWidth = 22;
+    g.strokeRect(0, 0, 512, 384);
+    g.textAlign = 'center';
+    g.lineJoin = 'round';
+    lines.forEach(([text, size, y]) => {
+      g.font = `700 ${size}px Caveat, cursive`;
+      g.strokeStyle = 'rgba(12, 18, 14, 0.85)';
+      g.lineWidth = 4;
+      g.strokeText(text, 256, y);
+      g.fillStyle = '#e8dec8';
+      g.fillText(text, 256, y);
+    });
+  };
+  draw();
+  const t = toTexture(c, { crisp: true });
+  onFontsReady(() => { draw(); t.needsUpdate = true; });
+  return t;
 }
 
 let pawTex;
