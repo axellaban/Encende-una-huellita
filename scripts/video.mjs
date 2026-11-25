@@ -79,34 +79,54 @@ const VIRTUAL_TIME = () => {
 // cuadro (`tick`, con k = segundos desde que arrancó la toma). Es código que corre en la página, con
 // H = __huellita, V(x, y, z) = un Vector3 y C = un objeto para guardar estado entre cuadros.
 // Cortes rápidos cada 5–7 s; la cámara siempre en movimiento.
+const TICK_PACK = `
+    // La cámara sigue a la manada (los que están cerca), bajita, y mira un poco hacia la pelota.
+    const M = C.M;
+    const ball = H.spirits.ball.pos;
+    // Los tres más cerca de la pelota (si están en la zona), que son los que juegan.
+    const near = [...H.spirits.pack, H.spirits.companion].filter((a) => a && a.pos.distanceTo(M) < (C.R || 14))
+      .sort((a, b) => a.pos.distanceTo(ball) - b.pos.distanceTo(ball)).slice(0, C.N || 9);
+    const c = V(0, 0, 0);
+    near.forEach((a) => c.add(a.pos));
+    if (near.length) c.divideScalar(near.length); else c.copy(M);
+    const target = c.clone().lerp(ball.clone().setY(0), 0.3).setY(C.ty || 0.45);
+    const want = target.clone().add(C.off || V(-3.4 + k * 0.15, 1.15, 2.6));
+    C.cam = C.cam ? C.cam.lerp(want, C.lerp || 0.06) : want;
+    C.look = C.look ? C.look.lerp(target, 0.08) : target;
+    H.controls.teleportCamera(C.cam, C.look);
+`;
 const SHOTS = [
-  // 1. Del cielo estrellado baja sobre el salón con sus farolitos y la ofrenda de Luca.
+  // 1. Del cielo estrellado baja sobre el salón con sus farolitos y la ofrenda central.
   { at: 0, run: `
-    H.controls.placePlayer(V(0, 0, 0), V(0, 0, -14));
+    H.controls.placePlayer(V(0, 0, 50), V(0, 0, 30));
     H.controls.cinematic([
-      { pos: V(11, 24, -8), look: V(-20, 40, -110) },
-      { pos: V(12, 15, 4), look: V(0, 2, -14) },
-      { pos: V(5, 6, 6), look: V(0, 2.5, -14) },
+      { pos: V(12, 30, -10), look: V(-20, 40, -110) },
+      { pos: V(9, 19, 4), look: V(0, 2, -14) },
+      { pos: V(2, 10, 10), look: V(0, 1, -12) },
     ], 4.6);
   ` },
-  // 2. La ofrenda de Luca: la llamita vuela a la veladora, la flor estalla en pétalos y el abrazo.
+  // 2. El nicho de Luca: la llamita vuela a la veladora, la flor estalla en pétalos y el abrazo.
   { at: 4.5, run: `
-    H.visit('luca');
-    setTimeout(() => H.offer('luca', 'candle'), 1500);
-    setTimeout(() => H.offer('luca', 'flower'), 3900);
-    setTimeout(() => H.offer('luca', 'hug'), 5900);
-    // Cuando termina de volar al marco, un acercamiento lento.
-    C.base = null;
-    setTimeout(() => { C.base = H.camera.position.clone(); C.dir = H.camera.getWorldDirection(V(0, 0, 0)); C.k0 = null; }, 1700);
+    const m = H.memorials.find((x) => x.id === 'luca');
+    const k = H.hall.memorialKey(m);
+    H.goFloor(0);
+    const { frame, stand } = H.hall.viewpoint(k, 0, 1);
+    const n = stand.clone().sub(frame).setY(0).normalize();
+    const r = V(n.z, 0, -n.x);
+    H.controls.placePlayer(frame.clone().addScaledVector(n, 1.3).addScaledVector(r, -0.95).setY(0), frame.clone().setY(0));
+    Object.assign(C, { frame, n, r });
+    setTimeout(() => H.offer('luca', 'candle'), 700);
+    setTimeout(() => H.offer('luca', 'flower'), 3000);
+    setTimeout(() => H.offer('luca', 'hug'), 5100);
   `, tick: `
-    if (!C.base) return;
-    if (C.k0 === null) C.k0 = k;
-    const u = Math.min(1, (k - C.k0) / 6);
-    const pos = C.base.clone().addScaledVector(C.dir, 1.6 * (1 - (1 - u) ** 2));
-    H.controls.teleportCamera(pos, pos.clone().addScaledVector(C.dir, 5));
+    // Un acercamiento lento al nicho.
+    const u = Math.min(1, k / 7.3);
+    const e = 1 - (1 - u) ** 2;
+    const pos = C.frame.clone().addScaledVector(C.n, 3.95 - 0.8 * e).addScaledVector(C.r, 1.0 - 0.15 * e).setY(1.8 - 0.1 * e);
+    H.controls.teleportCamera(pos, C.frame.clone().addScaledVector(C.r, -0.3).setY(C.frame.y - 0.25));
   ` },
   // 3. El Puente del Arcoíris: tu personaje cruza con Luca al lado; la cámara los acompaña de costado.
-  { at: 12, run: `
+  { at: 11.8, run: `
     H.controls.placePlayer(V(0.2, 0, 49), V(0, 0, 30));
     H.startWalk('luca');
     H.controls.walkTo(V(0, 0, 37));
@@ -124,35 +144,30 @@ const SHOTS = [
   // 4. El Prado de los espíritus: la pelota, y todos corren atrás de ella.
   { at: 15.8, run: `
     const M = V(24, 0, 20);
+    C.M = M;
     H.controls.placePlayer(V(M.x - 6, 0, M.z + 1), V(M.x + 4, 0, M.z - 1));
     C.cam = null; C.look = null;
     setTimeout(() => H.throwBall(), 500);
-    setTimeout(() => H.throwBall(), 3800);
-  `, tick: `
-    // La cámara sigue a la manada (los que están en el Prado), bajita, y mira un poco hacia la pelota.
-    const M = V(24, 0, 20);
-    const near = [...H.spirits.pack, H.spirits.companion].filter((a) => a && a.pos.distanceTo(M) < 14);
-    const c = V(0, 0, 0);
-    near.forEach((a) => c.add(a.pos));
-    if (near.length) c.divideScalar(near.length); else c.copy(M);
-    const ball = H.spirits.ball.pos;
-    const target = c.clone().lerp(ball.clone().setY(0), 0.3).setY(0.45);
-    const want = target.clone().add(V(-3.4 + k * 0.15, 1.15, 2.6));
-    C.cam = C.cam ? C.cam.lerp(want, 0.06) : want;
-    C.look = C.look ? C.look.lerp(target, 0.08) : target;
-    H.controls.teleportCamera(C.cam, C.look);
-  ` },
-  // 5. Final: en el salón, la cámara sube con los farolitos de Luca hacia el cielo.
-  { at: 23.4, run: `
-    H.offer('luca', 'candle');
-    setTimeout(() => H.offer('luca', 'candle'), 700);
-  ` },
-  { at: 24.2, run: `
+    setTimeout(() => H.throwBall(), 3000);
+  `, tick: TICK_PACK },
+  // 5. Final: el cielo del piso 99, el salón sobre las nubes y los perritos jugando.
+  { at: 21.3, run: `
+    H.goFloor(98);
+    H.controls.placePlayer(V(-3, 0, 6), V(8, 0, 7));
+    C.M = V(0, 0, 4);
+    // Que la manada esté cerca para jugar con la pelota.
+    H.spirits.pack.forEach((a, i) => a.pos.set(-2 + (i % 4) * 1.6, 0, 3.2 + Math.floor(i / 4) * 1.8));
+    C.R = 22; C.N = 4; C.ty = 0.8; C.off = V(0.6, 0.45, 3.4); C.lerp = 0.12;
+    C.cam = null; C.look = null;
+    setTimeout(() => H.throwBall(), 300);
+    setTimeout(() => H.throwBall(), 2900);
+  `, tick: TICK_PACK },
+  { at: 26.2, run: `
     H.controls.cinematic([
-      { pos: V(6, 2.6, 3), look: V(0, 3.5, -14) },
-      { pos: V(7, 6.5, 7), look: V(0, 9, -16) },
-      { pos: V(6, 11, 9), look: V(-2, 24, -22) },
-    ], 6);
+      { pos: H.camera.position.clone(), look: C.look.clone() },
+      { pos: V(10, 5, 20), look: V(0, 4, -14) },
+      { pos: V(16, 11, 29), look: V(-4, 13, -30) },
+    ], 3.9);
   ` },
 ];
 const DURATION = 30;
