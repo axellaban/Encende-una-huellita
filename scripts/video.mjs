@@ -80,33 +80,33 @@ const VIRTUAL_TIME = () => {
 // H = __huellita, V(x, y, z) = un Vector3 y C = un objeto para guardar estado entre cuadros.
 // Cortes rápidos cada 5–7 s; la cámara siempre en movimiento.
 const TICK_PACK = `
-    // La cámara sigue a la manada (los que están cerca), bajita, y mira un poco hacia la pelota.
+    // La cámara sigue a los espíritus que juegan (los más cerca de la pelota, dentro de la zona C.M),
+    // con C.off de distancia y mirando a C.ty de altura.
     const M = C.M;
     const ball = H.spirits.ball.pos;
-    // Los tres más cerca de la pelota (si están en la zona), que son los que juegan.
     const near = [...H.spirits.pack, H.spirits.companion].filter((a) => a && a.pos.distanceTo(M) < (C.R || 14))
       .sort((a, b) => a.pos.distanceTo(ball) - b.pos.distanceTo(ball)).slice(0, C.N || 9);
     const c = V(0, 0, 0);
     near.forEach((a) => c.add(a.pos));
     if (near.length) c.divideScalar(near.length); else c.copy(M);
     const target = c.clone().lerp(ball.clone().setY(0), 0.3).setY(C.ty || 0.45);
-    const want = target.clone().add(C.off || V(-3.4 + k * 0.15, 1.15, 2.6));
+    const want = target.clone().add(C.off);
     C.cam = C.cam ? C.cam.lerp(want, C.lerp || 0.06) : want;
     C.look = C.look ? C.look.lerp(target, 0.08) : target;
     H.controls.teleportCamera(C.cam, C.look);
 `;
 const SHOTS = [
-  // 1. Del cielo estrellado baja sobre el salón con sus farolitos y la ofrenda central.
+  // 1. Del cielo estrellado baja sobre el salón con sus farolitos.
   { at: 0, run: `
     H.controls.placePlayer(V(0, 0, 50), V(0, 0, 30));
     H.controls.cinematic([
-      { pos: V(12, 30, -10), look: V(-20, 40, -110) },
-      { pos: V(9, 19, 4), look: V(0, 2, -14) },
-      { pos: V(2, 10, 10), look: V(0, 1, -12) },
-    ], 4.6);
+      { pos: V(12, 32, -8), look: V(-20, 40, -110) },
+      { pos: V(9, 21, 8), look: V(0, 2, -14) },
+      { pos: V(3, 14, 16), look: V(0, 1, -13) },
+    ], 4.3);
   ` },
   // 2. El nicho de Luca: la llamita vuela a la veladora, la flor estalla en pétalos y el abrazo.
-  { at: 4.5, run: `
+  { at: 4.2, run: `
     const m = H.memorials.find((x) => x.id === 'luca');
     const k = H.hall.memorialKey(m);
     H.goFloor(0);
@@ -115,59 +115,58 @@ const SHOTS = [
     const r = V(n.z, 0, -n.x);
     H.controls.placePlayer(frame.clone().addScaledVector(n, 1.3).addScaledVector(r, -0.95).setY(0), frame.clone().setY(0));
     Object.assign(C, { frame, n, r });
-    setTimeout(() => H.offer('luca', 'candle'), 700);
-    setTimeout(() => H.offer('luca', 'flower'), 3000);
-    setTimeout(() => H.offer('luca', 'hug'), 5100);
+    setTimeout(() => H.offer('luca', 'candle'), 500);
+    setTimeout(() => H.offer('luca', 'flower'), 2400);
+    setTimeout(() => H.offer('luca', 'hug'), 4000);
   `, tick: `
     // Un acercamiento lento al nicho.
-    const u = Math.min(1, k / 7.3);
+    const u = Math.min(1, k / 5.6);
     const e = 1 - (1 - u) ** 2;
-    const pos = C.frame.clone().addScaledVector(C.n, 3.95 - 0.8 * e).addScaledVector(C.r, 1.0 - 0.15 * e).setY(1.8 - 0.1 * e);
+    const pos = C.frame.clone().addScaledVector(C.n, 4.0 - 0.6 * e).addScaledVector(C.r, 1.05 - 0.15 * e).setY(1.85 - 0.1 * e);
     H.controls.teleportCamera(pos, C.frame.clone().addScaledVector(C.r, -0.3).setY(C.frame.y - 0.25));
   ` },
-  // 3. El Puente del Arcoíris: tu personaje cruza con Luca al lado; la cámara los acompaña de costado.
-  { at: 11.8, run: `
-    H.controls.placePlayer(V(0.2, 0, 49), V(0, 0, 30));
+  // 3. El río y el Puente del Arcoíris, de lejos: tu personaje cruza con Luca al lado.
+  { at: 9.8, run: `
+    H.controls.placePlayer(V(0.2, 0, 50), V(0, 0, 30));
     H.startWalk('luca');
-    H.controls.walkTo(V(0, 0, 37));
+    H.controls.walkTo(V(0, 0, 33.5));
     H.controls.marker.scale.setScalar(0);
-    C.cam = null;
-  `, tick: `
-    const P = H.controls.player.pos;
-    const L = H.spirits.companion ? H.spirits.companion.pos : P;
-    const mid = P.clone().lerp(L, 0.4).add(V(0, 0.9, -0.6));
-    const want = P.clone().add(V(-4.2 + k * 0.25, 1.7 + k * 0.08, -3.2 + k * 0.1));
-    C.cam = C.cam ? C.cam.lerp(want, 0.12) : want;
-    C.look = C.look ? C.look.lerp(mid, 0.15) : mid;
-    H.controls.teleportCamera(C.cam, C.look);
+    H.controls.cinematic([
+      { pos: V(-18, 4.8, 36.4), look: V(0, 1, 41.4) },
+      { pos: V(-16.5, 4.2, 37.2), look: V(0, 1.1, 41.2) },
+      { pos: V(-15, 3.7, 38), look: V(0, 1.2, 40.8) },
+    ], 4.9);
   ` },
   // 4. El Prado de los espíritus: la pelota, y todos corren atrás de ella.
-  { at: 15.8, run: `
+  { at: 14.6, run: `
     const M = V(24, 0, 20);
-    C.M = M;
     H.controls.placePlayer(V(M.x - 6, 0, M.z + 1), V(M.x + 4, 0, M.z - 1));
-    C.cam = null; C.look = null;
-    setTimeout(() => H.throwBall(), 500);
-    setTimeout(() => H.throwBall(), 3000);
+    Object.assign(C, { M, R: 14, N: 9, ty: 0.6, off: V(-5.6, 2.0, 4.4), lerp: 0.06, cam: null, look: null });
+    setTimeout(() => H.throwBall(), 300);
+    setTimeout(() => H.throwBall(), 2700);
   `, tick: TICK_PACK },
-  // 5. Final: el cielo del piso 99, el salón sobre las nubes y los perritos jugando.
-  { at: 21.3, run: `
+  // 5. El cielo del piso 99: el salón sobre las nubes y los perritos jugando.
+  { at: 19, run: `
     H.goFloor(98);
     H.controls.placePlayer(V(-3, 0, 6), V(8, 0, 7));
-    C.M = V(0, 0, 4);
     // Que la manada esté cerca para jugar con la pelota.
     H.spirits.pack.forEach((a, i) => a.pos.set(-2 + (i % 4) * 1.6, 0, 3.2 + Math.floor(i / 4) * 1.8));
-    C.R = 22; C.N = 4; C.ty = 0.8; C.off = V(0.6, 0.45, 3.4); C.lerp = 0.12;
-    C.cam = null; C.look = null;
+    Object.assign(C, { M: V(0, 0, 4), R: 22, N: 4, ty: 0.9, off: V(1.0, 1.1, 5.8), lerp: 0.1, cam: null, look: null });
     setTimeout(() => H.throwBall(), 300);
-    setTimeout(() => H.throwBall(), 2900);
+    setTimeout(() => H.throwBall(), 2600);
   `, tick: TICK_PACK },
-  { at: 26.2, run: `
+  // 6. Final: el mundo abierto. Caminás con Luca hacia el horizonte, por el puentecito del arroyo.
+  { at: 23.6, run: `
+    H.goFloor(0);
+    H.controls.placePlayer(V(63, 0, 16), V(120, 0, 16));
+    H.startWalk('luca');
+    H.controls.walkTo(V(130, 0, 16));
+    H.controls.marker.scale.setScalar(0);
     H.controls.cinematic([
-      { pos: H.camera.position.clone(), look: C.look.clone() },
-      { pos: V(10, 5, 20), look: V(0, 4, -14) },
-      { pos: V(16, 11, 29), look: V(-4, 13, -30) },
-    ], 3.9);
+      { pos: V(58.5, 1.7, 17.2), look: V(75, 3.6, 16) },
+      { pos: V(57.5, 3.5, 17.8), look: V(90, 4, 15.8) },
+      { pos: V(54, 9, 19), look: V(110, 5, 15) },
+    ], 6.5);
   ` },
 ];
 const DURATION = 30;
