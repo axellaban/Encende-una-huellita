@@ -1,0 +1,218 @@
+// Graba videos de la jugabilidad cuadro a cuadro, con tiempo virtual: aunque el navegador dibuje a
+// 1 cuadro por segundo (swiftshader, sin GPU), el video sale fluido a 30 cuadros por segundo.
+//
+//   npm run build && npm start      (con data/ limpio)
+//   NODE_PATH=$(npm root -g) node scripts/video.mjs vertical   [salida.mp4]
+//   NODE_PATH=$(npm root -g) node scripts/video.mjs horizontal [salida.mp4]
+//
+// VIDEO_FROM=<segundo> y VIDEO_TO=<segundo> graban sólo un tramo (para probar tomas);
+// VIDEO_FPS cambia los cuadros por segundo (30 por defecto).
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright');
+
+const FORMAT = process.argv[2] || 'vertical';
+const OUT = process.argv[3] || `video-${FORMAT}.mp4`;
+const BASE = process.env.VIDEO_URL || 'http://localhost:8787';
+const FPS = Number(process.env.VIDEO_FPS || 30);
+const SIZES = {
+  // 1080x1920 (reel) y 1920x1080.
+  vertical: { viewport: { width: 360, height: 640 }, scale: 3, mobile: true },
+  horizontal: { viewport: { width: 1280, height: 720 }, scale: 1.5, mobile: false },
+};
+const S = SIZES[FORMAT];
+if (!S) throw new Error(`Formato desconocido: ${FORMAT} (vertical u horizontal)`);
+
+// ---------- tiempo virtual ----------
+// performance.now, Date.now, requestAnimationFrame, setTimeout y setInterval pasan a depender de un
+// reloj que avanza sólo cuando lo pedimos. Mientras carga, avanza solo (al ritmo real); para grabar
+// se pasa a modo manual y cada __vt.step(ms) mueve el reloj, corre los temporizadores y dibuja.
+const VIRTUAL_TIME = () => {
+  const realST = window.setTimeout.bind(window);
+  const realNow = performance.now.bind(performance);
+  const DateNow = Date.now;
+  const base = DateNow();
+  let vt = realNow();
+  let raf = [];
+  let timers = [];
+  let id = 1;
+  let auto = true;
+  performance.now = () => vt;
+  Date.now = () => base + vt;
+  window.requestAnimationFrame = (cb) => { raf.push({ id, cb }); return id++; };
+  window.cancelAnimationFrame = (x) => { raf = raf.filter((r) => r.id !== x); };
+  window.setTimeout = (fn, ms = 0, ...a) => { timers.push({ id, at: vt + (+ms || 0), fn, a }); return id++; };
+  window.setInterval = (fn, ms = 0, ...a) => { timers.push({ id, at: vt + Math.max(1, +ms || 0), fn, a, every: Math.max(1, +ms || 0) }); return id++; };
+  window.clearTimeout = window.clearInterval = (x) => { timers = timers.filter((t) => t.id !== x); };
+  const runTimers = () => {
+    for (let guard = 0; guard < 1000; guard++) {
+      let next = null;
+      for (const t of timers) if (t.at <= vt && (!next || t.at < next.at)) next = t;
+      if (!next) break;
+      if (next.every) next.at += next.every; else timers = timers.filter((t) => t !== next);
+      try { typeof next.fn === 'function' ? next.fn(...next.a) : (0, eval)(next.fn); } catch (e) { console.error(e); }
+    }
+  };
+  const frame = () => {
+    const q = raf;
+    raf = [];
+    for (const r of q) { try { r.cb(vt); } catch (e) { console.error(e); } }
+  };
+  const step = (ms) => { vt += ms; runTimers(); frame(); };
+  // Mientras carga: al ritmo real.
+  let last = realNow();
+  const pump = () => {
+    if (!auto) return;
+    const now = realNow();
+    step(Math.min(100, now - last));
+    last = now;
+    realST(pump, 16);
+  };
+  realST(pump, 16);
+  window.__vt = { step, manual() { auto = false; }, get now() { return vt; } };
+};
+
+// ---------- guion ----------
+// Cada toma: en qué segundo arranca, qué hace al empezar (`run`) y, si hace falta, qué hace en cada
+// cuadro (`tick`, con k = segundos desde que arrancó la toma). Es código que corre en la página, con
+// H = __huellita, V(x, y, z) = un Vector3 y C = un objeto para guardar estado entre cuadros.
+// Cortes rápidos cada 5–7 s; la cámara siempre en movimiento.
+const SHOTS = [
+  // 1. Del cielo estrellado baja sobre el salón con sus farolitos y la ofrenda de Luca.
+  { at: 0, run: `
+    H.controls.placePlayer(V(0, 0, 0), V(0, 0, -14));
+    H.controls.cinematic([
+      { pos: V(11, 24, -8), look: V(-20, 40, -110) },
+      { pos: V(12, 15, 4), look: V(0, 2, -14) },
+      { pos: V(5, 6, 6), look: V(0, 2.5, -14) },
+    ], 4.6);
+  ` },
+  // 2. La ofrenda de Luca: la llamita vuela a la veladora, la flor estalla en pétalos y el abrazo.
+  { at: 4.5, run: `
+    H.visit('luca');
+    setTimeout(() => H.offer('luca', 'candle'), 1500);
+    setTimeout(() => H.offer('luca', 'flower'), 3900);
+    setTimeout(() => H.offer('luca', 'hug'), 5900);
+    // Cuando termina de volar al marco, un acercamiento lento.
+    C.base = null;
+    setTimeout(() => { C.base = H.camera.position.clone(); C.dir = H.camera.getWorldDirection(V(0, 0, 0)); C.k0 = null; }, 1700);
+  `, tick: `
+    if (!C.base) return;
+    if (C.k0 === null) C.k0 = k;
+    const u = Math.min(1, (k - C.k0) / 6);
+    const pos = C.base.clone().addScaledVector(C.dir, 1.6 * (1 - (1 - u) ** 2));
+    H.controls.teleportCamera(pos, pos.clone().addScaledVector(C.dir, 5));
+  ` },
+  // 3. El Puente del Arcoíris: tu personaje cruza con Luca al lado; la cámara los acompaña de costado.
+  { at: 12, run: `
+    H.controls.placePlayer(V(0.2, 0, 49), V(0, 0, 30));
+    H.startWalk('luca');
+    H.controls.walkTo(V(0, 0, 37));
+    H.controls.marker.scale.setScalar(0);
+    C.cam = null;
+  `, tick: `
+    const P = H.controls.player.pos;
+    const L = H.spirits.companion ? H.spirits.companion.pos : P;
+    const mid = P.clone().lerp(L, 0.4).add(V(0, 0.9, -0.6));
+    const want = P.clone().add(V(-4.2 + k * 0.25, 1.7 + k * 0.08, -3.2 + k * 0.1));
+    C.cam = C.cam ? C.cam.lerp(want, 0.12) : want;
+    C.look = C.look ? C.look.lerp(mid, 0.15) : mid;
+    H.controls.teleportCamera(C.cam, C.look);
+  ` },
+  // 4. El Prado de los espíritus: la pelota, y todos corren atrás de ella.
+  { at: 15.8, run: `
+    const M = V(24, 0, 20);
+    H.controls.placePlayer(V(M.x - 6, 0, M.z + 1), V(M.x + 4, 0, M.z - 1));
+    C.cam = null; C.look = null;
+    setTimeout(() => H.throwBall(), 500);
+    setTimeout(() => H.throwBall(), 3800);
+  `, tick: `
+    // La cámara sigue a la manada (los que están en el Prado), bajita, y mira un poco hacia la pelota.
+    const M = V(24, 0, 20);
+    const near = [...H.spirits.pack, H.spirits.companion].filter((a) => a && a.pos.distanceTo(M) < 14);
+    const c = V(0, 0, 0);
+    near.forEach((a) => c.add(a.pos));
+    if (near.length) c.divideScalar(near.length); else c.copy(M);
+    const ball = H.spirits.ball.pos;
+    const target = c.clone().lerp(ball.clone().setY(0), 0.3).setY(0.45);
+    const want = target.clone().add(V(-3.4 + k * 0.15, 1.15, 2.6));
+    C.cam = C.cam ? C.cam.lerp(want, 0.06) : want;
+    C.look = C.look ? C.look.lerp(target, 0.08) : target;
+    H.controls.teleportCamera(C.cam, C.look);
+  ` },
+  // 5. Final: en el salón, la cámara sube con los farolitos de Luca hacia el cielo.
+  { at: 23.4, run: `
+    H.offer('luca', 'candle');
+    setTimeout(() => H.offer('luca', 'candle'), 700);
+  ` },
+  { at: 24.2, run: `
+    H.controls.cinematic([
+      { pos: V(6, 2.6, 3), look: V(0, 3.5, -14) },
+      { pos: V(7, 6.5, 7), look: V(0, 9, -16) },
+      { pos: V(6, 11, 9), look: V(-2, 24, -22) },
+    ], 6);
+  ` },
+];
+const DURATION = 30;
+
+// ---------- grabar ----------
+const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+const ctx = await b.newContext({
+  viewport: S.viewport, deviceScaleFactor: S.scale, isMobile: S.mobile, hasTouch: S.mobile,
+  userAgent: S.mobile ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' : undefined,
+});
+await ctx.addInitScript(VIRTUAL_TIME);
+await ctx.addInitScript(() => {
+  localStorage.setItem('huellita.welcomed', '1');
+  localStorage.setItem('huellita.quality', 'high');
+  localStorage.setItem('huellita.music', '0');
+  localStorage.setItem('huellita.sounds', '0');
+  localStorage.setItem('huellita.refSeen', '1');
+});
+const p = await ctx.newPage();
+p.on('pageerror', (e) => console.error('[pageerror]', e.message));
+await p.goto(`${BASE}/?debug`);
+await p.waitForFunction(() => !document.querySelector('#enter')?.disabled, null, { timeout: 180_000 });
+await p.click('#enter');
+await p.waitForTimeout(1500);
+// Saltear la intro de la app (la nuestra es otra) y esconder toda la interfaz: sólo el 3D.
+await p.evaluate(() => {
+  document.querySelector('#scene').dispatchEvent(new PointerEvent('pointerdown', { clientX: 100, clientY: 100, bubbles: true, pointerId: 1, isPrimary: true }));
+  document.querySelector('#scene').dispatchEvent(new PointerEvent('pointerup', { clientX: 100, clientY: 100, bubbles: true, pointerId: 1, isPrimary: true }));
+});
+await p.waitForTimeout(1000);
+await p.addStyleTag({ content: 'body > *:not(#scene):not(canvas) { display: none !important; } #scene { display: block !important; }' });
+// Que se asiente todo (sombreadores, espíritus) antes de arrancar.
+await p.waitForTimeout(3000);
+await p.evaluate(() => window.__vt.manual());
+
+const from = Number(process.env.VIDEO_FROM || 0);
+const to = Number(process.env.VIDEO_TO || DURATION);
+const W = S.viewport.width * S.scale;
+const Hh = S.viewport.height * S.scale;
+const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
+  '-vf', `scale=${W}:${Hh}:flags=lanczos,format=yuv420p`, '-c:v', 'libx264', '-preset', 'slow', '-crf', '17', '-movflags', '+faststart', OUT], { stdio: ['pipe', 'inherit', 'inherit'] });
+const cdp = await ctx.newCDPSession(p);
+const dt = 1000 / FPS;
+const total = Math.round(to * FPS);
+const shots = SHOTS.map((s) => ({ ...s, frame: Math.round(s.at * FPS) }));
+const t0 = Date.now();
+const PRE = 'const H = window.__huellita; const V = (x, y, z) => new H.THREE.Vector3(x, y, z); const C = (window.__shot ||= {});';
+let cur = null;
+for (let f = 0; f < total; f++) {
+  for (const s of shots) {
+    if (s.frame === f) { cur = s; await p.evaluate(`(() => { ${PRE} ${s.run} })()`); }
+  }
+  if (cur?.tick) await p.evaluate(`((k) => { ${PRE} ${cur.tick} })(${(f - cur.frame) / FPS})`);
+  await p.evaluate((ms) => window.__vt.step(ms), dt);
+  if (f < from * FPS) continue;
+  const { data } = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 95 });
+  if (!ff.stdin.write(Buffer.from(data, 'base64'))) await new Promise((r) => ff.stdin.once('drain', r));
+  if (f % 30 === 0) console.log(`${(f / FPS).toFixed(1)} s · ${((Date.now() - t0) / 1000 / 60).toFixed(1)} min`);
+}
+ff.stdin.end();
+await new Promise((r) => ff.on('close', r));
+await b.close();
+console.log('Listo:', OUT);

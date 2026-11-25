@@ -358,6 +358,21 @@ async function buildScene() {
   controls.onMove(hideHint);
   if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, THREE, spirits, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
     goFloor: (f) => goFloor(f, true, true),
+    // Para grabar videos (scripts/video.mjs): los gestos en 3D sin pasar por la API.
+    get memorials() { return memorials; },
+    visit: (id) => visit(memorials.find((m) => m.id === id)),
+    throwBall,
+    offer: (id, kind, emo = '🧸') => {
+      const m = memorials.find((x) => x.id === id);
+      const k = hall.memorialKey(m);
+      const run = {
+        candle: (from, to, done) => offerFx.candle(from, to, () => { releaseLantern(m, { burst: true }); done(); }),
+        flower: (from, to, done) => offerFx.flower(from, to, done),
+        gift: (from, to, done) => offerFx.gift(emo, from, to, hall.giftScale(k), done),
+        hug: (from, to, done) => { offerFx.hug(from, to); setTimeout(done, 1200); },
+      }[kind];
+      return offerGesture(m, kind, run);
+    },
     ogCard: async (id) => { const m = memorials.find((x) => x.id === id); return (await drawOgCard(m, photoSrc(m))).toDataURL('image/jpeg', 0.88); } };
 
   const clock = new THREE.Clock();
