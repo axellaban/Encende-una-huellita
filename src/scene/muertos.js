@@ -472,43 +472,134 @@ function paintGeo(geo, color) {
 }
 
 const bgCache = new Map();
-// Fondos para el lugar de cada huellita (el paspartú detrás de la foto).
+// Fondos ilustrados en alta definición para el interior de cada obituario (el paisaje detrás de la foto y las repisitas).
 export function backgroundTexture(id = 'crema') {
   if (bgCache.has(id)) return bgCache.get(id);
-  const [c, g] = canvas(160, 200);
-  const W = 160;
-  const H = 200;
-  const grad = (a, b) => { const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(0, 0, W, H); };
-  const dots = (col, n, r) => { g.fillStyle = col; for (let i = 0; i < n; i++) { g.beginPath(); g.arc(Math.random() * W, Math.random() * H, r * (0.5 + Math.random()), 0, Math.PI * 2); g.fill(); } };
+  const W = 512;
+  const H = 512;
+  const [c, g] = canvas(W, H);
+  const grad = (a, b, c2 = null) => {
+    const gr = g.createLinearGradient(0, 0, 0, H);
+    gr.addColorStop(0, a);
+    if (c2) { gr.addColorStop(0.58, b); gr.addColorStop(1, c2); } else gr.addColorStop(1, b);
+    g.fillStyle = gr;
+    g.fillRect(0, 0, W, H);
+  };
+  const dots = (col, n, r) => {
+    g.fillStyle = col;
+    for (let i = 0; i < n; i++) {
+      g.beginPath();
+      g.arc(Math.random() * W, Math.random() * H, r * (0.5 + Math.random()), 0, Math.PI * 2);
+      g.fill();
+    }
+  };
+  // Pradera suave con colinas y florcitas silvestres (como en la vista de obituario con ventanitas).
+  const drawMeadowHills = (hill1, hill2) => {
+    g.fillStyle = hill1;
+    g.beginPath();
+    g.moveTo(0, H * 0.62);
+    g.bezierCurveTo(W * 0.28, H * 0.52, W * 0.65, H * 0.68, W, H * 0.56);
+    g.lineTo(W, H);
+    g.lineTo(0, H);
+    g.closePath();
+    g.fill();
+    g.fillStyle = hill2;
+    g.beginPath();
+    g.moveTo(0, H * 0.72);
+    g.bezierCurveTo(W * 0.35, H * 0.64, W * 0.72, H * 0.78, W, H * 0.68);
+    g.lineTo(W, H);
+    g.lineTo(0, H);
+    g.closePath();
+    g.fill();
+    const flCols = ['#fff8e8', '#ffd24c', '#ff9a3c', '#ff7aa8', '#e6f2ff'];
+    for (let i = 0; i < 65; i++) {
+      const fx = (i * 79 + (i % 7) * 23) % W;
+      const fy = H * 0.64 + ((i * 53) % Math.round(H * 0.33));
+      const fr = 3.5 + (i % 4) * 1.4;
+      g.fillStyle = flCols[i % flCols.length];
+      for (let p = 0; p < 5; p++) {
+        const a = (p / 5) * Math.PI * 2;
+        g.beginPath();
+        g.arc(fx + Math.cos(a) * fr, fy + Math.sin(a) * fr, fr * 0.65, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = '#ffcf3a';
+      g.beginPath();
+      g.arc(fx, fy, fr * 0.55, 0, Math.PI * 2);
+      g.fill();
+    }
+  };
   switch (id) {
-    case 'cempasuchil': grad('#ffb238', '#ff7a1a'); dots('rgba(255,230,140,.6)', 30, 6); break;
+    case 'cempasuchil':
+      grad('#ffd26a', '#ff9428', '#e85d12');
+      dots('rgba(255,244,185,0.55)', 45, 11);
+      drawMeadowHills('rgba(155,195,110,0.45)', 'rgba(110,165,85,0.65)');
+      break;
     case 'picado': {
       grad('#fbefd9', '#f3dfc0');
-      PICADO_COLORS.forEach((col, i) => { g.fillStyle = col; g.fillRect(i * (W / 7), 0, W / 7 - 2, 26); g.beginPath(); g.moveTo(i * (W / 7), 26); g.lineTo(i * (W / 7) + W / 14, 36); g.lineTo((i + 1) * (W / 7) - 2, 26); g.fill(); });
+      PICADO_COLORS.forEach((col, i) => {
+        const bw = W / 7;
+        g.fillStyle = col;
+        g.fillRect(i * bw, 0, bw - 4, 68);
+        g.beginPath();
+        g.moveTo(i * bw, 68);
+        g.lineTo(i * bw + bw / 2, 92);
+        g.lineTo((i + 1) * bw - 4, 68);
+        g.fill();
+      });
       break;
     }
     case 'talavera': {
       const t = talaveraTexture().image;
-      for (let y = 0; y < H; y += 40) for (let x = 0; x < W; x += 40) g.drawImage(t, x, y, 40, 40);
+      for (let y = 0; y < H; y += 128) for (let x = 0; x < W; x += 128) g.drawImage(t, x, y, 128, 128);
       break;
     }
-    case 'noche': grad('#2a1846', '#120c22'); dots('rgba(255,200,120,.8)', 24, 2.2); break;
-    case 'estrellas': grad('#1b2350', '#3a1f5c'); dots('rgba(255,255,230,.9)', 60, 1.4); break;
-    case 'rosa': grad('#ff4fa3', '#c2186b'); dots('rgba(255,220,240,.35)', 26, 7); break;
-    case 'turquesa': grad('#3fd6cf', '#118f8b'); dots('rgba(230,255,250,.35)', 26, 7); break;
-    case 'arcoiris': ['#ff8a8a', '#ffb870', '#ffe58a', '#9be38f', '#8ec5ff', '#a99bff', '#e0a0ff'].forEach((col, i) => { g.fillStyle = col; g.fillRect(0, (i * H) / 7, W, H / 7 + 1); }); break;
-    case 'jardin': grad('#cfe8b0', '#7fb46b'); ['#ff9a1f', '#e4167c', '#ffcf3a', '#ffffff'].forEach((col) => dots(col, 10, 5)); break;
-    case 'atardecer': grad('#ffcf7a', '#c2397a'); break;
+    case 'noche':
+      grad('#22153d', '#3a2260', '#160e28');
+      dots('rgba(255,220,145,0.85)', 55, 3.8);
+      break;
+    case 'estrellas':
+      grad('#18224d', '#382262', '#203660');
+      dots('rgba(255,255,230,0.9)', 95, 2.8);
+      drawMeadowHills('rgba(72,118,92,0.55)', 'rgba(54,96,74,0.75)');
+      break;
+    case 'rosa':
+      grad('#ff78b8', '#d42678');
+      dots('rgba(255,230,245,0.4)', 40, 12);
+      break;
+    case 'turquesa':
+    case 'cielo':
+      grad('#bce0f5', '#dff2fa', '#b5dfc0');
+      drawMeadowHills('#96c98b', '#75b36d');
+      break;
+    case 'arcoiris':
+      ['#ff8a8a', '#ffb870', '#ffe58a', '#9be38f', '#8ec5ff', '#a99bff', '#e0a0ff'].forEach((col, i) => {
+        g.fillStyle = col;
+        g.fillRect(0, (i * H) / 7, W, H / 7 + 2);
+      });
+      break;
+    case 'jardin':
+      grad('#c6e6f5', '#e4f4d8', '#9fd18b');
+      drawMeadowHills('#94c884', '#72b068');
+      break;
+    case 'atardecer':
+      grad('#ffd88a', '#f29cb8', '#b8d4a6');
+      drawMeadowHills('#8ec27e', '#6ea864');
+      break;
     case 'huellitas': {
       grad('#fbefd9', '#f0dcc0');
-      g.fillStyle = 'rgba(201,112,78,.35)';
-      for (let y = 18; y < H; y += 40) for (let x = 18 + ((y / 40) % 2) * 20; x < W; x += 40) {
-        g.beginPath(); g.ellipse(x, y + 5, 7, 6, 0, 0, Math.PI * 2); g.fill();
-        for (const [dx, dy] of [[-8, -4], [8, -4], [-3, -10], [3, -10]]) { g.beginPath(); g.arc(x + dx, y + dy, 2.6, 0, Math.PI * 2); g.fill(); }
+      g.fillStyle = 'rgba(201,112,78,0.32)';
+      for (let y = 46; y < H; y += 96) for (let x = 46 + ((y / 96) % 2) * 48; x < W; x += 96) {
+        g.beginPath(); g.ellipse(x, y + 12, 16, 14, 0, 0, Math.PI * 2); g.fill();
+        for (const [dx, dy] of [[-18, -10], [18, -10], [-7, -22], [7, -22]]) {
+          g.beginPath(); g.arc(x + dx, y + dy, 6, 0, Math.PI * 2); g.fill();
+        }
       }
       break;
     }
-    default: grad('#fbf1e0', '#efe0c6');
+    default:
+      grad('#d4ebf7', '#eef6e6', '#b8ddb0');
+      drawMeadowHills('#99cb8c', '#7ab570');
   }
   const t = tex(c);
   bgCache.set(id, t);

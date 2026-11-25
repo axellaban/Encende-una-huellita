@@ -54,6 +54,16 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 - [x] **Carteles ultra nítidos (supersampling 2x sin mipmap blur) y calidad Alta por defecto (`src/quality.js`, `src/scene/textures.js`, `src/scene/elevator.js`, `src/main.js`)**:
   - Calidad **Alta** (`high`, hasta `2.5x` Retina y piso de `1.75x`) por defecto en todos los dispositivos; carteles (`labelTexture`, `chalkboardTexture`, `bubbleTexture`, `floorDisplay`) renderizados al doble de resolución (`2x`) con `LinearFilter` (`generateMipmaps = false`), filete de contraste anti-bloom y re-dibujado automático al terminar de cargar `document.fonts.ready`.
 
+### Etapa 7: Plazoleta con banquitos, Salón más grande con 2 ascensores, vitrinas de obituarios en las paredes del Hall, nichos con ventanitas y repisitas, y living central con sillones y atriles (`src/scene/world.js`, `src/scene/hall.js`, `src/scene/cozy.js`, `src/scene/muertos.js`)
+- [x] **Plazoleta circular en el camino principal (`PLAZA` en `src/scene/world.js`, `src/scene/cozy.js`)**:
+  - Luego de cruzar el Puente del Arcoíris, plazoleta de piedra con cantero redondo central de doble moldura lleno de flores, banquitos de madera alrededor y faroles cálidos.
+- [x] **Salón más grande (`ROOM_R = 15.2`), 2 ascensores laterales (`LIFT_DEGS = [247.5, 112.5]`) y vitrinas de obituarios en todas las paredes libres (`src/scene/world.js`, `src/scene/hall.js`)**:
+  - 6 grandes vitrinas de nogal de `3×4` obituarios iluminados en las paredes del salón que no tienen ascensor, más cuadros verticales con retrato en las jambas de entrada a cada pasillo.
+- [x] **Nuevo diseño de obituario con ventanitas batientes de vidrio y 4 repisitas laterales para apoyar (`makeSlot` en `src/scene/hall.js`, `backgroundTexture` en `src/scene/muertos.js`)**:
+  - Dos hojas de ventana batientes con marco claro, bisagras y vidrio esmerilado que se abren hacia los costados; paisaje de pradera ilustrada en el fondo; 4 repisitas de madera flotantes a los lados del retrato con regalitos 3D y pastillitas de conteo; florero a la izquierda, plaquita grande inclinada en el centro y velas a la derecha.
+- [x] **Living central con sillones y atriles de pie con cuadritos (`src/scene/hall.js`)**:
+  - Alfombra circular con sillones acolchados enfrentados y centro luminoso en el salón, más 3 atriles de madera con cuadritos (*"✨ Luz de hoy"*) y macetas blancas con plantas.
+
 ---
 
 ## 🆕 Última tanda (24/11/2026, noche) — verificada con capturas y recorrido en los 6 dispositivos

@@ -4,14 +4,14 @@
 // de los espíritus y el frasco de gracias.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HALL_CENTER, ROOM_R, SPAWN, PATH_HALF, GARDEN_RADIUS, BRIDGE, outside, MEADOW, MEADOW_R, nearCreek, insideHall, uTime, rand } from './world.js';
+import { HALL_CENTER, ROOM_R, SPAWN, PATH_HALF, GARDEN_RADIUS, BRIDGE, PLAZA, outside, MEADOW, MEADOW_R, nearCreek, insideHall, uTime, rand } from './world.js';
 import { EASEL_POS, ALTAR_SCALE } from './hall.js';
 import { pawTexture, chalkboardTexture, glowTexture, labelTexture, woodTexture, twoSided } from './textures.js';
 import { picadoBanner, PALETTE } from './muertos.js';
 import { buildRiver } from './river.js';
 import { paperLantern, flickerLantern } from './lanterns.js';
 
-export const JAR_POS = new THREE.Vector3(-4.2, 0, 15.5);
+export const JAR_POS = new THREE.Vector3(-4.5, 0, 12.2);
 
 // `ground`: lo que está en el suelo del jardín (se esconde en los pisos de arriba).
 export function createCozy(scene, tier, colliders, ground = scene) {
@@ -54,7 +54,14 @@ export function createCozy(scene, tier, colliders, ground = scene) {
       const zStart = BRIDGE.z - BRIDGE.halfL - 0.4;
       const z = zStart - t * (zStart - (EASEL_POS.z + 1.2 * ALTAR_SCALE));
       const spread = (r() + r() + r() - 1.5) * 0.9;
-      const x = spread + Math.sin(z * 0.35) * 0.3;
+      let x = spread + Math.sin(z * 0.35) * 0.3;
+      // En la plazoleta los pétalos rodean el cantero redondo central.
+      const dzP = z - PLAZA.z;
+      if (Math.abs(dzP) < PLAZA.bedR + 1.1) {
+        const side = x >= 0 ? 1 : -1;
+        const avoid = Math.sqrt(Math.max(0, (PLAZA.bedR + 1.0) ** 2 - dzP * dzP));
+        if (Math.abs(x) < avoid) x = side * (avoid + Math.abs(spread) * 0.45);
+      }
       m.position.set(x, 0.03 + (z < HALL_CENTER.z + ROOM_R + 0.7 ? 0.14 : 0) + r() * 0.01, z);
       m.rotation.set((r() - 0.5) * 0.3, r() * 6, (r() - 0.5) * 0.3);
       m.scale.setScalar(0.7 + r() * 0.8);
@@ -70,7 +77,7 @@ export function createCozy(scene, tier, colliders, ground = scene) {
   {
     const poleMat = new THREE.MeshLambertMaterial({ map: woodTexture('#5a3a28') });
     const poleGeo = new THREE.CylinderGeometry(0.045, 0.06, 4.4, 7);
-    for (const [z, seed] of [[27.8, 4], [22.6, 9], [17.4, 13], [12.2, 2]]) {
+    for (const [z, seed] of [[31.2, 4], [14.0, 9], [8.8, 13], [3.6, 2]]) {
       const b = picadoBanner(new THREE.Vector3(-2.75, 4.3, z), new THREE.Vector3(2.75, 4.3, z - 0.2), { sag: 0.42, flags: 11, size: 0.4, seed });
       ground.add(b);
       animated.push((t) => b.userData.flutter(t));

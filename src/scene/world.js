@@ -7,11 +7,11 @@ import { marigoldGeometry, marigoldMaterial, buildPueblo, PALETTE } from './muer
 import { paperLantern, flickerLantern } from './lanterns.js';
 
 // Plano del jardín (en metros). Todo lo demás se ubica a partir de estos números.
-export const HALL_CENTER = new THREE.Vector3(0, 0, -14);
+export const HALL_CENTER = new THREE.Vector3(0, 0, -16);
 // Todo lo que ocupa el salón con sus pasillos entra en este radio (el jardín empieza afuera).
-export const HALL_RADIUS = 28;
-// El salón central: redondo, con la ofrenda y la pérgola de luces. De él salen los pasillos.
-export const ROOM_R = 12; // radio del muro del salón
+export const HALL_RADIUS = 31;
+// El salón central: amplio y redondo, con sillones, atriles, vitrinas de obituarios, la ofrenda y la pérgola.
+export const ROOM_R = 15.2; // radio del muro del salón
 export const ROOM_WALL_H = 4.6;
 // Los pasillos: anchos (4,6 m libres) y bien largos (14,85 m), con nichos en las dos paredes y un vitral al fondo.
 // `hw` medio ancho libre, `wall` espesor de la pared de nichos, `len` largo desde la boca, `h` alto.
@@ -19,10 +19,10 @@ export const CORRIDOR = { hw: 2.3, wall: 0.55, len: 14.85, h: 3.8 };
 // Hacia dónde sale cada pasillo (grados: 0 = hacia la entrada, 90 = a la derecha de quien entra,
 // 180 = al fondo). El orden es el de los lugares: el pasillo 0 es el del fondo, de frente a la entrada.
 export const CORRIDOR_DEG = [180, 135, 225, 90, 270];
-// Los tres ascensores: en la pared del salón, entre los pasillos (izquierda 247.5°, derecha 112.5° y fondo 202.5°).
-export const LIFT_DEGS = [247.5, 112.5, 202.5];
+// Dos ascensores laterales en la pared del salón (izquierda 247.5° y derecha 112.5°); el resto de las paredes lleva vitrinas de obituarios.
+export const LIFT_DEGS = [247.5, 112.5];
 export const LIFT_DEG = LIFT_DEGS[0];
-const ENTRY_DEG = 17; // medio ancho de la entrada al salón (en grados)
+const ENTRY_DEG = 15; // medio ancho de la entrada al salón (en grados)
 const MOUTH_DEG = THREE.MathUtils.radToDeg(Math.asin((CORRIDOR.hw + CORRIDOR.wall) / ROOM_R));
 const dirOf = (deg) => { const a = THREE.MathUtils.degToRad(deg); return new THREE.Vector3(Math.sin(a), 0, Math.cos(a)); };
 // El sistema de un pasillo: `o` la boca (sobre el muro del salón), `u` hacia afuera, `v` de costado.
@@ -192,16 +192,22 @@ function paint(geo, color) {
 // Donde empieza el camino (justo afuera del piso del salón).
 export const PATH_START = HALL_CENTER.z + ROOM_R + 1.5;
 
+// La plazoleta circular en el camino principal (luego de cruzar el Puente del Arcoíris), con su cantero central y banquitos.
+export const PLAZA = { x: 0, z: 21.5, r: 5.8, bedR: 2.05 };
+
 // Canteros de flores con borde de piedra y un estanque chiquito (el pasto, las flores sueltas y los
 // árboles no se meten adentro).
 export const POND = { x: -14.2, z: 28, r: 2.7 };
-export const BEDS = [[-6.8, 27.2, 1.7], [6.6, 31.4, 1.6], [7.2, 12.8, 1.8], [-14.5, 21.6, 1.7], [11.5, 33.5, 1.5]];
-export const inFeature = (x, z, pad = 0) => Math.hypot(x - POND.x, z - POND.z) < POND.r + 0.5 + pad || BEDS.some(([bx, bz, br]) => Math.hypot(x - bx, z - bz) < br + 0.25 + pad);
+export const BEDS = [[-8.2, 27.2, 1.7], [8.2, 31.4, 1.6], [8.4, 12.8, 1.8], [-14.5, 21.6, 1.7], [11.5, 33.5, 1.5]];
+export const inFeature = (x, z, pad = 0) => Math.hypot(x - POND.x, z - POND.z) < POND.r + 0.5 + pad
+  || Math.hypot(x - PLAZA.x, z - PLAZA.z) < PLAZA.r + 0.35 + pad
+  || BEDS.some(([bx, bz, br]) => Math.hypot(x - bx, z - bz) < br + 0.25 + pad);
 // Adentro del salón, de un pasillo o de la cabina del ascensor (lo que tiene piso de madera).
 export function insideHall(x, z, pad = 0) {
   return Math.hypot(x - HALL_CENTER.x, z - HALL_CENTER.z) < ROOM_R + 0.7 + pad || inCorridor(x, z, pad) || inLift(x, z, pad);
 }
 export function onPath(x, z, pad = 0) {
+  if (Math.hypot(x - PLAZA.x, z - PLAZA.z) < PLAZA.r + pad) return true;
   return Math.abs(x) < PATH_HALF + pad && z > HALL_CENTER.z + ROOM_R - 0.6 && z < SPAWN.z + 6;
 }
 
@@ -462,6 +468,59 @@ export function buildWorld(scene, tier) {
   };
   pathPiece(HALL_CENTER.z + ROOM_R - 0.6, BRIDGE.z - BRIDGE.halfL + 0.25, stoneTexture(), '#ffffff', '#6d625a');
   pathPiece(BRIDGE.z + BRIDGE.halfL - 0.25, SPAWN.z + 6, stoneTexture(), '#8a7864', '#4a4038');
+  // Plazoleta circular en el camino principal (luego del Puente del Arcoíris), con cantero central de piedra y flores.
+  {
+    const pTex = stoneTexture().clone();
+    pTex.repeat.set(3.2, 3.2);
+    pTex.needsUpdate = true;
+    const plazaFloor = new THREE.Mesh(
+      new THREE.CircleGeometry(PLAZA.r, 56).rotateX(-Math.PI / 2),
+      new THREE.MeshLambertMaterial({ map: pTex, color: '#e6d6c3' }),
+    );
+    plazaFloor.position.set(PLAZA.x, 0.016, PLAZA.z);
+    plazaFloor.name = 'ground';
+    groundRoot.add(plazaFloor);
+    walkable.push(plazaFloor);
+    const outerRim = new THREE.Mesh(
+      new THREE.TorusGeometry(PLAZA.r, 0.08, 8, 56).rotateX(Math.PI / 2),
+      new THREE.MeshLambertMaterial({ color: '#8a7e74' }),
+    );
+    outerRim.position.set(PLAZA.x, 0.03, PLAZA.z);
+    groundRoot.add(outerRim);
+    // Cantero redondo central con doble moldura de piedra clara (como en la plazoleta de referencia).
+    const curbBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(PLAZA.bedR + 0.14, PLAZA.bedR + 0.22, 0.22, 44),
+      new THREE.MeshLambertMaterial({ color: '#9e948c' }),
+    );
+    curbBase.position.set(PLAZA.x, 0.11, PLAZA.z);
+    const curbTop = new THREE.Mesh(
+      new THREE.TorusGeometry(PLAZA.bedR + 0.06, 0.12, 10, 44).rotateX(Math.PI / 2),
+      new THREE.MeshLambertMaterial({ color: '#bfb5ac' }),
+    );
+    curbTop.position.set(PLAZA.x, 0.26, PLAZA.z);
+    const soil = new THREE.Mesh(
+      new THREE.CylinderGeometry(PLAZA.bedR, PLAZA.bedR, 0.28, 40),
+      new THREE.MeshLambertMaterial({ color: '#3b281e' }),
+    );
+    soil.position.set(PLAZA.x, 0.15, PLAZA.z);
+    groundRoot.add(curbBase, curbTop, soil);
+    colliders.circles.push({ x: PLAZA.x, z: PLAZA.z, r: PLAZA.bedR + 0.24, ground: true });
+    const nFl = 110;
+    const pFlowers = new THREE.InstancedMesh(marigoldGeometry(0.085, '#ffffff', r), marigoldMaterial(), nFl);
+    const pal = [PALETTE.cempasuchil, '#f4ede0', '#e0457b', '#9b72d6', PALETTE.amarillo, '#ff9a1f'].map((c) => new THREE.Color(c));
+    const fm = new THREE.Object3D();
+    for (let i = 0; i < nFl; i++) {
+      const a = r() * Math.PI * 2;
+      const d = Math.sqrt(r()) * (PLAZA.bedR - 0.18);
+      fm.position.set(PLAZA.x + Math.cos(a) * d, 0.31 + r() * 0.1, PLAZA.z + Math.sin(a) * d);
+      fm.rotation.set((r() - 0.5) * 0.4, r() * 6, (r() - 0.5) * 0.4);
+      fm.scale.setScalar(0.75 + r() * 0.65);
+      fm.updateMatrix();
+      pFlowers.setMatrixAt(i, fm.matrix);
+      pFlowers.setColorAt(i, pal[i % pal.length]);
+    }
+    groundRoot.add(pFlowers);
+  }
   // Piso de madera del salón (redondo) y de cada pasillo (tablas a lo largo).
   const floorTex = floorTexture();
   const deckMat = new THREE.MeshLambertMaterial({ map: floorTex });
@@ -722,15 +781,15 @@ export function buildWorld(scene, tier) {
   const poleMat = new THREE.MeshLambertMaterial({ color: '#1d1a1c' });
   const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 2.0, 0.9) });
   const lampSpots = [
-    [2.7, 31], [-2.7, 25.5], [2.7, 20], [-2.7, 15], [2.7, 10],
-    // Adentro del salón: dos a los lados de la ofrenda y dos cerca del cantero central (dejando libre la puerta de los tres ascensores).
-    [HALL_CENTER.x - 7.4, HALL_CENTER.z + 5.2], [HALL_CENTER.x + 7.4, HALL_CENTER.z + 5.2],
-    [HALL_CENTER.x - 4.2, HALL_CENTER.z - 2.4], [HALL_CENTER.x + 4.2, HALL_CENTER.z - 2.4],
+    [-2.35, 33.2], [2.35, 33.2], [-2.55, 25.3], [2.45, 17.5], [-2.45, 9.8], [2.45, 4.5],
+    // Adentro del salón amplio: dos a los lados de la ofrenda y dos acompañando el living central.
+    [HALL_CENTER.x - 9.4, HALL_CENTER.z + 6.4], [HALL_CENTER.x + 9.4, HALL_CENTER.z + 6.4],
+    [HALL_CENTER.x - 5.8, HALL_CENTER.z - 3.4], [HALL_CENTER.x + 5.8, HALL_CENTER.z - 3.4],
   ];
   const lampParts = [];
   const hallLampParts = [];
-  const PATH_LAMPS = 5;
-  const lightOrder = [6, 5, 2, 4, 0, 7, 8, 3, 1]; // prioridad de luces reales (primero las del salón)
+  const PATH_LAMPS = 6;
+  const lightOrder = [7, 6, 2, 3, 0, 8, 9, 4, 1, 5]; // prioridad de luces reales (primero las del salón y plazoleta)
   lampSpots.forEach(([x, z], i) => {
     const base = new THREE.CylinderGeometry(0.16, 0.2, 0.35, 8);
     base.translate(x, 0.17, z);
@@ -768,9 +827,10 @@ export function buildWorld(scene, tier) {
     for (let z = PATH_START; z < SPAWN.z + 4; z += 3.2) {
       for (const s of [-1, 1]) {
         const x = s * (PATH_HALF + 0.35);
-        if (Math.abs(z + (s > 0 ? 1.6 : 0) - BRIDGE.z) < BRIDGE.halfL + 1.4) continue;
+        const zz = z + (s > 0 ? 1.6 : 0);
+        if (Math.abs(zz - BRIDGE.z) < BRIDGE.halfL + 1.4 || Math.hypot(x - PLAZA.x, zz - PLAZA.z) < PLAZA.r + 0.6) continue;
         const g = new THREE.CylinderGeometry(0.06, 0.07, 0.42, 8);
-        g.translate(x, 0.21, z + (s > 0 ? 1.6 : 0));
+        g.translate(x, 0.21, zz);
         posts.push(g);
       }
     }
@@ -780,8 +840,10 @@ export function buildWorld(scene, tier) {
     let i = 0;
     for (let z = PATH_START; z < SPAWN.z + 4; z += 3.2) {
       for (const s of [-1, 1]) {
-        if (Math.abs(z + (s > 0 ? 1.6 : 0) - BRIDGE.z) < BRIDGE.halfL + 1.4) continue;
-        m.position.set(s * (PATH_HALF + 0.35), 0.46, z + (s > 0 ? 1.6 : 0));
+        const x = s * (PATH_HALF + 0.35);
+        const zz = z + (s > 0 ? 1.6 : 0);
+        if (Math.abs(zz - BRIDGE.z) < BRIDGE.halfL + 1.4 || Math.hypot(x - PLAZA.x, zz - PLAZA.z) < PLAZA.r + 0.6) continue;
+        m.position.set(x, 0.46, zz);
         m.updateMatrix();
         tops.setMatrixAt(i++, m.matrix);
       }
@@ -790,11 +852,20 @@ export function buildWorld(scene, tier) {
     groundRoot.add(tops);
   }
 
-  // ---------- bancos ----------
+  // ---------- bancos (en la plazoleta alrededor del cantero y a lo largo del camino) ----------
   {
     const parts = [];
     const metal = [];
-    const benchSpots = [[-3.8, 29, Math.PI / 2], [3.8, 26, -Math.PI / 2], [-3.8, 32.5, Math.PI / 2], [3.8, 14, -Math.PI / 2]];
+    const benchSpots = [
+      // Banquitos en la plazoleta circular (como en la imagen de referencia).
+      [-1.05, PLAZA.z + 3.25, 0],
+      [3.85, PLAZA.z - 0.2, -Math.PI / 2],
+      [-3.85, PLAZA.z - 0.2, Math.PI / 2],
+      // Banquitos a los costados del camino antes y después de la plazoleta.
+      [-3.1, 30.2, Math.PI / 2],
+      [3.1, 29.8, -Math.PI / 2],
+      [3.2, 12.2, -Math.PI / 2],
+    ];
     for (const [x, z, rot] of benchSpots) {
       const tr = new THREE.Matrix4().makeRotationY(rot).setPosition(x, 0, z);
       for (let s = 0; s < 4; s++) {

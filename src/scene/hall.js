@@ -33,17 +33,17 @@ const ROWS_Y = [0.92, 2.02, 3.12]; // de abajo hacia arriba (la fila de abajo qu
 const ROW_ORDER = [1, 0, 2];
 const Z0 = 0.7; // dónde empieza la grilla de nichos, desde la boca del pasillo
 const ZB = Z0 + COLS * PX;
-const PW = 0.55; // foto más grande y clara dentro del nicho (768x960)
-const PH = 0.66;
-const PHOTO_Y = 0.085;
+const PW = 0.43; // foto central con espacio a los costados para las 4 repisitas de madera
+const PH = 0.53;
+const PHOTO_Y = 0.05;
 const { hw: HW, wall: WALL, len: LEN, h: WALL_H } = CORRIDOR;
 
 export const POST_H = 7.4;
 const POLE_H = 11.5;
 // La ofrenda central es grande (se ve desde la entrada y domina el salón en tercera persona).
 export const ALTAR_SCALE = 2.2;
-export const EASEL_POS = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 5.2);
-const BED_R = 2.2; // cantero de flores alrededor del poste central
+export const EASEL_POS = new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z + 6.8);
+const BED_R = 2.0; // cantero de flores alrededor del poste central
 
 export function candleLevel(n) {
   return n >= 12 ? 3 : n >= 5 ? 2 : n >= 1 ? 1 : 0;
@@ -550,10 +550,13 @@ export function buildHall(scene, colliders, tier) {
   const corridorLabels = [];
   const pickables = [];
   const bulbs = []; // lucecitas de las guirnaldas (pérgola y pasillos)
+  const wallCells = []; // obituarios en las vitrinas de madera de las paredes del salón
+  const standingEasels = []; // atriles de madera con cuadritos en el centro del salón
 
   // ---------- el muro del salón ----------
   // Cada tramo es una serie de paredes rectas (cuerdas del círculo): por fuera pintadas, por dentro
   // con zócalo de madera, una franja de talavera, el revoque de color y una cornisa.
+  // En todas las paredes del salón que no tienen ascensor van vitrinas de madera con obituarios (3x4).
   {
     const outer = [];
     const wains = [];
@@ -562,8 +565,96 @@ export function buildHall(scene, colliders, tier) {
     const cornices = [];
     const T = 0.4;
     const outerMat = new THREE.MeshLambertMaterial({ map: paintedWallTexture('#c9663a'), emissive: '#2a0e06' });
+    const cabMat = new THREE.MeshLambertMaterial({ map: darkWood, color: '#382012', emissive: '#1a0d06' });
+    const cabBackMat = new THREE.MeshLambertMaterial({ color: '#f5ebd8', emissive: '#4a3824', emissiveIntensity: 0.55 });
+    const darkFrameMat = new THREE.MeshLambertMaterial({ color: '#22150e', emissive: '#0c0704' });
+    const VITRINE_TITLES = [
+      'Siempre en nuestro corazón',
+      'Huellitas de luz eterna',
+      'Amigos que nunca se olvidan',
+      'Estrellas del jardín',
+      'Recuerdos que brillan',
+      'Amor para siempre',
+    ];
+    let vitrineIdx = 0;
+
+    // Vitrina de madera oscura con 12 obituarios iluminados (3 columnas x 4 filas) y cartel superior.
+    const makeWallVitrine = (deg, w = 3.25, h = 3.42) => {
+      const vIdx = vitrineIdx++;
+      const g = new THREE.Group();
+      const pos = onRing(deg, ROOM_R - 0.25, 0.16);
+      g.position.copy(pos);
+      g.lookAt(HALL_CENTER.x, 0.16, HALL_CENTER.z);
+      const D = 0.28;
+      const cols = 3;
+      const rows = 4;
+      const cellW = (w - 0.32) / cols;
+      const cellH = (h - 0.36) / rows;
+      const cabParts = [
+        // Fondo, techo con cornisa y zócalo inferior de la vitrina.
+        box(w, h, 0.04, 0, h / 2, -D / 2),
+        box(w + 0.18, 0.14, D + 0.12, 0, h + 0.05, 0.02),
+        box(w + 0.1, 0.14, D + 0.06, 0, 0.07, 0.01),
+      ];
+      for (let c = 0; c <= cols; c++) {
+        const x = -w / 2 + 0.06 + c * ((w - 0.12) / cols);
+        cabParts.push(box(0.08, h, D, x, h / 2, 0));
+      }
+      for (let rIdx = 0; rIdx <= rows; rIdx++) {
+        const y = 0.12 + rIdx * ((h - 0.2) / rows);
+        cabParts.push(box(w, 0.07, D, 0, y, 0));
+      }
+      g.add(new THREE.Mesh(mergeGeometries(cabParts), cabMat));
+      // Cartel claro arriba de la vitrina.
+      const banner = new THREE.Mesh(
+        new THREE.PlaneGeometry(w * 0.92, 0.36),
+        new THREE.MeshBasicMaterial({
+          map: labelTexture(VITRINE_TITLES[vIdx % VITRINE_TITLES.length], {
+            w: 820, h: 120, font: '400 52px "Young Serif", Georgia, serif', bg: 'rgba(246,238,225,0.96)', fg: '#3b2618',
+          }),
+          transparent: true,
+        }),
+      );
+      banner.position.set(0, h + 0.32, 0.06);
+      g.add(banner);
+      // Halo cálido general de la vitrina.
+      const vGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.26, color: new THREE.Color(1.35, 0.98, 0.55),
+      }));
+      vGlow.scale.set(w * 1.25, h * 1.15, 1);
+      vGlow.position.set(0, h * 0.52, 0.18);
+      g.add(vGlow);
+
+      const bgs = ['jardin', 'crema', 'cielo', 'atardecer', 'cempasuchil', 'estrellas'];
+      for (let rIdx = 0; rIdx < rows; rIdx++) {
+        for (let c = 0; c < cols; c++) {
+          const cx = -w / 2 + 0.16 + (c + 0.5) * cellW;
+          const cy = 0.16 + (rows - 1 - rIdx + 0.5) * cellH;
+          const back = new THREE.Mesh(
+            new THREE.PlaneGeometry(cellW - 0.07, cellH - 0.07),
+            new THREE.MeshLambertMaterial({ map: backgroundTexture(bgs[(vIdx + rIdx + c) % bgs.length]), emissive: '#4a3824', emissiveIntensity: 0.52 }),
+          );
+          back.position.set(cx, cy, -D / 2 + 0.03);
+          const pw = cellW * 0.54;
+          const ph = cellH * 0.64;
+          const pFrame = new THREE.Mesh(new THREE.BoxGeometry(pw + 0.06, ph + 0.06, 0.025), (rIdx + c) % 3 === 0 ? goldMat : darkFrameMat);
+          pFrame.position.set(cx, cy + 0.04, -0.02);
+          const photo = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.93, 0.9) }));
+          photo.position.set(cx, cy + 0.04, -0.004);
+          photo.userData = { kind: 'featured' };
+          pickables.push(photo);
+          const plaqueMesh = new THREE.Mesh(new THREE.PlaneGeometry(cellW * 0.68, 0.095), new THREE.MeshBasicMaterial({ transparent: true }));
+          plaqueMesh.position.set(cx, cy - cellH * 0.37, 0.045);
+          plaqueMesh.rotation.x = -0.18;
+          g.add(back, pFrame, photo, plaqueMesh);
+          wallCells.push({ photo, plaque: plaqueMesh, seed: vIdx * 12 + rIdx * 3 + c });
+        }
+      }
+      scene.add(g);
+    };
+
     ROOM_ARCS.forEach(([a0, a1], ai) => {
-      if (LIFT_ARCS.some((arc) => arc && a0 === arc[0])) return; // esos tramos son las paredes de los tres ascensores (elevator.js)
+      if (LIFT_ARCS.some((arc) => arc && a0 === arc[0])) return; // esos tramos son las paredes de los dos ascensores (elevator.js)
       const n = Math.max(1, Math.ceil((a1 - a0) / 9));
       const inner = [];
       for (let k = 0; k < n; k++) {
@@ -585,63 +676,23 @@ export function buildHall(scene, colliders, tier) {
       }
       const paint = new THREE.Mesh(mergeGeometries(inner), new THREE.MeshLambertMaterial({ map: paintedWallTexture(WALL_COLORS[ai % WALL_COLORS.length]), emissive: '#1a0c08' }));
       scene.add(paint);
-      // Cuadros iluminados, coronas de cempasúchil y papel picado en las paredes vacías del salón.
-      const makeWallPainting = (deg, w = 1.45, h = 1.15, kind = 0, withConsole = false) => {
-        const g = new THREE.Group();
-        const pos = onRing(deg, ROOM_R - 0.24, 2.38);
-        g.position.copy(pos);
-        g.lookAt(HALL_CENTER.x, 2.38, HALL_CENTER.z);
-        const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.14, h + 0.14, 0.06), goldMat);
-        const innerB = new THREE.Mesh(new THREE.BoxGeometry(w + 0.05, h + 0.05, 0.07), nicheMat);
-        const art = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: folkPaintingTexture(kind), color: new THREE.Color(0.95, 0.92, 0.88) }));
-        art.position.z = 0.038;
-        // Lámpara de bronce arriba del cuadro.
-        const sconce = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, w * 0.42, 8).rotateZ(Math.PI / 2), goldMat);
-        sconce.position.set(0, h / 2 + 0.14, 0.12);
-        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.38, color: new THREE.Color(1.2, 0.9, 0.55) }));
-        glow.scale.set(w * 1.35, h * 1.25, 1);
-        glow.position.set(0, 0.05, 0.12);
-        g.add(frame, innerB, art, sconce, glow);
-        if (withConsole) {
-          const table = new THREE.Mesh(new THREE.BoxGeometry(w * 1.05, 0.08, 0.36), trimMat);
-          table.position.set(0, -1.25, 0.16);
-          g.add(table);
-          for (const sx of [-w * 0.34, 0, w * 0.34]) {
-            const c = makeCandle(waxMat, 0.11 + Math.abs(sx) * 0.05, flames, tier.bloom);
-            c.scale.setScalar(1.15);
-            c.position.set(sx, -1.21, 0.18);
-            c.visible = true;
-            g.add(c);
-          }
-        }
-        scene.add(g);
-      };
       if (a1 - a0 > 30) {
+        // Tramos largos de la entrada: dos vitrinas grandes de obituarios por pared, coronas y papel picado.
         for (let k = 0; k < 2; k++) {
-          const ta = a0 + 4 + k * ((a1 - a0 - 8) / 2);
-          const tb = ta + (a1 - a0 - 8) / 2;
+          const ta = a0 + 5 + k * ((a1 - a0 - 10) / 2);
+          const tb = ta + (a1 - a0 - 10) / 2;
           const midDeg = (ta + tb) / 2;
-          const b = picadoBanner(onRing(ta, ROOM_R - 0.35, ROOM_WALL_H - 0.35), onRing(tb, ROOM_R - 0.35, ROOM_WALL_H - 0.35), { sag: 0.4, flags: 9, size: 0.34, seed: ai * 3 + k });
+          const b = picadoBanner(onRing(ta, ROOM_R - 0.35, ROOM_WALL_H - 0.28), onRing(tb, ROOM_R - 0.35, ROOM_WALL_H - 0.28), { sag: 0.36, flags: 9, size: 0.34, seed: ai * 3 + k });
           scene.add(b);
           animators.push(b.userData.flutter);
-          makeWallPainting(midDeg, 1.5, 1.18, ai * 2 + k, true);
-          const wreathAt = onRing(midDeg, ROOM_R - 0.32, 3.45);
-          const pts = [];
-          for (let i = 0; i < 36; i++) {
-            const a = (i / 36) * Math.PI * 2;
-            pts.push([Math.cos(a) * 0.42, Math.sin(a) * 0.42, 0, 0.85 + r() * 0.45]);
-          }
-          const wreath = marigoldCluster(pts, { r: 0.09, rnd: r });
-          wreath.position.copy(wreathAt);
-          wreath.lookAt(HALL_CENTER.x, 3.45, HALL_CENTER.z);
-          scene.add(wreath);
+          makeWallVitrine(midDeg, 3.35, 3.42);
         }
-        // Un tercer cuadro en el centro del tramo largo.
-        makeWallPainting((a0 + a1) / 2, 1.15, 1.32, ai + 4, false);
       } else if (a1 - a0 > 14) {
-        makeWallPainting((a0 + a1) / 2, 1.32, 1.08, ai + 2, true);
+        // Tramos entre pasillos sin ascensor: vitrina completa de 3x4 obituarios.
+        makeWallVitrine((a0 + a1) / 2, 3.35, 3.42);
       }
     });
+    void cabBackMat;
     const walls = new THREE.Mesh(mergeGeometries(outer), outerMat);
     walls.userData.kind = 'wall';
     blockers.push(walls);
@@ -840,21 +891,55 @@ export function buildHall(scene, colliders, tier) {
         cg.add(hang);
         animators.push((tt) => { hang.rotation.z = Math.sin(tt * 0.9 + c + li) * 0.05; hang.rotation.x = Math.sin(tt * 0.7 + c * 2 + li) * 0.04; flickerLantern(l, tt); });
       }
-      // La boca del pasillo: dintel sobre la entrada y el cartel colgado con el nombre del pasillo.
+      // La boca del pasillo: dintel sobre la entrada, cartel colgado y cuadros verticales en las jambas.
       {
         lr.push(box(2 * (HW + WALL) + 0.2, 0.42, 0.5, 0, ROOM_WALL_H - 0.21, -0.25));
         const labelMat = new THREE.MeshBasicMaterial({ transparent: true });
-        const label = twoSided(new THREE.PlaneGeometry(3.1, 0.5), labelMat);
+        const label = twoSided(new THREE.PlaneGeometry(3.3, 0.52), labelMat);
         label.userData.mat = labelMat;
-        label.position.set(0, 4.06, -0.62);
+        label.position.set(0, 3.92, -0.58);
         label.rotation.y = Math.PI; // mira al salón
         cg.add(label);
         for (const sx of [-1.25, 1.25]) {
           const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.32, 4), new THREE.MeshLambertMaterial({ color: '#c9973f' }));
-          chain.position.set(sx, 4.38, -0.62);
+          chain.position.set(sx, 4.3, -0.58);
           cg.add(chain);
         }
         corridorLabels.push(label);
+        // Cuadros verticales con retrato y nombre en las jambas de entrada a cada pasillo (como en las imágenes de referencia).
+        for (const [si, sd] of [[0, -1], [1, 1]]) {
+          const pg = new THREE.Group();
+          pg.position.set(sd * (HW - 0.03), 1.98, 0.02);
+          pg.rotation.y = -sd * Math.PI / 2;
+          const pFrame = new THREE.Mesh(new THREE.BoxGeometry(0.76, 1.38, 0.04), trimMat);
+          const pMat = new THREE.Mesh(new THREE.PlaneGeometry(0.68, 1.3), new THREE.MeshBasicMaterial({ color: '#faf4ea' }));
+          pMat.position.z = 0.022;
+          const pPhoto = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.88), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.93, 0.9) }));
+          pPhoto.position.set(0, 0.14, 0.025);
+          pPhoto.userData = { kind: 'featured' };
+          pickables.push(pPhoto);
+          const pName = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.14), new THREE.MeshBasicMaterial({ transparent: true }));
+          pName.position.set(0, -0.44, 0.026);
+          pg.add(pFrame, pMat, pPhoto, pName);
+          cg.add(pg);
+          wallCells.push({ photo: pPhoto, plaque: pName, seed: 80 + c * 2 + si, lightPlaque: true });
+        }
+        // Macetitas verdes con hojas en la entrada de cada pasillo.
+        for (const sd of [-1, 1]) {
+          const ep = new THREE.Group();
+          ep.position.set(sd * (HW - 0.28), 0.16, 0.52);
+          const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.28, 12), creamMat);
+          pot.position.y = 0.14;
+          ep.add(pot);
+          for (let l = 0; l < 7; l++) {
+            const la = (l / 7) * Math.PI * 2;
+            const lf = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 4).scale(0.5, 1.8, 0.25), leafMat2);
+            lf.position.set(Math.cos(la) * 0.07, 0.34 + (l % 2) * 0.05, Math.sin(la) * 0.07);
+            lf.rotation.set(0.35 * Math.sin(la), la, -0.35 * Math.cos(la));
+            ep.add(lf);
+          }
+          cg.add(ep);
+        }
       }
 
       // ---------- los nichos de este pasillo ----------
@@ -888,41 +973,94 @@ export function buildHall(scene, colliders, tier) {
     scene.add(new THREE.Mesh(mergeGeometries(leafParts), leafMat2));
     scene.add(marigoldCluster(flowerPts, { r: 0.07, rnd: r }));
   }
-  // Arma un nicho: la caja de adentro (fondo de color, marco claro, foto, vidrio), la repisa con velas,
-  // jarrito y regalitos, la plaquita con el nombre, el brillo y el área para tocar.
+  // Geometrías compartidas para las dos ventanitas batientes de vidrio de cada nicho y las 4 repisitas de madera.
+  const casementFrameMat = new THREE.MeshLambertMaterial({ color: '#d8d4ce', emissive: '#4a453e', emissiveIntensity: 0.45 });
+  const casementGlassTex = canvasTex(128, 256, (g) => {
+    g.fillStyle = 'rgba(235, 242, 250, 0.14)';
+    g.fillRect(0, 0, 128, 256);
+    g.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+    g.lineWidth = 3;
+    g.strokeRect(2, 2, 124, 252);
+    // Puntitos sutiles del vidrio esmerilado y reflejo diagonal.
+    g.fillStyle = 'rgba(255, 255, 255, 0.18)';
+    for (let y = 16; y < 256; y += 24) {
+      for (let x = 16; x < 128; x += 24) {
+        g.beginPath(); g.arc(x, y, 1.6, 0, Math.PI * 2); g.fill();
+      }
+    }
+    g.fillStyle = 'rgba(255, 255, 255, 0.06)';
+    g.beginPath(); g.moveTo(12, 256); g.lineTo(38, 256); g.lineTo(96, 0); g.lineTo(70, 0); g.closePath(); g.fill();
+  });
+  const casementGlassMat = new THREE.MeshBasicMaterial({ map: casementGlassTex, transparent: true, opacity: 0.65, side: THREE.DoubleSide, depthWrite: false });
+  const winW = OW / 2 - 0.008;
+  const winH = OH - 0.016;
+  const winBar = 0.026;
+  const makeCasementLeafGeo = (dir) => {
+    // dir = +1 para hoja izquierda (se extiende de 0 a +winW desde la bisagra), -1 para hoja derecha (0 a -winW).
+    const cx = dir * (winW / 2);
+    return mergeGeometries([
+      new THREE.BoxGeometry(winW, winBar, 0.022).translate(cx, winH / 2 - winBar / 2, 0),
+      new THREE.BoxGeometry(winW, winBar, 0.022).translate(cx, -winH / 2 + winBar / 2, 0),
+      new THREE.BoxGeometry(winBar, winH - 2 * winBar, 0.022).translate(dir * (winBar / 2), 0, 0),
+      new THREE.BoxGeometry(winBar, winH - 2 * winBar, 0.022).translate(dir * (winW - winBar / 2), 0, 0),
+      // Bisagras metálicas en el borde exterior.
+      new THREE.CylinderGeometry(0.01, 0.01, 0.07, 6).translate(dir * 0.008, winH * 0.28, 0.008),
+      new THREE.CylinderGeometry(0.01, 0.01, 0.07, 6).translate(dir * 0.008, -winH * 0.28, 0.008),
+    ].map((x) => x.toNonIndexed()));
+  };
+  const winLeafGeoL = makeCasementLeafGeo(1);
+  const winLeafGeoR = makeCasementLeafGeo(-1);
+  const winGlassGeoL = new THREE.PlaneGeometry(winW - winBar * 2, winH - winBar * 2).translate(winW / 2, 0, 0);
+  const winGlassGeoR = new THREE.PlaneGeometry(winW - winBar * 2, winH - winBar * 2).translate(-winW / 2, 0, 0);
+  const darkPictureFrameMat = new THREE.MeshLambertMaterial({ color: '#1e1612', emissive: '#0c0806' });
+  const shelfWoodMat = new THREE.MeshLambertMaterial({ map: trimWood, color: '#c48d56', emissive: '#3d2410', emissiveIntensity: 0.45 });
+  const pillBadgeMat = new THREE.MeshBasicMaterial({ color: '#faf3e6' });
+  const DEFAULT_SHELF_GIFTS = ['🧸', '🎾', '🦴', '🧁', '🧶', '🦆'];
+
+  // Arma un nicho: la caja de adentro (fondo ilustrado, marco central, 4 repisitas de madera a los costados
+  // para apoyar regalitos, repisa inferior blanca con florero, plaquita inclinada y velas) y las dos
+  // ventanitas batientes de vidrio a izquierda y derecha.
   function makeSlot(g, local) {
-    const mat = new THREE.Mesh(new THREE.PlaneGeometry(OW - 0.02, OH - 0.02), new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#3a2a20', emissiveIntensity: 0.35 }));
+    const mat = new THREE.Mesh(new THREE.PlaneGeometry(OW - 0.02, OH - 0.02), new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#4a3828', emissiveIntensity: 0.42 }));
     mat.position.z = -DEPTH + 0.01;
-    const border = new THREE.Mesh(frameGeo, frameMat);
+    const border = new THREE.Mesh(frameGeo, darkPictureFrameMat);
     border.position.set(0, PHOTO_Y, -DEPTH * 0.65 - 0.006);
-    const photo = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.93, 0.93, 0.93) }));
+    const photo = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.94, 0.94, 0.94) }));
     photo.position.set(0, PHOTO_Y, -DEPTH * 0.65);
-    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(OW - 0.04, DEPTH - 0.04).rotateX(-Math.PI / 2), clothMat);
-    cloth.position.set(0, -OH / 2 + 0.003, -DEPTH / 2);
+    const cloth = new THREE.Mesh(new THREE.BoxGeometry(OW - 0.03, 0.036, DEPTH - 0.03), clothMat);
+    cloth.position.set(0, -OH / 2 + 0.018, -DEPTH / 2);
     const glass = new THREE.Mesh(new THREE.PlaneGeometry(OW, OH), glassMat);
     glass.position.z = -0.015;
     glass.renderOrder = 4;
+    glass.visible = false; // al abrirse quedan las dos ventanitas batientes a los costados
     const name = new THREE.Mesh(new THREE.PlaneGeometry(0.68, 0.125), new THREE.MeshBasicMaterial({ transparent: true }));
     name.position.set(0, -OH / 2 - 0.055, 0.048);
+    // Plaquita grande apoyada e inclinada en el centro de la repisa inferior (como en la imagen de referencia).
+    const innerPlaqueStand = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.11, 0.024), creamMat);
+    innerPlaqueStand.position.set(0, -OH / 2 + 0.068, -DEPTH * 0.36);
+    innerPlaqueStand.rotation.x = -0.22;
+    const innerName = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.098), new THREE.MeshBasicMaterial({ transparent: true }));
+    innerName.position.set(0, -OH / 2 + 0.07, -DEPTH * 0.36 + 0.014);
+    innerName.rotation.x = -0.22;
     const pick = new THREE.Mesh(new THREE.PlaneGeometry(OW + 0.1, OH + 0.1), pickMat);
     pick.position.z = 0.05;
     pick.userData = { kind: 'slot', local };
     pickables.push(pick);
 
     const shelf = new THREE.Group();
-    shelf.position.set(0, -OH / 2, -DEPTH / 2 + 0.02);
-    shelf.scale.setScalar(1.2);
+    shelf.position.set(0, -OH / 2 + 0.032, -DEPTH / 2 + 0.02);
+    shelf.scale.setScalar(1.18);
     const candles = [0, 1, 2].map((i) => {
       const c = makeCandle(waxMat, 0.09 + i * 0.03, flames, tier.bloom);
-      c.position.set([0.31, 0.38, 0.24][i], 0.0, [0.04, -0.04, -0.06][i]);
+      c.position.set([0.31, 0.38, 0.25][i], 0.0, [0.05, -0.03, -0.06][i]);
       c.visible = false;
       shelf.add(c);
       return c;
     });
-    // Jarrito de barro con el ramo de cempasúchil (más flores, más ramo).
+    // Florero con el ramo de flores a la izquierda de la repisa inferior.
     const jar = new THREE.Group();
-    jar.position.set(-0.32, 0.0, -0.02);
-    jar.scale.setScalar(1.15);
+    jar.position.set(-0.32, 0.0, 0.03);
+    jar.scale.setScalar(1.22);
     jar.add(new THREE.Mesh(jarGeo, jarMat), new THREE.Mesh(jarRimGeo, jarMat), new THREE.Mesh(jarLeafGeo, leafMat));
     jar.visible = false;
     shelf.add(jar);
@@ -935,36 +1073,53 @@ export function buildHall(scene, colliders, tier) {
       jar.add(f);
       return f;
     });
-    // Repisas laterales de madera dentro del nicho (a los costados del marco).
+    // 4 repisitas de madera flotantes a los costados de la foto (2 a la izquierda y 2 a la derecha) con sus apoyos.
     const inside = new THREE.Group();
-    const sideShelves = new THREE.Mesh(mergeGeometries([
-      box(0.18, 0.022, DEPTH * 0.58, -0.38, -0.02, -DEPTH * 0.48),
-      box(0.18, 0.022, DEPTH * 0.58, 0.38, -0.02, -DEPTH * 0.48),
-    ]), trimMat);
+    const SHELF_SPOTS = [
+      [-0.36, 0.145, -DEPTH * 0.56],
+      [-0.36, -0.055, -DEPTH * 0.56],
+      [0.36, 0.145, -DEPTH * 0.56],
+      [0.36, -0.055, -DEPTH * 0.56],
+    ];
+    const sideShelves = new THREE.Mesh(mergeGeometries(
+      SHELF_SPOTS.map(([sx, sy, sz]) => box(0.22, 0.024, DEPTH * 0.44, sx, sy, sz)),
+    ), shelfWoodMat);
+    // Pastillitas blancas de conteo en el frente de las repisitas (como en la foto de referencia).
+    const pills = new THREE.Mesh(mergeGeometries(
+      SHELF_SPOTS.map(([sx, sy, sz]) => box(0.058, 0.024, 0.012, sx + (sx < 0 ? 0.04 : -0.04), sy + 0.002, sz + DEPTH * 0.225)),
+    ), pillBadgeMat);
     const gifts = [0, 1, 2, 3, 4].map((i) => {
-      const h = giftHolder(i < 3 ? 0.16 : 0.14);
-      if (i < 3) {
-        h.position.set(-0.13 + i * 0.15, 0.0, 0.06);
-        h.rotation.y = (i - 1) * 0.3;
-        shelf.add(h);
-      } else {
-        const sd = i === 3 ? -1 : 1;
-        h.position.set(sd * 0.38, -0.008, -DEPTH * 0.46);
-        h.rotation.y = -sd * 0.35;
+      const h = giftHolder(i < 4 ? 0.125 : 0.145);
+      if (i < 4) {
+        const [sx, sy, sz] = SHELF_SPOTS[i];
+        h.position.set(sx, sy + 0.012, sz + 0.01);
+        h.rotation.y = sx < 0 ? 0.32 : -0.32;
         inside.add(h);
+      } else {
+        h.position.set(0.22, 0.0, 0.06);
+        h.rotation.y = -0.25;
+        shelf.add(h);
       }
       return h;
     });
+    // Dos ventanitas batientes de vidrio (izquierda y derecha) que se abren hacia afuera al abrirse el nicho.
+    const winL = new THREE.Group();
+    winL.position.set(-OW / 2 + 0.006, 0, 0.01);
+    winL.add(new THREE.Mesh(winLeafGeoL, casementFrameMat), new THREE.Mesh(winGlassGeoL, casementGlassMat));
+    const winR = new THREE.Group();
+    winR.position.set(OW / 2 - 0.006, 0, 0.01);
+    winR.add(new THREE.Mesh(winLeafGeoR, casementFrameMat), new THREE.Mesh(winGlassGeoR, casementGlassMat));
+
     const fx = makeGlowFx(glowFx, 0.72);
     fx.group.position.set(0, 0.04, 0.02);
     const warmHalo = new THREE.Sprite(innerWarmMat);
-    warmHalo.scale.set(0.95, 0.88, 1);
-    warmHalo.position.set(0, -0.04, -DEPTH * 0.45);
+    warmHalo.scale.set(0.98, 0.9, 1);
+    warmHalo.position.set(0, -0.02, -DEPTH * 0.45);
     warmHalo.visible = false;
-    inside.add(mat, border, photo, cloth, sideShelves, glass, name, shelf, warmHalo, fx.group);
+    inside.add(mat, border, photo, cloth, sideShelves, pills, innerPlaqueStand, innerName, winL, winR, glass, name, shelf, warmHalo, fx.group);
     inside.visible = false;
     g.add(inside, pick);
-    return { group: g, inside, border, mat, photo, name, shelf, candles, jar, flowers, gifts, warmHalo, fx, memorial: null, textures: [], open: 0, openTarget: 0, openDelay: 0, local };
+    return { group: g, inside, border, mat, photo, name, innerName, winL, winR, shelf, candles, jar, flowers, gifts, warmHalo, fx, memorial: null, textures: [], open: 0, openTarget: 0, openDelay: 0, local };
   }
 
   // ---------- puertitas de los nichos (todas en un solo dibujo) ----------
@@ -1067,9 +1222,14 @@ export function buildHall(scene, colliders, tier) {
       doors.setMatrixAt(s.local, fold <= 0.001 ? zero : dM);
       s.drawn = true;
       dirty = true;
-      // Adentro y las lucecitas aparecen apenas se entreabre.
+      // Adentro, las dos ventanitas batientes de vidrio y las lucecitas aparecen apenas se entreabre.
       const showIn = e > 0.08;
       if (s.inside.visible !== showIn) s.inside.visible = showIn;
+      if (s.winL && s.winR) {
+        const wAng = Math.min(1, e * 1.1) * 1.82;
+        s.winL.rotation.y = -wAng;
+        s.winR.rotation.y = wAng;
+      }
       setBulbs(s, e > 0.55);
     }
     if (dirty) doors.instanceMatrix.needsUpdate = true;
@@ -1260,6 +1420,155 @@ export function buildHall(scene, colliders, tier) {
     }
     bedFlowersMesh = fl;
     scene.add(fl);
+  }
+
+  // ---------- living central del salón: sillones cómodos, alfombra circular y atriles con cuadritos ----------
+  {
+    const sofaFabric = new THREE.MeshLambertMaterial({ color: '#f3ece0', emissive: '#4d3e30', emissiveIntensity: 0.48 });
+    const cushionMat = new THREE.MeshLambertMaterial({ color: '#fbf6ec', emissive: '#594736', emissiveIntensity: 0.5 });
+    const rugMat = new THREE.MeshLambertMaterial({ color: '#e2d3be', emissive: '#382b1e', emissiveIntensity: 0.42 });
+    const rugRimMat = new THREE.MeshLambertMaterial({ color: '#c8b398', emissive: '#2e2216', emissiveIntensity: 0.4 });
+    const easelWoodMat = new THREE.MeshLambertMaterial({ map: darkWood, color: '#3b2416', emissive: '#170c06' });
+    const potWhiteMat = new THREE.MeshLambertMaterial({ color: '#f4eee4', emissive: '#3b3228', emissiveIntensity: 0.45 });
+    const plantGreenMat = new THREE.MeshLambertMaterial({ color: '#589c48', emissive: '#183312', emissiveIntensity: 0.35 });
+
+    // Arma un sillón acolchado de dos cuerpos (como los del centro del salón de referencia).
+    const makeSofa = (x, z, rotY, width = 2.2) => {
+      const sg = new THREE.Group();
+      sg.position.set(x, 0.16, z);
+      sg.rotation.y = rotY;
+      const base = new THREE.Mesh(new THREE.BoxGeometry(width, 0.34, 0.88), sofaFabric);
+      base.position.set(0, 0.2, 0);
+      const back = new THREE.Mesh(new THREE.BoxGeometry(width, 0.56, 0.24), sofaFabric);
+      back.position.set(0, 0.56, -0.32);
+      back.rotation.x = -0.08;
+      sg.add(base, back);
+      for (const sd of [-1, 1]) {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.52, 0.92), sofaFabric);
+        arm.position.set(sd * (width / 2 - 0.1), 0.34, 0.02);
+        const armTop = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.92, 12).rotateX(Math.PI / 2), cushionMat);
+        armTop.position.set(sd * (width / 2 - 0.1), 0.6, 0.02);
+        sg.add(arm, armTop);
+      }
+      const cw = (width - 0.48) / 2 - 0.03;
+      for (const sd of [-0.5, 0.5]) {
+        const seatC = new THREE.Mesh(new THREE.BoxGeometry(cw, 0.14, 0.68), cushionMat);
+        seatC.position.set(sd * (cw + 0.04), 0.41, 0.06);
+        const backC = new THREE.Mesh(new THREE.BoxGeometry(cw, 0.42, 0.16), cushionMat);
+        backC.position.set(sd * (cw + 0.04), 0.62, -0.2);
+        backC.rotation.x = -0.1;
+        sg.add(seatC, backC);
+      }
+      scene.add(sg);
+      colliders.circles.push({ x, z, r: 0.95 });
+    };
+
+    // Living principal entre el cantero central y las vitrinas del fondo (como en la tercera foto).
+    const loungeZ = HALL_CENTER.z - 5.6;
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(3.25, 48).rotateX(-Math.PI / 2), rugMat);
+    rug.position.set(HALL_CENTER.x, 0.168, loungeZ);
+    const rugRim = new THREE.Mesh(new THREE.RingGeometry(3.12, 3.28, 48).rotateX(-Math.PI / 2), rugRimMat);
+    rugRim.position.set(HALL_CENTER.x, 0.17, loungeZ);
+    scene.add(rug, rugRim);
+    makeSofa(HALL_CENTER.x, loungeZ - 1.55, 0, 2.35);
+    makeSofa(HALL_CENTER.x, loungeZ + 1.55, Math.PI, 2.35);
+    // Centro de luz cálido entre los dos sillones.
+    const tableGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.72, color: new THREE.Color(1.8, 1.35, 0.8),
+    }));
+    tableGlow.scale.set(2.8, 1.8, 1);
+    tableGlow.position.set(HALL_CENTER.x, 0.62, loungeZ);
+    const lowTable = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.58, 0.26, 24), cushionMat);
+    lowTable.position.set(HALL_CENTER.x, 0.29, loungeZ);
+    scene.add(lowTable, tableGlow);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const c = makeCandle(waxMat, 0.12 + (i % 2) * 0.04, flames, tier.bloom);
+      c.position.set(HALL_CENTER.x + Math.cos(a) * 0.28, 0.42, loungeZ + Math.sin(a) * 0.28);
+      c.scale.setScalar(1.25);
+      c.visible = true;
+      scene.add(c);
+    }
+    colliders.circles.push({ x: HALL_CENTER.x, z: loungeZ, r: 0.72 });
+
+    // Dos livings laterales con sillones mirando hacia el centro del salón.
+    for (const sd of [-1, 1]) {
+      const sx = HALL_CENTER.x + sd * 7.6;
+      const sz = HALL_CENTER.z + 1.2;
+      const sRug = new THREE.Mesh(new THREE.CircleGeometry(2.1, 36).rotateX(-Math.PI / 2), rugMat);
+      sRug.position.set(sx, 0.168, sz);
+      scene.add(sRug);
+      makeSofa(sx + sd * 0.55, sz, -sd * Math.PI / 2, 2.05);
+    }
+
+    // Atriles de madera de pie con cuadritos ("Luz de hoy") y macetita blanca al lado (como en la tercera imagen).
+    const makeStandingEasel = (x, z, rotY) => {
+      const eg = new THREE.Group();
+      eg.position.set(x, 0.16, z);
+      eg.rotation.y = rotY;
+      // Patas del atril de madera oscura y travesaño donde apoya el cuadro.
+      const legs = mergeGeometries([
+        box(0.06, 1.85, 0.06, -0.42, 0.9, 0.02).rotateX(-0.08),
+        box(0.06, 1.85, 0.06, 0.42, 0.9, 0.02).rotateX(-0.08),
+        box(0.06, 1.75, 0.06, 0, 0.84, -0.36).rotateX(0.24),
+        box(1.18, 0.07, 0.12, 0, 0.72, 0.1),
+      ]);
+      eg.add(new THREE.Mesh(legs, easelWoodMat));
+      // Marco dorado con arquito ornamental arriba.
+      const fw = 1.08;
+      const fh = 1.34;
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, 0.055), goldMat);
+      frame.position.set(0, 1.42, 0.08);
+      frame.rotation.x = -0.06;
+      const topOrn = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.028, 8, 24, Math.PI), goldMat);
+      topOrn.position.set(0, 2.1, 0.04);
+      topOrn.rotation.x = -0.06;
+      // Paspartú blanco con encabezado "Luz de hoy", foto central y plaquita con el nombre abajo.
+      const cardBg = new THREE.Mesh(
+        new THREE.PlaneGeometry(fw - 0.1, fh - 0.1),
+        new THREE.MeshBasicMaterial({
+          map: labelTexture('✨ Luz de hoy', { w: 512, h: 640, font: '700 34px "Young Serif", Georgia, serif', bg: '#faf5ec', fg: '#7a5c3e' }),
+        }),
+      );
+      cardBg.position.set(0, 1.42, 0.11);
+      cardBg.rotation.x = -0.06;
+      // Movemos el título arriba dibujando la foto en el centro y el nombre abajo.
+      const headerLbl = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.84, 0.13),
+        new THREE.MeshBasicMaterial({
+          map: labelTexture('✨ Luz de hoy ✨', { w: 520, h: 84, font: '400 38px "Young Serif", Georgia, serif', bg: 'rgba(250,245,236,0.98)', fg: '#6b4e32' }),
+          transparent: true,
+        }),
+      );
+      headerLbl.position.set(0, 1.92, 0.115);
+      headerLbl.rotation.x = -0.06;
+      const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.78), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.93, 0.9) }));
+      photo.position.set(0, 1.44, 0.116);
+      photo.rotation.x = -0.06;
+      photo.userData = { kind: 'featured' };
+      pickables.push(photo);
+      const nameLbl = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.18), new THREE.MeshBasicMaterial({ transparent: true }));
+      nameLbl.position.set(0, 0.93, 0.118);
+      nameLbl.rotation.x = -0.06;
+      // Maceta blanca con planta verde al pie del atril.
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.34, 16), potWhiteMat);
+      pot.position.set(-0.78, 0.17, -0.08);
+      eg.add(frame, topOrn, cardBg, headerLbl, photo, nameLbl, pot);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6).scale(0.55, 2.2, 0.25), plantGreenMat);
+        leaf.position.set(-0.78 + Math.cos(a) * 0.08, 0.45 + (i % 2) * 0.08, -0.08 + Math.sin(a) * 0.08);
+        leaf.rotation.set(0.32 * Math.sin(a), a, -0.32 * Math.cos(a));
+        eg.add(leaf);
+      }
+      scene.add(eg);
+      colliders.circles.push({ x, z, r: 0.65 });
+      standingEasels.push({ photo, name: nameLbl });
+    };
+
+    makeStandingEasel(HALL_CENTER.x + 3.9, loungeZ + 1.4, -0.38);
+    makeStandingEasel(HALL_CENTER.x - 3.9, loungeZ + 1.4, 0.38);
+    makeStandingEasel(HALL_CENTER.x + 4.8, HALL_CENTER.z + 5.4, -0.45);
   }
 
   // ---------- en los pisos de arriba, donde está la ofrenda: una fuente con velitas flotando ----------
@@ -1512,30 +1821,43 @@ export function buildHall(scene, colliders, tier) {
       s.textures.push(lt);
       s.name.material.map = lt;
       s.name.material.needsUpdate = true;
+      if (s.innerName) {
+        const ilt = labelTexture(m.name, { w: 460, h: 96, font: '400 54px "Young Serif", Georgia, serif', bg: 'rgba(245,235,214,0.98)', fg: '#2b1b10' });
+        s.textures.push(ilt);
+        s.innerName.material.map = ilt;
+        s.innerName.material.needsUpdate = true;
+      }
     }
     s.memorial = m;
     s.name.visible = true;
+    if (s.innerName) s.innerName.visible = true;
     s.border.material = (m.candles >= 12 || m.eternal || m.bg === 'estrellas')
       ? goldMat
       : (m.bg === 'talavera' || m.bg === 'cielo')
         ? talaveraFrameMat
         : (m.bg === 'cempasuchil' || m.bg === 'atardecer')
           ? marigoldFrameMat
-          : frameMat;
+          : darkPictureFrameMat;
     if (s.bg !== m.bg) {
       s.mat.material.map = backgroundTexture(m.bg || 'crema');
       s.mat.material.needsUpdate = true;
       s.bg = m.bg;
     }
-    s.mat.material.emissiveIntensity = 0.35 + Math.min(0.28, (m.candles || 0) * 0.03) + (m.eternal ? 0.15 : 0);
+    s.mat.material.emissiveIntensity = 0.38 + Math.min(0.28, (m.candles || 0) * 0.03) + (m.eternal ? 0.15 : 0);
     s.shelf.visible = true;
     const lvl = candleLevel(m.candles);
     s.candles.forEach((c, i) => { c.visible = i < lvl; });
     if (s.warmHalo) s.warmHalo.visible = lvl > 0 || !!m.eternal;
-    const fl = Math.min(BOUQUET.length, Math.ceil(m.flowers / 2));
-    s.jar.visible = fl > 0;
+    const fl = Math.max(2, Math.min(BOUQUET.length, Math.ceil((m.flowers || 1) / 2)));
+    s.jar.visible = true;
     s.flowers.forEach((f, i) => { f.visible = i < fl; });
-    showGifts(s.gifts, m.lastGifts);
+    // Llenamos las 4 repisitas de madera con los regalitos recibidos y recuerdos tiernos para que siempre luzcan vivas.
+    const shelfGifts = [...(m.lastGifts || [])];
+    for (let k = 0; shelfGifts.length < 4 && k < DEFAULT_SHELF_GIFTS.length; k++) {
+      const gEmo = DEFAULT_SHELF_GIFTS[(s.local + k) % DEFAULT_SHELF_GIFTS.length];
+      if (!shelfGifts.includes(gEmo)) shelfGifts.push(gEmo);
+    }
+    showGifts(s.gifts, shelfGifts);
     s.fx.group.visible = true;
     setStage(s.fx, stageOf(m.glow).index, !!m.eternal);
   }
@@ -1676,6 +1998,63 @@ export function buildHall(scene, colliders, tier) {
     }
     if (!hasCenterFeatured) setWelcomeAltar(memorials);
     slots.forEach((s, i) => (here.has(i) ? fillSlot(s, here.get(i)) : clearSlot(s)));
+    // Poblar las vitrinas de obituarios de las paredes del salón, cuadros de entrada y los atriles de pie.
+    if (memorials.length) {
+      const COMPANIONS = [
+        { name: 'Micky', species: 'perro', hue: 38 },
+        { name: 'Luna', species: 'gato', hue: 280 },
+        { name: 'Toto', species: 'perro', hue: 22 },
+        { name: 'Nina', species: 'gato', hue: 340 },
+        { name: 'Coco', species: 'perro', hue: 145 },
+        { name: 'Mora', species: 'perro', hue: 205 },
+        { name: 'Simón', species: 'gato', hue: 50 },
+        { name: 'Lola', species: 'perro', hue: 315 },
+        { name: 'Rocco', species: 'perro', hue: 18 },
+        { name: 'Mia', species: 'gato', hue: 170 },
+        { name: 'Bobi', species: 'perro', hue: 95 },
+        { name: 'Kira', species: 'perro', hue: 255 },
+      ];
+      wallCells.forEach((cell, idx) => {
+        const real = idx < memorials.length ? memorials[idx] : memorials[idx % memorials.length];
+        const useReal = idx < memorials.length;
+        const item = useReal ? real : COMPANIONS[idx % COMPANIONS.length];
+        const key = useReal ? `${real.id}:${real.photo || ''}:${real.name}` : `comp:${item.name}:${idx}`;
+        if (cell.key === key) return;
+        cell.key = key;
+        cell.tex?.dispose();
+        cell.lt?.dispose();
+        cell.tex = (useReal && real.photo) ? photoTexture(real.photo) : portraitTexture(item);
+        cell.lt = labelTexture(item.name, {
+          w: 360, h: 72,
+          font: '400 42px "Young Serif", Georgia, serif',
+          bg: cell.lightPlaque ? 'rgba(250,244,234,0.98)' : 'rgba(201,151,63,0.98)',
+          fg: '#3a2410',
+        });
+        cell.photo.material.map = cell.tex;
+        cell.photo.material.needsUpdate = true;
+        cell.photo.userData = real ? { kind: 'spot', id: real.id } : { kind: 'featured' };
+        cell.plaque.material.map = cell.lt;
+        cell.plaque.material.needsUpdate = true;
+      });
+      standingEasels.forEach((ea, idx) => {
+        const m = memorials[idx % memorials.length];
+        if (!m) return;
+        const key = `${m.id}:${m.photo || ''}:${m.name}`;
+        if (ea.key === key) return;
+        ea.key = key;
+        ea.tex?.dispose();
+        ea.lt?.dispose();
+        ea.tex = m.photo ? photoTexture(m.photo) : portraitTexture(m);
+        ea.lt = labelTexture(`🐾 ${m.name}`, {
+          w: 480, h: 96, font: '700 54px "Young Serif", Georgia, serif', bg: 'rgba(250,245,236,0.98)', fg: '#2b1b10',
+        });
+        ea.photo.material.map = ea.tex;
+        ea.photo.material.needsUpdate = true;
+        ea.photo.userData = { kind: 'spot', id: m.id };
+        ea.name.material.map = ea.lt;
+        ea.name.material.needsUpdate = true;
+      });
+    }
     // Cada pasillo con su nombre y cuántas huellitas tiene en este piso.
     const per = new Array(CORRIDORS).fill(0);
     const corridorOfSlot = (i) => Math.floor((i % 90) / 18);
