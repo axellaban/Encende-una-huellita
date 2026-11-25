@@ -714,6 +714,49 @@ export function buildHall(scene, colliders, tier) {
   const clothMat = new THREE.MeshLambertMaterial({ color: '#fbf3e6', emissive: '#4a3626', emissiveIntensity: 0.5 });
   const glassMat = new THREE.MeshBasicMaterial({ map: glassTexture(), transparent: true, depthWrite: false });
   const pickMat = new THREE.MeshBasicMaterial({ visible: false });
+  // Geometrías compartidas para las dos ventanitas batientes de vidrio de cada nicho y las 4 repisitas de madera.
+  const casementFrameMat = new THREE.MeshLambertMaterial({ color: '#d8d4ce', emissive: '#4a453e', emissiveIntensity: 0.45 });
+  const casementGlassTex = canvasTex(128, 256, (g) => {
+    g.fillStyle = 'rgba(235, 242, 250, 0.14)';
+    g.fillRect(0, 0, 128, 256);
+    g.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+    g.lineWidth = 3;
+    g.strokeRect(2, 2, 124, 252);
+    // Puntitos sutiles del vidrio esmerilado y reflejo diagonal.
+    g.fillStyle = 'rgba(255, 255, 255, 0.18)';
+    for (let y = 16; y < 256; y += 24) {
+      for (let x = 16; x < 128; x += 24) {
+        g.beginPath(); g.arc(x, y, 1.6, 0, Math.PI * 2); g.fill();
+      }
+    }
+    g.fillStyle = 'rgba(255, 255, 255, 0.06)';
+    g.beginPath(); g.moveTo(12, 256); g.lineTo(38, 256); g.lineTo(96, 0); g.lineTo(70, 0); g.closePath(); g.fill();
+  });
+  const casementGlassMat = new THREE.MeshBasicMaterial({ map: casementGlassTex, transparent: true, opacity: 0.65, side: THREE.DoubleSide, depthWrite: false });
+  const winW = OW / 2 - 0.008;
+  const winH = OH - 0.016;
+  const winBar = 0.026;
+  const makeCasementLeafGeo = (dir) => {
+    // dir = +1 para hoja izquierda (se extiende de 0 a +winW desde la bisagra), -1 para hoja derecha (0 a -winW).
+    const cx = dir * (winW / 2);
+    return mergeGeometries([
+      new THREE.BoxGeometry(winW, winBar, 0.022).translate(cx, winH / 2 - winBar / 2, 0),
+      new THREE.BoxGeometry(winW, winBar, 0.022).translate(cx, -winH / 2 + winBar / 2, 0),
+      new THREE.BoxGeometry(winBar, winH - 2 * winBar, 0.022).translate(dir * (winBar / 2), 0, 0),
+      new THREE.BoxGeometry(winBar, winH - 2 * winBar, 0.022).translate(dir * (winW - winBar / 2), 0, 0),
+      // Bisagras metálicas en el borde exterior.
+      new THREE.CylinderGeometry(0.01, 0.01, 0.07, 6).translate(dir * 0.008, winH * 0.28, 0.008),
+      new THREE.CylinderGeometry(0.01, 0.01, 0.07, 6).translate(dir * 0.008, -winH * 0.28, 0.008),
+    ].map((x) => x.toNonIndexed()));
+  };
+  const winLeafGeoL = makeCasementLeafGeo(1);
+  const winLeafGeoR = makeCasementLeafGeo(-1);
+  const winGlassGeoL = new THREE.PlaneGeometry(winW - winBar * 2, winH - winBar * 2).translate(winW / 2, 0, 0);
+  const winGlassGeoR = new THREE.PlaneGeometry(winW - winBar * 2, winH - winBar * 2).translate(-winW / 2, 0, 0);
+  const darkPictureFrameMat = new THREE.MeshLambertMaterial({ color: '#1e1612', emissive: '#0c0806' });
+  const shelfWoodMat = new THREE.MeshLambertMaterial({ map: trimWood, color: '#c48d56', emissive: '#3d2410', emissiveIntensity: 0.45 });
+  const pillBadgeMat = new THREE.MeshBasicMaterial({ color: '#faf3e6' });
+  const DEFAULT_SHELF_GIFTS = ['🧸', '🎾', '🦴', '🧁', '🧶', '🦆'];
 
   // ---------- los pasillos ----------
   {
@@ -973,49 +1016,6 @@ export function buildHall(scene, colliders, tier) {
     scene.add(new THREE.Mesh(mergeGeometries(leafParts), leafMat2));
     scene.add(marigoldCluster(flowerPts, { r: 0.07, rnd: r }));
   }
-  // Geometrías compartidas para las dos ventanitas batientes de vidrio de cada nicho y las 4 repisitas de madera.
-  const casementFrameMat = new THREE.MeshLambertMaterial({ color: '#d8d4ce', emissive: '#4a453e', emissiveIntensity: 0.45 });
-  const casementGlassTex = canvasTex(128, 256, (g) => {
-    g.fillStyle = 'rgba(235, 242, 250, 0.14)';
-    g.fillRect(0, 0, 128, 256);
-    g.strokeStyle = 'rgba(255, 255, 255, 0.32)';
-    g.lineWidth = 3;
-    g.strokeRect(2, 2, 124, 252);
-    // Puntitos sutiles del vidrio esmerilado y reflejo diagonal.
-    g.fillStyle = 'rgba(255, 255, 255, 0.18)';
-    for (let y = 16; y < 256; y += 24) {
-      for (let x = 16; x < 128; x += 24) {
-        g.beginPath(); g.arc(x, y, 1.6, 0, Math.PI * 2); g.fill();
-      }
-    }
-    g.fillStyle = 'rgba(255, 255, 255, 0.06)';
-    g.beginPath(); g.moveTo(12, 256); g.lineTo(38, 256); g.lineTo(96, 0); g.lineTo(70, 0); g.closePath(); g.fill();
-  });
-  const casementGlassMat = new THREE.MeshBasicMaterial({ map: casementGlassTex, transparent: true, opacity: 0.65, side: THREE.DoubleSide, depthWrite: false });
-  const winW = OW / 2 - 0.008;
-  const winH = OH - 0.016;
-  const winBar = 0.026;
-  const makeCasementLeafGeo = (dir) => {
-    // dir = +1 para hoja izquierda (se extiende de 0 a +winW desde la bisagra), -1 para hoja derecha (0 a -winW).
-    const cx = dir * (winW / 2);
-    return mergeGeometries([
-      new THREE.BoxGeometry(winW, winBar, 0.022).translate(cx, winH / 2 - winBar / 2, 0),
-      new THREE.BoxGeometry(winW, winBar, 0.022).translate(cx, -winH / 2 + winBar / 2, 0),
-      new THREE.BoxGeometry(winBar, winH - 2 * winBar, 0.022).translate(dir * (winBar / 2), 0, 0),
-      new THREE.BoxGeometry(winBar, winH - 2 * winBar, 0.022).translate(dir * (winW - winBar / 2), 0, 0),
-      // Bisagras metálicas en el borde exterior.
-      new THREE.CylinderGeometry(0.01, 0.01, 0.07, 6).translate(dir * 0.008, winH * 0.28, 0.008),
-      new THREE.CylinderGeometry(0.01, 0.01, 0.07, 6).translate(dir * 0.008, -winH * 0.28, 0.008),
-    ].map((x) => x.toNonIndexed()));
-  };
-  const winLeafGeoL = makeCasementLeafGeo(1);
-  const winLeafGeoR = makeCasementLeafGeo(-1);
-  const winGlassGeoL = new THREE.PlaneGeometry(winW - winBar * 2, winH - winBar * 2).translate(winW / 2, 0, 0);
-  const winGlassGeoR = new THREE.PlaneGeometry(winW - winBar * 2, winH - winBar * 2).translate(-winW / 2, 0, 0);
-  const darkPictureFrameMat = new THREE.MeshLambertMaterial({ color: '#1e1612', emissive: '#0c0806' });
-  const shelfWoodMat = new THREE.MeshLambertMaterial({ map: trimWood, color: '#c48d56', emissive: '#3d2410', emissiveIntensity: 0.45 });
-  const pillBadgeMat = new THREE.MeshBasicMaterial({ color: '#faf3e6' });
-  const DEFAULT_SHELF_GIFTS = ['🧸', '🎾', '🦴', '🧁', '🧶', '🦆'];
 
   // Arma un nicho: la caja de adentro (fondo ilustrado, marco central, 4 repisitas de madera a los costados
   // para apoyar regalitos, repisa inferior blanca con florero, plaquita inclinada y velas) y las dos
