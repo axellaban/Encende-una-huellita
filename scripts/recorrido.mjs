@@ -242,19 +242,21 @@ async function full(b, tag, dev) {
   check(tag, 'menú → Prado', await p.evaluate(() => { const P = window.__huellita.controls.player.pos; return Math.hypot(P.x - 24, P.z - 20) < 14; }));
   // Vitrinas del salón: frente a un cuadrito con foto, el botón de acción ofrece su nombre y abre su
   // obituario ahí mismo (sin llevarte a su nicho).
-  const cellName = await p.evaluate(() => {
+  const cell = await p.evaluate(() => {
     const H = window.__huellita;
     const c = H.hall.debugCells().find((k) => k.kind === 'spot' && k.y < 2.4 && Math.hypot(k.nx, k.nz) > 0.5);
     if (!c) return null;
     const n = Math.hypot(c.nx, c.nz);
     H.controls.placePlayer(new H.THREE.Vector3(c.x + (c.nx / n) * 1.6, 0, c.z + (c.nz / n) * 1.6), new H.THREE.Vector3(c.x, 0, c.z));
     H.controls.snapFollow();
-    return c.id;
+    return c;
   });
+  const cellName = cell?.id;
   const actOk = cellName && await p.waitForFunction(() => document.querySelector('#act-btn')?.dataset.kind === 'visit', null, { timeout: 15000 }).then(() => true, () => false);
   if (actOk) await p.evaluate(() => document.querySelector('#act-btn').click());
   const cellSheet = actOk && await p.waitForFunction(() => !document.querySelector('#sheet').hidden && document.querySelector('#s-name').textContent.length > 0, null, { timeout: 15000 }).then(() => true, () => false);
-  const near = await p.evaluate(() => { const P = window.__huellita.controls.player.pos; const d = Math.hypot(P.x, P.z + 16); return d > 9 && d < 14.6; }); // sigue en el salón (no se fue a un pasillo)
+  // Sigue al lado del cuadrito (no lo mandó a su nicho).
+  const near = cell && await p.evaluate((c) => { const P = window.__huellita.controls.player.pos; return Math.hypot(P.x - c.x, P.z - c.z) < 3; }, cell);
   check(tag, 'vitrina: cuadrito → obituario ahí mismo', !!(cellSheet && near), `${cellName} → ${await text(p, '#s-name')}`);
   await p.evaluate(() => document.querySelector('#sheet-x').click());
   await wait(p, 1500);
