@@ -4,6 +4,34 @@ Lista para quien siga el proyecto (persona o IA). Leé primero [`AGENTS.md`](AGE
 Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** = lo que más suma,
 **P2** = completa el relevamiento del sitio de referencia, **P3** = deuda técnica y mejoras.
 
+## 🆕 Tanda del 26/11/2026: listo para compartir (cuadritos, espíritus, compartir y WhatsApp)
+
+Pedido del dueño: que todos los cuadritos con fotos abran su obituario, más espíritus en la plazoleta y
+el campo, que las imágenes se bajen bien y que la vista previa de WhatsApp sea lo mejor posible.
+- [x] **Cuadritos del salón → obituario ahí mismo** (`visitHere` en `main.js`, `nearestCell` en `hall.js`).
+      Antes las vitrinas mostraban mascotas inventadas (Micky, Luna, Toto…) que al tocarlas abrían la
+      ficha de *otra* mascota. Ahora sólo hay huellitas reales, cada vitrina con su tema y "lugar libre"
+      (velita + ＋) donde no hay nadie: tocarlo suma a tu mascota (en ese pasillo si es el cuadro de la boca).
+- [x] **Más espíritus**: 8 / 12 / 16 según la calidad (antes 6 / 8 / 10), repartidos entre el Prado, la
+      plazoleta de después del arcoíris, claros del campo (adelante del jardín primero) y el césped; los
+      lejanos se animan menos seguido. Ver AGENTS → Espíritus.
+- [x] **Fotos con franjas negras** (capturas de pantalla, p. ej. Monarkito en producción): se recortan solas
+      al subir, en el 3D, en la ficha y en las tarjetas (`src/photoTrim.js`). Las tarjetas ya subidas con
+      franjas se rehacen cuando quien cuida la huellita la vuelve a abrir (`OG_VERSION = 2`).
+- [x] **Guardar/compartir imágenes** (`src/saveimg.js`): estampita, tarjeta para historias y foto del paseo
+      en JPEG, preparadas antes del toque; en iPhone "Guardar" va a Fotos; en la compu se descargan (antes
+      el `<a download>` quedaba afuera del diálogo y en iPhone iba a Archivos). Botón "Enviar por WhatsApp".
+- [x] **Vista previa de WhatsApp**: `og.jpg` nuevo (el puente con el arcoíris, título y botón), tarjeta de
+      cada huellita con las palabras de la familia, título "En memoria de X 🕯️", textos con llamada a la
+      acción, `og:site_name`/tipo/medidas, etiquetas al principio del `<head>` y `HEAD` respondido (antes 405).
+- [x] Otros arreglos: "1 velas" → "1 vela" en la ficha; el cartel "Bienvenidos al jardín" del arco tapaba
+      media pantalla al pasar la cámara por abajo (ahora se desvanece de cerca); "0 velas encendidas" en la
+      tarjeta para historias → "Encendé la primera vela"; el dominio ya no se aplasta en esa tarjeta.
+- [ ] **Probar en teléfonos reales**: "Guardar" en iPhone (Safari y app de inicio) y Android; mandar un link
+      por WhatsApp y ver la vista previa (si WhatsApp muestra la vieja, es su caché: probar con otro `?de=`).
+- [ ] Que cada familia vuelva a abrir su huellita para que se rehaga su tarjeta (no hay forma de hacerlo
+      desde el servidor: la tarjeta se pinta en el navegador de quien la cuida).
+
 ## 🗺️ Plan Maestro en curso (24/11/2026) — Implementar por etapas y mergear a `main` en cada avance
 
 > **Instrucción para cualquier IA que continúe este plan**: cada etapa se implementa, se prueba con

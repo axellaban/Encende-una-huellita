@@ -641,6 +641,18 @@ export function buildRiver({ ground, animated, colliders, r, density = 1 }) {
     back.position.set(0, PH + 0.1, 0.08);
     back.rotation.y = Math.PI;
     gate.add(front, back);
+    // La cámara pasa por debajo del arco detrás de tu personaje: de cerca el cartel se desvanece (si
+    // no, tapaba media pantalla al entrar al jardín).
+    const signPos = new THREE.Vector3();
+    for (const sm of [front, back]) {
+      sm.material.transparent = true;
+      sm.onBeforeRender = (_r, _s, cam) => {
+        sm.getWorldPosition(signPos);
+        const d = cam.position.distanceTo(signPos);
+        sm.material.opacity = Math.min(1, Math.max(0, (d - 2.8) / 3));
+        sm.material.depthWrite = sm.material.opacity > 0.98;
+      };
+    }
     // Papel picado entre los pilares.
     const pp = picadoBanner(new THREE.Vector3(-PX, PH - 0.4, 0.2), new THREE.Vector3(PX, PH - 0.4, 0.2), { sag: 0.5, flags: 12, size: 0.36, seed: 31 });
     gate.add(pp);

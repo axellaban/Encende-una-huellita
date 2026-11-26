@@ -96,6 +96,14 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     cielo de `world.js`. `watercolor.js`: el pase final de acuarela (Opciones → Estilo acuarela).
   - `src/floors.js`: nombres propios de los 99 pisos y de los 10 pasillos (no usar los del original).
   - Muro: cada lugar ocupado es una ventanita con postigos (un solo `InstancedMesh`, `updateShutters`).
+  - **Vitrinas del salón, cuadros de la boca de cada pasillo y atriles** (`hall.js`, `render()` →
+    `themedLists`/`paintCell`): **sólo huellitas de verdad**, nunca mascotas inventadas. Cada vitrina tiene
+    un tema con su cartel (Siempre en nuestro corazón = más velas, Recién llegadas, Esperando una vela,
+    Las recordamos este mes, Perritos, Gatitos); los cuadros de las bocas muestran a quienes están en ese
+    pasillo. Lo que sobra es "lugar libre" (`vacantCellTexture`, `userData.kind = 'add'` → `addFromCell`).
+    **Tocar cualquier cuadrito con foto abre su obituario ahí mismo** (`visitHere(m, mesh)` en `main.js`:
+    la cámara encuadra ese cuadrito, no te lleva al nicho) y el botón de acción lo ofrece si lo tenés
+    adelante (`hall.nearestCell`).
   - `heaven.js`: los pisos hacia el cielo (mar de nubes, nubes de algodón, sol, rayos). `elevator.js`:
     la torre: planta baja con el hueco de la puerta y la cabina con interior (descansa en la planta baja
     de cada piso; `setFloor(n)` sólo cambia el indicador). La escena del viaje está en `main.js`
@@ -109,7 +117,11 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     (`want.sit/lie/bow/rear/sniff/carry/tilt` y `trigger('jump'|'roll'|'shake')`). `spirits.js` es el
     cerebro: estados por espíritu (`idle`, `wander`, `zoomies`, `chase`, `bow`, `wrestle`, `ball`,
     `carry`, `rest`, `roll`, `greet`, `follow`, `explore`…), la pelota con física, huellitas de luz y
-    chispitas. `setPack(memorials)` elige quiénes juegan en el Prado; `walk(m, from)` saca a pasear.
+    chispitas. `setPack(memorials)` elige quiénes juegan; `walk(m, from)` saca a pasear.
+    En el jardín se reparten por zonas (`zoneForIndex`): el Prado (`meadow`), la plazoleta de después del
+    Puente del Arcoíris (`plaza`), claros del campo (`field`, cada uno con su `d.home` en `fieldHomes`) y
+    el césped (`lawn`); `field` y `lawn` te acompañan al mundo abierto. Cuántos: 8 / 12 / 16 según la
+    calidad (`maxPack`). Los que están a más de 38 m de la cámara se animan ~8 veces por segundo (LOD).
     Cómo se ve cada uno sale de `m.look` (`server/looks.js`) o, si no hay, de un hash de su id.
   - `src/api.js`: cliente HTTP + **modo demo** (localStorage) si no hay base de datos.
     Una vez usado el jardín compartido, un corte de internet ofrece reintentar y no abre otro jardín
@@ -121,9 +133,23 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     (Vercel: rewrite `/h/:id` → `api/handler.js?page=:id`, que lee `dist/index.html` incluido con
     `functions.includeFiles`, o lo pide a sí mismo, o devuelve una página mínima que redirige).
     La imagen: `og` de las destacadas (`public/huellitas/luca-og.jpg`), la tarjeta que sube la familia
-    (`drawOgCard`, 1200x630) o su foto. Invitar: `?de=<nombre>&l=<código>`; la primera vela de quien
-    llega suma al código (`hu:ref:<código>`). `src/photo.js`: polaroid del modo foto (captura del
-    canvas en el mismo cuadro en que se dibuja, `captureNext` en el ciclo).
+    (`drawOgCard`, 1200x630, liviana: < 280 KB) o su foto. **`OG_VERSION`** (`share.js`): al cambiar el
+    diseño de la tarjeta, subila en uno y quien cuida cada huellita la vuelve a subir sola al abrirla
+    (cambia el `?v=` y WhatsApp toma la nueva). Las etiquetas van al principio del `<head>`
+    (`injectMeta` saca las viejas y pone las nuevas, con `og:site_name`, tipo y medidas si se saben).
+    La función de Vercel responde `HEAD` (antes 405: algunos robots de vista previa preguntan así).
+    Si cambiás `public/og.jpg` o `luca-og.jpg`, subí el `?v=` en `index.html`, `page.js` y `seed.js`.
+    Invitar: `?de=<nombre>&l=<código>`; la primera vela de quien llega suma al código (`hu:ref:<código>`).
+    El texto que acompaña cada link sale de `inviteText()` en `main.js`; "Enviar por WhatsApp" usa `wa.me`.
+    **Guardar y compartir imágenes** (`src/saveimg.js`): en iPhone "Guardar" abre la hoja de compartir
+    *sin texto* (si no, iOS esconde "Guardar imagen") y si no se puede, se pide mantener apretada la
+    imagen; en la compu y Android es una descarga de verdad (el `<a>` va adentro del `<dialog>` abierto,
+    afuera queda inerte). Las imágenes se pintan y comprimen **antes** del toque (`keepBlob`,
+    `shareBlob`, `lastPhoto.blob`): `navigator.share` falla si pasa mucho entre el toque y la llamada.
+    Todo en JPEG. **Fotos con franjas** (`src/photoTrim.js`): `contentRect`/`drawCover` recortan las
+    bandas negras o blancas de las capturas de pantalla al subir, en el 3D, en la ficha y en las tarjetas.
+    `src/photo.js`: polaroid del modo foto (captura del canvas en el mismo cuadro en que se dibuja,
+    `captureNext` en el ciclo).
   - `src/game.js` (gestos del día, racha, Glow guardado), `src/guide.js` (la sexta etapa),
     `src/quality.js` (calidad por dispositivo + resolución adaptativa), `src/audio.js` (todo sintetizado).
 - **Backend**: `server/core.js` (rutas, independiente del runtime) + `server/store.js` (lógica sobre

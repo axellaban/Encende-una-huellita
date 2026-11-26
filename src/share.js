@@ -2,6 +2,7 @@
 // "Pasá la luz" (cuántas velas se encendieron gracias a tus links) y la tarjeta 1200x630 que se ve
 // como vista previa en WhatsApp, Instagram, Facebook y X.
 import { papelPicadoTexture, PICADO_COLORS } from './scene/muertos.js';
+import { drawCover } from './photoTrim.js';
 
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -103,15 +104,7 @@ export async function drawOgCard(m, photoSrc) {
   g.shadowColor = 'transparent';
   g.fillStyle = '#fbefd9';
   g.fillRect(-fw / 2 - 9, -fh / 2 - 9, fw + 18, fh + 18);
-  if (img) {
-    const r = Math.max(fw / img.naturalWidth, fh / img.naturalHeight);
-    const w = img.naturalWidth * r;
-    const h = img.naturalHeight * r;
-    g.beginPath();
-    g.rect(-fw / 2, -fh / 2, fw, fh);
-    g.clip();
-    g.drawImage(img, -w / 2, -fh / 2 - (h - fh) * 0.35, w, h);
-  }
+  if (img) drawCover(g, img, -fw / 2, -fh / 2, fw, fh, 0.35);
   g.restore();
   // Velita.
   const vx = 560;
@@ -126,26 +119,51 @@ export async function drawOgCard(m, photoSrc) {
   g.beginPath();
   g.ellipse(vx, vy - 62, 18, 30, 0, 0, Math.PI * 2);
   g.fill();
-  // Textos.
+  // Textos: "En memoria de", el nombre, las fechas, las palabras de la familia y la invitación.
   const x = 640;
+  const maxW = W - x - 48;
   g.textAlign = 'left';
   g.fillStyle = '#ffd9a8';
   g.font = '700 46px Caveat, cursive';
-  g.fillText('En memoria de', x, 228);
+  g.fillText('En memoria de', x, 196);
   g.fillStyle = '#ffffff';
   let size = 128;
-  g.font = `italic 600 ${size}px "Cormorant Garamond", Georgia, serif`;
-  while (g.measureText(m.name).width > W - x - 50 && size > 60) { size -= 6; g.font = `italic 600 ${size}px "Cormorant Garamond", Georgia, serif`; }
+  const nameFont = () => `italic 600 ${size}px "Cormorant Garamond", Georgia, serif`;
+  g.font = nameFont();
+  while (g.measureText(m.name).width > maxW && size > 60) { size -= 6; g.font = nameFont(); }
   g.shadowColor = 'rgba(255,170,90,.55)';
   g.shadowBlur = 30;
-  g.fillText(m.name, x, 228 + size * 0.95);
+  let y = 196 + size * 0.95;
+  g.fillText(m.name, x, y, maxW);
   g.shadowBlur = 0;
   const dates = [m.birthYear, m.passedYear].filter(Boolean).join(' – ');
-  g.font = '700 30px "DM Sans", sans-serif';
-  g.fillStyle = 'rgba(255,240,224,.85)';
-  if (dates) g.fillText(dates, x + 4, 228 + size * 0.95 + 52);
+  if (dates) {
+    y += 50;
+    g.font = '700 30px "DM Sans", sans-serif';
+    g.fillStyle = 'rgba(255,240,224,.85)';
+    g.fillText(dates, x + 4, y);
+  }
+  // Las palabras de la familia (hasta dos renglones): es lo que más ganas da de tocar.
+  if (m.message) {
+    g.font = 'italic 500 34px "Cormorant Garamond", Georgia, serif';
+    g.fillStyle = '#ffe9cf';
+    const words = `“${m.message}”`.split(/\s+/);
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+      const test = line ? `${line} ${w}` : w;
+      if (g.measureText(test).width > maxW && line) {
+        lines.push(line);
+        line = w;
+        if (lines.length === 2) break;
+      } else line = test;
+    }
+    if (lines.length < 2 && line) lines.push(line);
+    else if (lines.length === 2 && line && !lines.includes(line)) lines[1] = `${lines[1].replace(/[”"]$/, '')}…”`;
+    for (const l of lines.slice(0, 2)) { y += 40; g.fillText(l, x + 2, y, maxW); }
+  }
   // Botón.
-  const by = 470;
+  const by = Math.min(486, Math.max(430, y + 34));
   const label = '🕯️  Encendé una vela';
   g.font = '800 34px "DM Sans", sans-serif';
   const bw = g.measureText(label).width + 64;
@@ -153,13 +171,16 @@ export async function drawOgCard(m, photoSrc) {
   grd.addColorStop(0, '#f7951f');
   grd.addColorStop(1, '#e4167c');
   g.fillStyle = grd;
+  g.shadowColor = 'rgba(228,22,124,.45)';
+  g.shadowBlur = 24;
   roundRect(g, x, by, bw, 74, 37);
   g.fill();
+  g.shadowBlur = 0;
   g.fillStyle = '#fff';
   g.fillText(label, x + 32, by + 49);
   g.font = '700 24px "DM Sans", sans-serif';
-  g.fillStyle = 'rgba(255,240,224,.75)';
-  g.fillText('Un jardín para recordar a quienes amamos 🐾', x + 4, by + 118, W - x - 40);
+  g.fillStyle = 'rgba(255,240,224,.78)';
+  g.fillText('Gratis · Un jardín de luz para recordar a quienes amamos 🐾', x + 4, by + 116, maxW);
   return c;
 }
 
@@ -173,11 +194,20 @@ function roundRect(g, x, y, w, h, r) {
   g.closePath();
 }
 
+// La versión del diseño de la tarjeta: al cambiarla, quien cuida cada huellita la vuelve a subir
+// sola la próxima vez que la abre (y WhatsApp toma la nueva porque cambia el link de la imagen).
+export const OG_VERSION = 2;
+
 // Arma la tarjeta y la sube (sólo quien cuida la huellita). Silencioso: si falla, se usa la foto.
+// Liviana (menos de ~280 KB): WhatsApp a veces no muestra imágenes de vista previa pesadas.
 export async function uploadOgCard(api, m, photoSrc) {
   try {
     const c = await drawOgCard(m, photoSrc);
-    const image = c.toDataURL('image/jpeg', 0.86);
+    let image = '';
+    for (const q of [0.86, 0.78, 0.68]) {
+      image = c.toDataURL('image/jpeg', q);
+      if (image.length * 0.75 < 280 * 1024) break;
+    }
     return await api.own(m.id, 'og', { image });
   } catch {
     return null;
@@ -361,10 +391,7 @@ export async function drawKeepsake(m, photoSrc, { dates = '', years = '', link =
     g.save();
     arch(0);
     g.clip();
-    const r = Math.max(aw / img.naturalWidth, ah / img.naturalHeight);
-    const w = img.naturalWidth * r;
-    const h = img.naturalHeight * r;
-    g.drawImage(img, ax - w / 2, top - (h - ah) * 0.35, w, h);
+    drawCover(g, img, ax - aw / 2, top, aw, ah, 0.35);
     g.restore();
   }
   // Flores de cempasúchil en las esquinas del arco.

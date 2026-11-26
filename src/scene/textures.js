@@ -1,5 +1,6 @@
 // Texturas dibujadas en canvas: no hace falta descargar imágenes.
 import * as THREE from 'three';
+import { drawCover } from '../photoTrim.js';
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -361,16 +362,64 @@ export function photoTexture(url, onReady) {
     const [c, g] = canvas(768, 960);
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
-    const r = Math.max(c.width / img.width, c.height / img.height);
-    const w = img.width * r;
-    const h = img.height * r;
-    g.drawImage(img, (c.width - w) / 2, (c.height - h) / 2, w, h);
+    // Sin las franjas negras o blancas de las capturas de pantalla.
+    drawCover(g, img, 0, 0, c.width, c.height, 0.4);
     tex.image = c;
     tex.needsUpdate = true;
     onReady?.();
   };
   img.src = url;
   return tex;
+}
+
+// Un lugar libre de las vitrinas del salón: nicho crema con una velita encendida y una huellita
+// dibujada (sin mascota inventada). Tocándolo se suma a una mascota.
+let vacantTex;
+export function vacantCellTexture() {
+  if (vacantTex) return vacantTex;
+  const [c, g] = canvas(384, 480);
+  const bg = g.createLinearGradient(0, 0, 0, c.height);
+  bg.addColorStop(0, '#5a3a5e');
+  bg.addColorStop(1, '#2c1a30');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, c.width, c.height);
+  const glow = g.createRadialGradient(192, 250, 10, 192, 250, 210);
+  glow.addColorStop(0, 'rgba(255,186,96,0.55)');
+  glow.addColorStop(1, 'rgba(255,186,96,0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, c.width, c.height);
+  // Huellita de luz detrás de la vela.
+  g.fillStyle = 'rgba(255,226,180,0.22)';
+  g.beginPath();
+  g.ellipse(192, 176, 66, 54, 0, 0, Math.PI * 2);
+  for (const [x, y, r] of [[114, 96, 25], [158, 64, 26], [226, 64, 26], [270, 96, 25]]) {
+    g.moveTo(x + r, y);
+    g.ellipse(x, y, r, r * 1.2, 0, 0, Math.PI * 2);
+  }
+  g.fill();
+  // Velita encendida.
+  g.fillStyle = '#fff3e2';
+  g.fillRect(170, 268, 44, 110);
+  g.fillStyle = 'rgba(120,70,30,0.22)';
+  g.fillRect(201, 268, 13, 110);
+  const fl = g.createRadialGradient(192, 236, 2, 192, 236, 52);
+  fl.addColorStop(0, 'rgba(255,250,220,1)');
+  fl.addColorStop(0.35, 'rgba(255,176,64,0.95)');
+  fl.addColorStop(1, 'rgba(255,140,40,0)');
+  g.fillStyle = fl;
+  g.beginPath();
+  g.ellipse(192, 230, 24, 44, 0, 0, Math.PI * 2);
+  g.fill();
+  // "＋" en un círculo: acá puede ir tu mascota.
+  g.fillStyle = 'rgba(255,214,150,0.92)';
+  g.beginPath();
+  g.arc(192, 428, 30, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#4a2a4c';
+  g.fillRect(176, 424, 32, 8);
+  g.fillRect(188, 412, 8, 32);
+  vacantTex = toTexture(c, { crisp: true });
+  return vacantTex;
 }
 
 let emptyTex;

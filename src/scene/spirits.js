@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { createPet, lookFor } from './petRig.js';
 import { glowTexture, bubbleTexture } from './textures.js';
-import { HALL_CENTER, HALL_RADIUS, ROOM_R, GARDEN_RADIUS, MEADOW, MEADOW_R, BRIDGE, onBridge, inWater, groundY } from './world.js';
+import { HALL_CENTER, HALL_RADIUS, ROOM_R, GARDEN_RADIUS, MEADOW, MEADOW_R, BRIDGE, PLAZA, PATH_HALF, creekZ, onBridge, inWater, groundY } from './world.js';
 import { SLOTS_PER_FLOOR } from './hall.js';
 
 export { MEADOW, MEADOW_R };
@@ -318,8 +318,38 @@ export function createSpirits(scene, { blocked, tier }) {
   const player = { pos: new THREE.Vector3(0, 0, 24), heading: Math.PI, moving: false, still: 0, vel: new THREE.Vector3() };
   const listeners = { fetch: [], event: [] };
   let camPos = new THREE.Vector3();
-  const maxPack = tier?.grass >= 20000 ? 10 : tier?.grass >= 10000 ? 8 : 6;
+  // Cuántos espíritus juegan en el piso: en el jardín se reparten entre el Prado, la plazoleta de
+  // después del Puente del Arcoíris, el césped y el campo (ver zoneForIndex en setPack).
+  const maxPack = tier?.grass >= 20000 ? 16 : tier?.grass >= 10000 ? 12 : 8;
   let currentFl = 0;
+  // Claros del campo donde vive cada espíritu "de campo": lejos del salón, del camino, del río y de
+  // los otros lugares de juego (para que se vean perritos por todo el jardín y no sólo en el Prado).
+  const fieldHomes = (() => {
+    const out = [];
+    const avoid = [MEADOW, new THREE.Vector3(-11, 0, 15), new THREE.Vector3(PLAZA.x, 0, PLAZA.z)];
+    const cands = [];
+    for (const r of [44, 38, 50, 32, 26]) {
+      for (let k = 0; k < 20; k++) {
+        const ang = (k / 20) * TAU + r * 0.07;
+        const x = Math.sin(ang) * r;
+        const z = Math.cos(ang) * r;
+        if (Math.hypot(x - HALL_CENTER.x, z - HALL_CENTER.z) < HALL_RADIUS + 5) continue;
+        if (z > creekZ(x) - 6) continue;
+        if (Math.abs(x) < PATH_HALF + 4 && z > -4) continue;
+        if (blocked(x, z, 0.6)) continue;
+        cands.push(new THREE.Vector3(x, 0, z));
+      }
+    }
+    // Primero los claros que se ven desde el camino del puente al salón (los de adelante).
+    cands.sort((p, q) => q.z - p.z);
+    for (const c of cands) {
+      if ([...avoid, ...out].some((p) => Math.hypot(p.x - c.x, p.z - c.z) < 9.5)) continue;
+      out.push(c);
+    }
+    return out.length ? out : [MEADOW.clone()];
+  })();
+  // LOD: los que están lejos de la cámara se animan menos seguido (en el celular cada hueso cuenta).
+  const FAR2 = 38 * 38;
 
   const meadowPoint = (rad = MEADOW_R - 1) => {
     const a = R() * TAU;
@@ -327,12 +357,16 @@ export function createSpirits(scene, { blocked, tier }) {
     return new THREE.Vector3(MEADOW.x + Math.sin(a) * d, 0, MEADOW.z + Math.cos(a) * d);
   };
   const wildCenter = new THREE.Vector3(MEADOW.x, 0, MEADOW.z);
+  const exploringWild = () => !up && Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 6;
+  const plazaC = new THREE.Vector3(PLAZA.x, 0, PLAZA.z);
   const zoneCenter = (a) => {
     const z = a?.zone || (up ? 'sky' : 'meadow');
     if (z === 'hall') return new THREE.Vector3(HALL_CENTER.x, 0, HALL_CENTER.z - 3.6);
     if (z === 'sky') return SKY_TERRACE;
     if (z === 'wild') return wildCenter;
-    if (z === 'lawn') return Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 6 ? wildCenter : LAWN;
+    if (z === 'plaza') return plazaC;
+    if (z === 'field') return exploringWild() ? wildCenter : (a.d?.home || MEADOW);
+    if (z === 'lawn') return exploringWild() ? wildCenter : LAWN;
     return MEADOW;
   };
   const zonePoint = (a, radScale = 1) => {
@@ -350,7 +384,29 @@ export function createSpirits(scene, { blocked, tier }) {
       }
       return new THREE.Vector3(HALL_CENTER.x + (R() < 0.5 ? -5.6 : 5.6), 0, HALL_CENTER.z - 2.2);
     }
-    const useWild = z === 'wild' || (z === 'lawn' && !up && Math.hypot(player.pos.x, player.pos.z) > GARDEN_RADIUS - 6);
+    if (z === 'plaza') {
+      // Alrededor del cantero redondo de la plazoleta (sin pisar las flores ni los banquitos).
+      for (let k = 0; k < 12; k++) {
+        const ang = R() * TAU;
+        const d = PLAZA.bedR + 0.7 + R() * (PLAZA.r - PLAZA.bedR - 0.9) * radScale;
+        const px = PLAZA.x + Math.sin(ang) * d;
+        const pz = PLAZA.z + Math.cos(ang) * d;
+        if (!blocked(px, pz, 0.3)) return new THREE.Vector3(px, 0, pz);
+      }
+      return new THREE.Vector3(PLAZA.x + PLAZA.r - 0.8, 0, PLAZA.z);
+    }
+    if (z === 'field' && !exploringWild()) {
+      const h = a.d?.home || MEADOW;
+      for (let k = 0; k < 10; k++) {
+        const ang = R() * TAU;
+        const d = radial() * 6.5;
+        const px = h.x + Math.sin(ang) * d;
+        const pz = h.z + Math.cos(ang) * d;
+        if (!blocked(px, pz, 0.3) && !inWater(px, pz)) return new THREE.Vector3(px, 0, pz);
+      }
+      return h.clone();
+    }
+    const useWild = z === 'wild' || ((z === 'lawn' || z === 'field') && exploringWild());
     const c = z === 'sky' ? SKY_TERRACE : useWild ? wildCenter : z === 'lawn' ? LAWN : MEADOW;
     const maxR = z === 'sky' ? SKY_TERRACE_R : useWild ? 11 : z === 'lawn' ? LAWN_R : (MEADOW_R - 1);
     const ang = R() * TAU;
@@ -435,6 +491,19 @@ export function createSpirits(scene, { blocked, tier }) {
           if (fd < 2.95) { vx += (fx2 / fd) * 1.8; vz += (fz2 / fd) * 1.8; }
         } else if (a.zone === 'sky') {
           if (hd < ROOM_R + 2) { vx += (hx / hd) * 1.4; vz += (hz / hd) * 1.4; }
+        } else if (a.zone === 'plaza') {
+          // Que no se vayan de la plazoleta ni se metan en el cantero del medio.
+          const px = a.pos.x - PLAZA.x;
+          const pz = a.pos.z - PLAZA.z;
+          const pd = Math.hypot(px, pz) || 1;
+          if (pd > PLAZA.r + 1.2) { vx -= (px / pd) * 1.5; vz -= (pz / pd) * 1.5; }
+          if (pd < PLAZA.bedR + 0.35) { vx += (px / pd) * 1.8; vz += (pz / pd) * 1.8; }
+        } else if (a.zone === 'field' && a.d.home && !exploringWild()) {
+          const px = a.pos.x - a.d.home.x;
+          const pz = a.pos.z - a.d.home.z;
+          const pd = Math.hypot(px, pz) || 1;
+          if (pd > 9.5) { vx -= (px / pd) * 1.4; vz -= (pz / pd) * 1.4; }
+          if (hd < HALL_RADIUS + 3) { vx += (hx / hd) * 1.5; vz += (hz / hd) * 1.5; }
         } else if (hd < HALL_RADIUS + 3) {
           vx += (hx / hd) * 1.5;
           vz += (hz / hd) * 1.5;
@@ -1231,10 +1300,16 @@ export function createSpirits(scene, { blocked, tier }) {
       chosen.push({ id: `espiritu-p${floor}-${idx}`, species: isCat ? 'gato' : 'perro', name: '' });
       idx++;
     }
-    const meadowCount = Math.ceil(maxPack * 0.65);
+    // En el jardín: el Prado (más o menos 4 de cada 10), la plazoleta, el campo y el césped.
+    const meadowCount = Math.round(maxPack * 0.38);
+    const plazaCount = Math.max(2, Math.round(maxPack * 0.25));
+    const fieldCount = Math.max(2, Math.round(maxPack * 0.25));
     const zoneForIndex = (i) => {
-      if (!up) return i < meadowCount ? 'meadow' : 'lawn';
-      return i % 2 === 0 ? 'hall' : 'sky';
+      if (up) return i % 2 === 0 ? 'hall' : 'sky';
+      if (i < meadowCount) return 'meadow';
+      if (i < meadowCount + plazaCount) return 'plaza';
+      if (i < meadowCount + plazaCount + fieldCount) return 'field';
+      return 'lawn';
     };
     const key = `${floor}|` + chosen.map((m, i) => `${m.id}:${zoneForIndex(i)}:${m.look ? JSON.stringify(m.look) : ''}`).join('|');
     if (key === packKey) return;
@@ -1249,6 +1324,7 @@ export function createSpirits(scene, { blocked, tier }) {
       else {
         a = spawnAgent(lookFor(m), { name: m.name, memorialId: m.featured || m.candles !== undefined ? m.id : null, zone }, 'pack');
         a.d.key = k;
+        if (zone === 'field') a.d.home = fieldHomes[i % fieldHomes.length];
         a.pos.copy(zonePoint(a));
         a.pos.y = groundY(a.pos.x, a.pos.z, up);
         go(a, 'idle');
@@ -1449,7 +1525,7 @@ export function createSpirits(scene, { blocked, tier }) {
           wildCenter.set(aheadX, 0, aheadZ);
         }
         for (const a of pack) {
-          if (a.zone === 'lawn' && dist2(a.pos, player.pos) > 46) {
+          if ((a.zone === 'lawn' || a.zone === 'field') && dist2(a.pos, player.pos) > 46) {
             const p = zonePoint(a);
             if (!blocked(p.x, p.z, 0.3)) {
               a.pos.set(p.x, groundY(p.x, p.z, up), p.z);
@@ -1491,7 +1567,13 @@ export function createSpirits(scene, { blocked, tier }) {
         if (a.fade < 1) { a.fade = Math.min(1, a.fade + dt * 1.8); a.pet.setOpacity(a.fade); }
         think(a, dt);
         move(a, dt);
-        animate(a, dt);
+        // Lejos de la cámara (y sin ser tu mascota), la animación se calcula unas 8 veces por segundo.
+        a.d.animAcc = (a.d.animAcc || 0) + dt;
+        const far = a.role === 'pack' && a.pos.distanceToSquared(camPos) > FAR2;
+        if (!far || a.d.animAcc > 0.12) {
+          animate(a, Math.min(a.d.animAcc, 0.15));
+          a.d.animAcc = 0;
+        } else a.pet.group.rotation.y = a.heading;
       }
       updateBall(dt);
       updateLeash();

@@ -23,7 +23,9 @@ import { createOfferFx } from './scene/gifts3d.js';
 import { createSparkles } from './scene/sparkles.js';
 import { createMist } from './scene/mist.js';
 import { FURS, PATTERNS, COATS, EARS, TAILS, EYES, SIZES, SNOUTS, PERSONALITIES } from '../server/looks.js';
-import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard, drawKeepsake } from './share.js';
+import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard, drawKeepsake, OG_VERSION } from './share.js';
+import { contentRect, drawCover } from './photoTrim.js';
+import { canvasBlob, saveImage, shareImage, copyText, whatsappUrl, isIOS } from './saveimg.js';
 import { polaroid } from './photo.js';
 // Cómo llegó esta persona (link de una huellita, invitación de alguien). Se lee antes de tocar la URL.
 const ARRIVAL = arrival();
@@ -362,11 +364,16 @@ async function buildScene() {
       controls.walkTo(spirits.ball.pos.clone().setY(0));
       return;
     }
+    // Un lugar libre de una vitrina: sumar a tu mascota (en ese pasillo, si era el cuadro de su boca).
+    if (hit.object.userData.kind === 'add') return addFromCell(hit.object.userData.corridor);
+    // Un cuadrito de la decoración que todavía no tiene a nadie (mientras carga la lista).
+    if (hit.object.userData.kind === 'decor') { controls.walkTo(hit.point.clone().setY(0)); return; }
     const key = slotKeyFromHit(hit.object);
     if (key === 'featured') return hall.featured ? visit(hall.featured) : visitWelcome();
     if (typeof key === 'string' && key.startsWith('spot:')) {
+      // Vitrinas, cuadros de los pasillos y atriles: el obituario se abre ahí mismo, frente al cuadrito.
       const m = memorials.find((x) => x.id === key.slice(5));
-      return m && visit(m);
+      return m && visitHere(m, hit.object);
     }
     if (key !== null) {
       const m = hall.slots[key].memorial;
@@ -904,6 +911,45 @@ function visit(m) {
   openSheet(m);
 }
 
+// Abre el obituario de una huellita frente al cuadrito que se tocó (una vitrina, el cuadro de la boca
+// de un pasillo o un atril), sin llevarte hasta su nicho.
+function visitHere(m, obj) {
+  closeModals();
+  if (!hall || !controls || !obj) return visit(m);
+  obj.updateWorldMatrix(true, false);
+  const frame = obj.getWorldPosition(new THREE.Vector3());
+  const normal = new THREE.Vector3(0, 0, 1).transformDirection(obj.matrixWorld).setY(0);
+  const right = new THREE.Vector3(1, 0, 0).transformDirection(obj.matrixWorld).setY(0);
+  if (normal.lengthSq() < 1e-4 || right.lengthSq() < 1e-4) return visit(m);
+  normal.normalize();
+  right.normalize();
+  const sheet = bottomSheet();
+  const distMul = camera.aspect < 0.8 ? 1.55 : camera.aspect < 1.2 ? 1.25 : 1;
+  const dist = 1.2 * distMul;
+  const target = frame.clone().addScaledVector(right, sheet ? 0 : 0.42);
+  const stand = target.clone().addScaledVector(normal, dist);
+  stand.y = Math.max(1.1, frame.y + 0.05);
+  // La hoja tapa la mitad de abajo: el cuadrito tiene que quedar en el cuarto de arriba.
+  if (sheet) target.y -= 0.42 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  hideHint();
+  placeNear(stand, frame, 0.85, 1.3);
+  controls.flyTo(stand, target, () => spirits?.sparkle(frame.clone().addScaledVector(normal, 0.08), new THREE.Color(1.9, 1.45, 0.65), 10));
+  openSheet(m);
+}
+// Un lugar libre de una vitrina o de la boca de un pasillo: sumar a tu mascota (en ese pasillo si se puede).
+function addFromCell(corridor) {
+  if (corridor === undefined || corridor === null) return addHere();
+  const f = Math.max(0, currentFloor());
+  const used = new Set(memorials.filter((m) => floorOf(m) === f).map((m) => m.slot));
+  for (let block = 0; block < 3; block++) {
+    for (let k = 0; k < 18; k++) {
+      const slot = f * SLOTS_PER_FLOOR + block * 90 + corridor * 18 + k;
+      if (!used.has(slot)) return openAdd(slot);
+    }
+  }
+  return addHere();
+}
+
 // Pone a tu personaje parado frente a un marco (o al ascensor), a un costado para no taparlo.
 function placeNear(stand, frame, side = 0.85, dist = 1.45) {
   if (!controls) return;
@@ -927,6 +973,36 @@ function teleportPlayer(spot, facing) {
     spirits?.sparkle(new THREE.Vector3(spot.x, 0.8, spot.z));
   }
   controls.placePlayer(spot, facing);
+}
+
+// La foto de la ficha sin las franjas negras o blancas de las capturas de pantalla.
+const cleanPhotos = new Map();
+function cleanPhoto(url) {
+  if (!url || url.startsWith('data:image/png')) return Promise.resolve(url);
+  if (!cleanPhotos.has(url)) {
+    cleanPhotos.set(url, new Promise((res) => {
+      const i = new Image();
+      i.crossOrigin = 'anonymous';
+      i.onload = () => {
+        const r = contentRect(i);
+        if (r.sw >= i.naturalWidth - 1 && r.sh >= i.naturalHeight - 1) return res(url);
+        const c = document.createElement('canvas');
+        c.width = Math.round(r.sw);
+        c.height = Math.round(r.sh);
+        c.getContext('2d').drawImage(i, r.sx, r.sy, r.sw, r.sh, 0, 0, c.width, c.height);
+        c.toBlob((b) => res(b ? URL.createObjectURL(b) : url), 'image/jpeg', 0.9);
+      };
+      i.onerror = () => res(url);
+      i.src = url;
+    }));
+  }
+  return cleanPhotos.get(url);
+}
+function showPhoto(url) {
+  const el = $('#s-photo');
+  el.dataset.src = url || '';
+  el.src = url;
+  cleanPhoto(url).then((u) => { if (u !== url && el.dataset.src === url) el.src = u; });
 }
 
 const photoCache = new Map();
@@ -1062,7 +1138,7 @@ function inspectShelfGift(m, emo, single = null) {
 }
 
 function fillSheet(m) {
-  $('#s-photo').src = photoSrc(m);
+  showPhoto(photoSrc(m));
   $('#s-photo').alt = `Foto de ${m.name}`;
   $('.sheet-photo').classList.toggle('gold', !!m.featured || m.candles >= 20);
   const topGifts = (m.lastGifts && m.lastGifts.length ? m.lastGifts : Object.keys(m.giftCounts || {})).slice(0, 4);
@@ -1207,6 +1283,9 @@ function setCount(sel, n, animate) {
   const el = $(sel);
   const prev = Number(el.textContent);
   el.textContent = n;
+  // "1 vela", "2 velas": la palabra de al lado va en singular o plural.
+  const word = el.nextElementSibling;
+  if (word?.dataset.one) word.textContent = Number(n) === 1 ? word.dataset.one : word.dataset.many;
   if (animate && n > prev) {
     el.classList.remove('bump');
     void el.offsetWidth;
@@ -1339,13 +1418,18 @@ $('#s-share').onclick = () => openShare();
 
 // ---------- recuerdo: la estampita para guardar o compartir ----------
 let keepBlob = null;
+let keepUrl = null;
 let keepQr = false;
+let keepFor = null;
+const fileSafe = (t) => (t || 'huellita').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'huellita';
 async function openKeepsake() {
   if (!current) return;
   const m = current;
+  keepFor = m;
+  keepBlob = null;
   $('#keep-img').hidden = true;
   $('#keep-wait').hidden = false;
-  $('#keep-save').removeAttribute('href');
+  $('#keep-wait').textContent = 'Pintándola…';
   const qrBtn = $('#keep-qr');
   if (qrBtn) {
     qrBtn.setAttribute('aria-pressed', String(keepQr));
@@ -1359,13 +1443,16 @@ async function openKeepsake() {
   const years = m.birthYear && m.passedYear ? `${m.passedYear - m.birthYear} años de amor` : '';
   try {
     const c = await drawKeepsake(m, photoSrc(m), { dates, years, link: `${location.host}/h/${m.id}`, qrUrl: keepQr ? shareUrl(m.id) : '' });
-    keepBlob = await new Promise((res) => c.toBlob(res, 'image/png'));
-    const url = URL.createObjectURL(keepBlob);
-    $('#keep-img').src = url;
+    // JPEG: pesa poco, WhatsApp e Instagram lo aceptan sin convertir y se guarda bien en Fotos.
+    const blob = await canvasBlob(c, 'image/jpeg', 0.92);
+    if (!blob) throw new Error('sin imagen');
+    if (keepFor !== m) return;
+    keepBlob = blob;
+    if (keepUrl) URL.revokeObjectURL(keepUrl);
+    keepUrl = URL.createObjectURL(blob);
+    $('#keep-img').src = keepUrl;
     $('#keep-img').hidden = false;
     $('#keep-wait').hidden = true;
-    $('#keep-save').href = url;
-    $('#keep-save').download = `recuerdo-${(m.name || 'huellita').toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, '-')}.png`;
   } catch { $('#keep-wait').textContent = 'No se pudo pintar la estampita. Probá de nuevo.'; }
 }
 $('#s-keep').onclick = openKeepsake;
@@ -1373,29 +1460,41 @@ $('#keep-qr').onclick = () => {
   keepQr = !keepQr;
   openKeepsake();
 };
-$('#keep-share').onclick = async () => {
-  if (!keepBlob || !current) return;
-  const file = new File([keepBlob], 'recuerdo.png', { type: 'image/png' });
-  try {
-    if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: `En memoria de ${current.name}`, text: `Encendé una vela para ${current.name} 🕯️ ${shareUrl(current.id)}` });
-    else { $('#keep-save').click(); toast('🖼️ Guardamos la estampita en tu equipo'); }
-  } catch { /* el usuario cerró el compartir */ }
+// Lo que pasó al guardar o compartir una imagen, contado en un aviso.
+function savedToast(r, what) {
+  if (r === 'saved') toast(`🖼️ ${what} guardada en tu equipo`);
+  else if (r === 'hold') toast(`📲 Mantené apretada la imagen y tocá "Guardar en Fotos"`);
+}
+$('#keep-save').onclick = async () => {
+  if (!keepBlob || !keepFor) return toast('Un segundito, la estamos pintando…');
+  savedToast(await saveImage(keepBlob, `recuerdo-${fileSafe(keepFor.name)}.jpg`), 'Estampita');
 };
+$('#keep-share').onclick = async () => {
+  if (!keepBlob || !keepFor) return toast('Un segundito, la estamos pintando…');
+  const r = await shareImage(keepBlob, `recuerdo-${fileSafe(keepFor.name)}.jpg`, inviteText(keepFor, { url: true }));
+  if (r === 'saved') toast('🖼️ Estampita guardada y mensaje copiado: pegalo donde quieras compartirla');
+  else savedToast(r, 'Estampita');
+};
+// El mensaje que acompaña cada link o imagen compartida (lo que se lee en WhatsApp antes de tocar).
+function inviteText(m, { url = false } = {}) {
+  const link = shareUrl(m.id, { invite: true, name: shareName() });
+  let text;
+  if (isMine(m)) text = `Le hice un lugar a ${m.name} en un jardín de luz para recordarle 🐾 Si querés acompañarme, encendele una velita 🕯️`;
+  else if (didToday('c', m.id)) text = `Encendí una vela por ${m.name} 🕯️ ¿Le encendés una vos también? Es gratis y lleva un segundo.`;
+  else text = `Encendé una vela por ${m.name} 🕯️ Un jardín de luz para recordar a las mascotas que amamos 🐾`;
+  return url ? `${text}\n👉 ${link}` : text;
+}
 async function shareLinkNow() {
   if (!current) return;
   const url = shareUrl(current.id, { invite: true, name: shareName() });
-  const text = didToday('c', current.id) ? `Encendí una vela por ${current.name} 🕯️ ¿Le encendés una vos también?` : `Encendé una vela por ${current.name} 🕯️`;
-  if (navigator.share) {
-    try { await navigator.share({ title: 'Encendé una huellita', text, url }); } catch { /* cancelado */ }
+  const text = inviteText(current);
+  if (navigator.share && (coarse || isIOS)) {
+    try { await navigator.share({ title: `En memoria de ${current.name}`, text, url }); } catch { /* cancelado */ }
     return;
   }
-  try {
-    await navigator.clipboard.writeText(`${text} ${url}`);
-    toast('💌 Link copiado. Compartilo con quien quieras.');
-  } catch {
-    prompt('Copiá este link:', url);
-  }
-};
+  if (await copyText(`${text}\n👉 ${url}`)) toast('💌 Link copiado. Pegalo en WhatsApp o donde quieras.');
+  else prompt('Copiá este link:', url);
+}
 
 $('#s-delete').onclick = async () => {
   if (!current || !confirm(`¿Quitar a ${current.name} del muro? No se puede deshacer.`)) return;
@@ -1511,19 +1610,21 @@ async function resizePhoto(file, max) {
       i.onerror = rej;
       i.src = url;
     });
-    // Recorte a 4:5 como el marco, un poco hacia arriba (donde suelen estar las caras).
+    // Recorte a 4:5 como el marco, un poco hacia arriba (donde suelen estar las caras), sin las
+    // franjas negras o blancas de las capturas de pantalla.
     const ar = 4 / 5;
-    let sw = img.width;
-    let sh = img.height;
+    const box = contentRect(img);
+    let sw = box.sw;
+    let sh = box.sh;
     if (sw / sh > ar) sw = sh * ar; else sh = sw / ar;
-    const sx = (img.width - sw) / 2;
-    const sy = (img.height - sh) * 0.4;
     const k = Math.min(1, max / sh);
     const c = document.createElement('canvas');
     c.width = Math.round(sw * k);
     c.height = Math.round(sh * k);
-    c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
-    return c.toDataURL('image/jpeg', 0.84);
+    const g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    drawCover(g, img, 0, 0, c.width, c.height, 0.4);
+    return c.toDataURL('image/jpeg', 0.86);
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -2557,6 +2658,13 @@ function computeAction() {
   if (nearSofa) return { kind: 'sofa', ic: '🛋️', lbl: 'Sentarse', key: 'sit', run: () => sitOnSofa(nearSofa) };
   const b = spirits?.ball;
   if (b && !b.held && !b.inAir && P.pos.distanceTo(_v.set(b.pos.x, 0, b.pos.z)) < 2.6) return { kind: 'ball', ic: '🎾', lbl: 'Tirar', key: 'ball', run: throwBall };
+  // Un cuadrito de una vitrina, de la boca de un pasillo o de un atril, justo adelante tuyo.
+  const cell = hall.nearestCell?.(P.pos, P.heading);
+  if (cell) {
+    const m = cell.id && memorials.find((x) => x.id === cell.id);
+    if (m) return { kind: 'visit', ic: '🕯️', lbl: m.name, key: `v:${m.id}`, run: () => visitHere(m, cell.photo) };
+    if (!cell.id) return { kind: 'add', ic: '＋', lbl: 'Sumar a tu mascota', key: `va:${cell.corridor ?? ''}`, run: () => addFromCell(cell.corridor) };
+  }
   // La ofrenda central del salón: se la ofrece desde la entrada si la mirás.
   const fd = Math.hypot(EASEL_POS.x - P.pos.x, EASEL_POS.z - P.pos.z);
   const ff = ((EASEL_POS.x - P.pos.x) * Math.sin(P.heading) + (EASEL_POS.z - P.pos.z) * Math.cos(P.heading)) / Math.max(fd, 1e-3);
@@ -2613,7 +2721,7 @@ function fillExtras(m) {
   const list = [photoSrc(m), ...(m.extraPhotos || [])];
   if (list.join() !== photoList.join()) photoIdx = 0;
   photoList = list;
-  $('#s-photo').src = photoList[photoIdx] || photoList[0];
+  showPhoto(photoList[photoIdx] || photoList[0]);
   $('#s-dots').innerHTML = photoList.length > 1 ? photoList.map((_, i) => `<i class="${i === photoIdx ? 'on' : ''}"></i>`).join('') : '';
   $('#s-voice').hidden = !m.voice;
   // Luz eterna. MONETIZAR: pago único (ver MONETIZACION.md).
@@ -2664,7 +2772,7 @@ $('#s-card').onclick = () => $('#s-card').classList.toggle('big');
 $('#s-photo-box').onclick = () => {
   if (photoList.length < 2) return;
   photoIdx = (photoIdx + 1) % photoList.length;
-  $('#s-photo').src = photoList[photoIdx];
+  showPhoto(photoList[photoIdx]);
   $$('#s-dots i').forEach((d, i) => d.classList.toggle('on', i === photoIdx));
 };
 
@@ -3069,17 +3177,7 @@ async function drawShareCard(m) {
   g.fillRect(fx - 26, fy - 26, fw + 52, fh + 52);
   g.fillStyle = '#fbefd9';
   g.fillRect(fx - 10, fy - 10, fw + 20, fh + 20);
-  if (img.naturalWidth) {
-    const r = Math.max(fw / img.naturalWidth, fh / img.naturalHeight);
-    const w = img.naturalWidth * r;
-    const h = img.naturalHeight * r;
-    g.save();
-    g.beginPath();
-    g.rect(fx, fy, fw, fh);
-    g.clip();
-    g.drawImage(img, fx + (fw - w) / 2, fy + (fh - h) / 2, w, h);
-    g.restore();
-  }
+  if (img.naturalWidth) drawCover(g, img, fx, fy, fw, fh, 0.4);
   g.textAlign = 'center';
   g.fillStyle = '#ffe0b0';
   // Fuentes que la página ya carga (antes usaba Lobster, que no se carga, y salía en letra genérica).
@@ -3091,13 +3189,18 @@ async function drawShareCard(m) {
   g.fillText(m.name, W / 2, 1450, W - 120);
   g.font = '800 52px Nunito, sans-serif';
   g.fillStyle = '#fff3e0';
-  g.fillText(`🕯️ ${m.candles} ${m.candles === 1 ? 'vela encendida' : 'velas encendidas'}`, W / 2, 1560);
-  g.fillStyle = 'rgba(255,255,255,.92)';
-  roundRectPath(g, W / 2 - 330, 1640, 660, 110, 55);
+  const n = Number(m.candles) || 0;
+  g.fillText(n ? `🕯️ ${n} ${n === 1 ? 'vela encendida' : 'velas encendidas'}` : '🕯️ Encendé la primera vela', W / 2, 1560);
+  // La invitación y el sitio en dos renglones (el dominio entero no entraba en el botón).
+  g.fillStyle = 'rgba(255,255,255,.94)';
+  roundRectPath(g, W / 2 - 300, 1610, 600, 104, 52);
   g.fill();
   g.fillStyle = '#b8326f';
-  g.font = '800 46px Nunito, sans-serif';
-  g.fillText(`Encendé una vela → ${location.host}`, W / 2, 1712, 620);
+  g.font = '800 48px Nunito, sans-serif';
+  g.fillText('Encendé una vela 🕯️', W / 2, 1678, 560);
+  g.font = '700 36px Nunito, sans-serif';
+  g.fillStyle = '#fff3e0';
+  g.fillText(location.host, W / 2, 1770, W - 120);
   return c;
 }
 function roundRectPath(g, x, y, w, h, r) {
@@ -3109,26 +3212,43 @@ function roundRectPath(g, x, y, w, h, r) {
   g.arcTo(x, y, x + w, y, r);
   g.closePath();
 }
+let shareBlob = null;
+let shareFor = null;
 async function openShare() {
   if (!current) return;
-  $('#share-sub').textContent = `Ayudá a que más personas recuerden a ${current.name}.`;
+  const m = current;
+  shareFor = m;
+  shareBlob = null;
+  $('#share-sub').textContent = `Ayudá a que más personas recuerden a ${m.name}.`;
+  $('#share-wa').href = whatsappUrl(inviteText(m, { url: true }));
+  $('#share-img').hidden = true;
+  $('#share-wait').hidden = false;
+  $('#share-wait').textContent = 'Pintándola…';
   $('#share').showModal();
-  await drawShareCard(current);
+  await drawShareCard(m);
+  // La imagen queda lista antes del toque: si se pinta después, el navegador no deja compartirla.
+  const blob = await canvasBlob($('#share-preview'), 'image/jpeg', 0.9);
+  if (shareFor !== m) return;
+  if (!blob) { $('#share-wait').textContent = 'No se pudo pintar la tarjeta. Probá de nuevo.'; return; }
+  shareBlob = blob;
+  const img = $('#share-img');
+  if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+  img.dataset.url = URL.createObjectURL(blob);
+  img.src = img.dataset.url;
+  img.hidden = false;
+  $('#share-wait').hidden = true;
 }
 $('#share-link').onclick = () => { $('#share').close(); shareLinkNow(); };
+$('#share-wa').onclick = () => { haptic(8); };
 $('#share-image').onclick = async () => {
-  const c = $('#share-preview');
-  const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.9));
-  const file = new File([blob], `${current?.name || 'huellita'}.jpg`, { type: 'image/jpeg' });
-  if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], text: `Encendé una vela por ${current.name} 🕯️ ${shareUrl(current.id, { invite: true, name: shareName() })}` }); } catch { /* cancelado */ }
-    return;
-  }
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = file.name;
-  a.click();
-  toast('Imagen guardada. Publicala en tu historia 📸');
+  if (!shareBlob || !shareFor) return toast('Un segundito, la estamos pintando…');
+  const r = await shareImage(shareBlob, `${fileSafe(shareFor.name)}-huellita.jpg`, inviteText(shareFor, { url: true }));
+  if (r === 'saved') toast('📸 Imagen guardada y mensaje copiado. Publicala en tu historia y pegá el link.');
+  else savedToast(r, 'Imagen');
+};
+$('#share-save').onclick = async () => {
+  if (!shareBlob || !shareFor) return toast('Un segundito, la estamos pintando…');
+  savedToast(await saveImage(shareBlob, `${fileSafe(shareFor.name)}-huellita.jpg`), 'Imagen');
 };
 
 // ---------- guía: la sexta etapa ----------
@@ -3317,28 +3437,28 @@ async function photoMode() {
     if (!url) return toast('No pudimos sacar la foto en este navegador.');
     const caption = comp ? `Paseando con ${comp.name} 🐾` : 'En el jardín de las huellitas 🌼';
     const when = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
-    lastPhoto = { canvas: await polaroid(url, { caption, sub: `${when} · Encendé una huellita` }), name: comp?.name || 'jardin', id: comp?.memorialId || null };
-    $('#polaroid-preview').src = lastPhoto.canvas.toDataURL('image/jpeg', 0.9);
+    const pc = await polaroid(url, { caption, sub: `${when} · Encendé una huellita` });
+    const blob = await canvasBlob(pc, 'image/jpeg', 0.92);
+    if (!blob) return toast('No pudimos sacar la foto en este navegador.');
+    if (lastPhoto?.url) URL.revokeObjectURL(lastPhoto.url);
+    lastPhoto = { blob, url: URL.createObjectURL(blob), name: comp?.name || 'jardin', id: comp?.memorialId || null };
+    $('#polaroid-preview').src = lastPhoto.url;
     $('#photo-dialog-sub').textContent = comp ? `Un recuerdo de tu paseo con ${comp.name}.` : 'Un recuerdo de tu visita al jardín.';
     $('#photo-dialog').showModal();
   }, { duration: reduced ? 0.3 : 1.1 });
 }
 async function sharePhoto() {
   if (!lastPhoto) return;
-  const blob = await new Promise((res) => lastPhoto.canvas.toBlob(res, 'image/jpeg', 0.92));
-  const file = new File([blob], `huellita-${lastPhoto.name}.jpg`, { type: 'image/jpeg' });
   const link = lastPhoto.id ? shareUrl(lastPhoto.id, { invite: true, name: shareName() }) : `${location.origin}/`;
-  const text = lastPhoto.id ? `Paseando con ${lastPhoto.name} en el jardín de las huellitas 🐾 ${link}` : `Un jardín para recordar a las mascotas que amamos 🌼 ${link}`;
-  if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], text }); } catch { /* cancelado */ }
-    return;
-  }
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = file.name;
-  a.click();
-  toast('📸 Foto guardada. Subila a tu historia y etiquetá a quien también lo quería.');
+  const text = lastPhoto.id ? `Paseando con ${lastPhoto.name} en el jardín de las huellitas 🐾\n👉 ${link}` : `Un jardín de luz para recordar a las mascotas que amamos 🌼\n👉 ${link}`;
+  const r = await shareImage(lastPhoto.blob, `huellita-${fileSafe(lastPhoto.name)}.jpg`, text);
+  if (r === 'saved') toast('📸 Foto guardada y mensaje copiado. Subila a tu historia y pegá el link.');
+  else savedToast(r, 'Foto');
 }
+$('#photo-save').onclick = async () => {
+  if (!lastPhoto) return;
+  savedToast(await saveImage(lastPhoto.blob, `huellita-${fileSafe(lastPhoto.name)}.jpg`), 'Foto');
+};
 $('#walk-photo-btn').onclick = photoMode;
 $('#photo-btn').onclick = photoMode;
 $('#photo-share').onclick = sharePhoto;
@@ -3351,12 +3471,18 @@ const shareName = () => store.get('huellita.signName') || visitor.name;
 $('#s-pass').onclick = () => { haptic(10); shareLinkNow(); };
 
 // La tarjeta de la vista previa: la arma y la sube quien cuida la huellita (una vez por sesión).
+// También la rehace si la que está subida es de un diseño anterior (OG_VERSION).
 const ogDone = new Set();
 function maybeOgCard(m, force = false) {
-  if (!m || !isMine(m) || api?.mode !== 'server' || (!force && (m.ogCard || ogDone.has(m.id)))) return;
+  if (!m || !isMine(m) || api?.mode !== 'server') return;
+  const fresh = m.ogCard && store.get(`huellita.ogv.${m.id}`) === String(OG_VERSION);
+  if (!force && (fresh || ogDone.has(m.id))) return;
   ogDone.add(m.id);
   uploadOgCard(api, m, photoSrc(m)).then((r) => {
-    if (r?.ogCard) { const x = memorials.find((y) => y.id === m.id); if (x) x.ogCard = r.ogCard; }
+    if (!r?.ogCard) { ogDone.delete(m.id); return; }
+    store.set(`huellita.ogv.${m.id}`, String(OG_VERSION));
+    const x = memorials.find((y) => y.id === m.id);
+    if (x) x.ogCard = r.ogCard;
   });
 }
 

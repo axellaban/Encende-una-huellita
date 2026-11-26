@@ -57,7 +57,8 @@ before(async () => {
     if (page) {
       const q = new URLSearchParams(u.search);
       q.set('page', page[1]);
-      return fn.GET(new Request(`https://huellita.test/api/handler?${q}`));
+      const m = init.method || 'GET';
+      return fn[m](new Request(`https://huellita.test/api/handler?${q}`, { method: m }));
     }
     const rewritten = new URL(`https://huellita.test/api/handler?path=${encodeURIComponent(u.pathname.replace(/^\/api\//, ''))}`);
     const method = init.method || 'GET';
@@ -178,8 +179,13 @@ for (const name of ['local', 'vercel']) {
   test(`[${name}] compartir: /h/<id> con vista previa, imagen propia y "Pasá la luz"`, async () => {
     // Luca: su imagen para compartir y su nombre en el título.
     let html = await (await call('/h/luca')).text();
-    assert.match(html, /<title>Luca · Encendé una huellita<\/title>/);
-    assert.match(html, /og:image" content="https?:\/\/[^"]+\/huellitas\/luca-og\.jpg"/);
+    assert.match(html, /<title>En memoria de Luca · Encendé una huellita<\/title>/);
+    assert.match(html, /og:title" content="En memoria de Luca 🕯️"/);
+    assert.match(html, /og:image" content="https?:\/\/[^"]+\/huellitas\/luca-og\.jpg(\?v=\d+)?"/);
+    assert.match(html, /og:image:width" content="1200"/);
+    assert.equal(html.match(/<title>/g).length, 1, 'un solo título');
+    assert.equal(html.match(/property="og:image"/g).length, 1, 'una sola imagen');
+    assert.ok(html.indexOf('og:image') < 2500, 'las etiquetas van al principio');
     assert.match(html, /og:url" content="https?:\/\/[^"]+\/h\/luca"/);
     // Quién invita aparece en el texto (y escapado).
     html = await (await call('/h/luca?de=' + encodeURIComponent('Ana <b>'))).text();
@@ -196,6 +202,12 @@ for (const name of ['local', 'vercel']) {
     assert.equal((await post(`/api/memorials/${c.memorial.id}/og`, { image: JPG }, { 'X-Edit-Token': 'no' })).status, 403);
     const img = await call(`/api/og/${c.memorial.id}`);
     assert.equal(img.headers.get('content-type'), 'image/jpeg');
+    // Los robots que preguntan con HEAD (antes: 405) reciben lo mismo sin el cuerpo.
+    const hImg = await call(`/api/og/${c.memorial.id}`, { method: 'HEAD' });
+    assert.equal(hImg.status, 200);
+    assert.equal(hImg.headers.get('content-type'), 'image/jpeg');
+    assert.equal((await call('/h/luca', { method: 'HEAD' })).status, 200);
+    assert.equal((await call(`/api/photos/${c.memorial.id}`, { method: 'HEAD' })).status, 200);
     html = await (await call(`/h/${c.memorial.id}`)).text();
     assert.match(html, /og:image" content="[^"]+\/api\/og\//);
     // Pasá la luz: una vela que llega por un link suma a quien lo compartió (una vez por persona y día).
@@ -443,9 +455,10 @@ test('los encabezados de seguridad del servidor local y de Vercel coinciden', as
 test('la vista previa de Luca no depende de la base de datos', async () => {
   const { pageMeta, injectMeta } = await import('./page.js');
   const meta = await pageMeta(null, 'luca', { origin: 'https://x.test', de: 'Axel' });
-  assert.equal(meta.image, 'https://x.test/huellitas/luca-og.jpg');
+  assert.match(meta.image, /^https:\/\/x\.test\/huellitas\/luca-og\.jpg(\?v=\d+)?$/);
   assert.match(meta.description, /Axel encendió una vela por Luca/);
   assert.equal(await pageMeta(null, 'otra', { origin: 'https://x.test' }), null);
-  const html = injectMeta('<title>x</title><meta property="og:title" content="y" />', meta);
-  assert.match(html, /<title>Luca · Encendé una huellita<\/title>/);
+  const html = injectMeta('<head><meta charset="UTF-8" /><title>x</title><meta property="og:title" content="y" /></head>', meta);
+  assert.match(html, /<title>En memoria de Luca · Encendé una huellita<\/title>/);
+  assert.ok(!html.includes('content="y"'), 'saca las etiquetas viejas');
 });

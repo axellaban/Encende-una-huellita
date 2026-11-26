@@ -132,20 +132,20 @@ export async function handleApi(req, store) {
   }
 
   let m = path.match(/^\/api\/photos\/([\w-]{3,24})\/([1-3])$/);
-  if (m && method === 'GET') {
+  if (m && (method === 'GET' || method === 'HEAD')) {
     const p = await store.extraPhoto(m[1], m[2]);
     if (!p) return fail(404, 'No encontrada');
     return { status: 200, bytes: p.bytes, type: p.type, cache: 'public, max-age=31536000, s-maxage=31536000, immutable' };
   }
   m = path.match(/^\/api\/voices\/([\w-]{3,24})$/);
-  if (m && method === 'GET') {
+  if (m && (method === 'GET' || method === 'HEAD')) {
     const p = await store.voice(m[1]);
     if (!p) return fail(404, 'No encontrada');
     return { status: 200, bytes: p.bytes, type: p.type, cache: 'public, max-age=31536000, s-maxage=31536000, immutable' };
   }
 
   m = path.match(/^\/api\/og\/([\w-]{3,24})$/);
-  if (m && method === 'GET') {
+  if (m && (method === 'GET' || method === 'HEAD')) {
     const p = await store.og(m[1]);
     if (!p) return fail(404, 'No encontrada');
     return { status: 200, bytes: p.bytes, type: p.type, cache: 'public, max-age=31536000, s-maxage=31536000, immutable' };
@@ -155,7 +155,7 @@ export async function handleApi(req, store) {
   if (m && method === 'GET') return ok({ n: await store.refCount(m[1]) });
 
   m = path.match(/^\/api\/photos\/([\w-]{3,24})$/);
-  if (m && method === 'GET') {
+  if (m && (method === 'GET' || method === 'HEAD')) {
     const p = await store.photo(m[1]);
     if (!p) return fail(404, 'No encontrada');
     return { status: 200, bytes: p.bytes, type: p.type, cache: 'public, max-age=31536000, s-maxage=31536000, immutable' };

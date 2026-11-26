@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { HALL_CENTER, ROOM_R, ROOM_WALL_H, CORRIDOR, CORRIDOR_DEG, ROOM_ARCS, LIFT_ARCS, corridorFrame, rand, uTime } from './world.js';
-import { portraitTexture, photoTexture, labelTexture, twoSided, flameTexture, glowTexture, woodTexture, lightConeTexture, emojiTexture, lanternTexture } from './textures.js';
+import { portraitTexture, photoTexture, vacantCellTexture, labelTexture, twoSided, flameTexture, glowTexture, woodTexture, lightConeTexture, emojiTexture, lanternTexture } from './textures.js';
 import { stageOf } from '../../server/glow.js';
 import { giftMesh, idleGift } from './gifts3d.js';
 import { CORRIDOR_NAMES } from '../floors.js';
@@ -551,6 +551,7 @@ export function buildHall(scene, colliders, tier) {
   const pickables = [];
   const bulbs = []; // lucecitas de las guirnaldas (pérgola y pasillos)
   const wallCells = []; // obituarios en las vitrinas de madera de las paredes del salón
+  const vitrines = []; // cada vitrina con su cartel (el título sale de su tema, ver themedLists)
   const standingEasels = []; // atriles de madera con cuadritos en el centro del salón
   const sofas = []; // sillones del salón donde el personaje puede sentarse y descansar
   const wallTexCache = new Map(); // caché de retratos y plaquitas para no duplicar texturas en memoria móvil
@@ -572,14 +573,6 @@ export function buildHall(scene, colliders, tier) {
     const cabAlcoveMat = new THREE.MeshBasicMaterial({ color: '#ddd3c2' });
     const cabShelfMat = new THREE.MeshLambertMaterial({ color: '#ebe1d0', emissive: '#594836', emissiveIntensity: 0.55 });
     const darkFrameMat = new THREE.MeshLambertMaterial({ color: '#1b120c', emissive: '#0a0604' });
-    const VITRINE_TITLES = [
-      'Siempre en nuestro corazón',
-      'Huellitas de luz eterna',
-      'Amigos que nunca se olvidan',
-      'Estrellas del jardín',
-      'Recuerdos que brillan',
-      'Amor para siempre',
-    ];
     let vitrineIdx = 0;
 
     // Vitrina de madera oscura con 12 obituarios iluminados (3 columnas x 4 filas) y cartel superior,
@@ -612,18 +605,12 @@ export function buildHall(scene, colliders, tier) {
         cabParts.push(box(w, 0.075, D, 0, y, 0));
       }
       g.add(new THREE.Mesh(mergeGeometries(cabParts), cabMat));
-      // Cartel claro arriba de la vitrina (sin banderitas adelante que lo tapen).
-      const banner = new THREE.Mesh(
-        new THREE.PlaneGeometry(w * 0.94, 0.38),
-        new THREE.MeshBasicMaterial({
-          map: labelTexture(VITRINE_TITLES[vIdx % VITRINE_TITLES.length], {
-            w: 760, h: 112, font: '400 48px "Young Serif", Georgia, serif', bg: 'rgba(228,218,202,0.98)', fg: '#2b1b10',
-          }),
-          transparent: true,
-        }),
-      );
+      // Cartel claro arriba de la vitrina (sin banderitas adelante que lo tapen). El título depende del
+      // tema de la vitrina (recién llegadas, esperando una vela…) y se escribe al poblarla.
+      const banner = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.94, 0.38), new THREE.MeshBasicMaterial({ transparent: true }));
       banner.position.set(0, h + 0.34, 0.08);
       g.add(banner);
+      vitrines.push({ banner, title: null });
 
       const alcoveParts = [];
       const shelfParts = [];
@@ -671,7 +658,7 @@ export function buildHall(scene, colliders, tier) {
 
           const photo = new THREE.Mesh(photoGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.88, 0.86, 0.84) }));
           photo.position.set(cx, cy + 0.035, -0.002);
-          photo.userData = { kind: 'featured' };
+          photo.userData = { kind: 'decor' };
           pickables.push(photo);
 
           const plaqueMesh = new THREE.Mesh(plaqueGeo, new THREE.MeshBasicMaterial({ transparent: true }));
@@ -679,7 +666,7 @@ export function buildHall(scene, colliders, tier) {
           plaqueMesh.rotation.x = -0.15;
 
           g.add(photo, plaqueMesh);
-          wallCells.push({ photo, plaque: plaqueMesh, seed: vIdx * 12 + rIdx * 3 + c });
+          wallCells.push({ photo, plaque: plaqueMesh, vitrine: vIdx, pos: rIdx * cols + c });
         }
       }
       g.add(new THREE.Mesh(mergeGeometries(alcoveParts), cabAlcoveMat));
@@ -1014,13 +1001,13 @@ export function buildHall(scene, colliders, tier) {
           pInnerBorder.position.set(0, 0.14, 0.024);
           const pPhoto = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.87), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.88, 0.86, 0.84) }));
           pPhoto.position.set(0, 0.14, 0.026);
-          pPhoto.userData = { kind: 'featured' };
+          pPhoto.userData = { kind: 'decor' };
           pickables.push(pPhoto);
           const pName = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.2), new THREE.MeshBasicMaterial({ transparent: true }));
           pName.position.set(0, -0.44, 0.026);
           pg.add(pFrame, pMat, pInnerBorder, pPhoto, pName);
           cg.add(pg);
-          wallCells.push({ photo: pPhoto, plaque: pName, seed: 80 + c * 2 + si, lightPlaque: true });
+          wallCells.push({ photo: pPhoto, plaque: pName, corridor: c, pos: si, lightPlaque: true });
         }
         // Macetitas verdes con hojas en la entrada de cada pasillo.
         for (const sd of [-1, 1]) {
@@ -1595,7 +1582,7 @@ export function buildHall(scene, colliders, tier) {
       const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.78), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.88, 0.86, 0.84) }));
       photo.position.set(0, 1.44, 0.116);
       photo.rotation.x = -0.06;
-      photo.userData = { kind: 'featured' };
+      photo.userData = { kind: 'decor' };
       pickables.push(photo);
       const nameLbl = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.18), new THREE.MeshBasicMaterial({ transparent: true }));
       nameLbl.position.set(0, 0.93, 0.118);
@@ -2042,6 +2029,47 @@ export function buildHall(scene, colliders, tier) {
     setStage(featuredFx, 2, true);
   }
 
+  // Los temas de las vitrinas del salón (cada una con su cartel). Si un tema no tiene a nadie
+  // (p. ej., ningún cumpleaños este mes), la vitrina usa su título de siempre con todas.
+  function themedLists(real) {
+    const hash = (id, k) => { let h = k * 2654435761; for (const ch of id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; };
+    const mix = (k) => [...real].sort((p, q) => hash(p.id, k) - hash(q.id, k));
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const themed = (title, list, fallback, k) => (list.length ? { title, list } : { title: fallback, list: mix(k) });
+    return [
+      { title: 'Siempre en nuestro corazón', list: [...real].sort((p, q) => (q.candles || 0) - (p.candles || 0)) },
+      { title: 'Recién llegadas al jardín', list: [...real].sort((p, q) => (q.createdAt || 0) - (p.createdAt || 0)) },
+      { title: 'Esperando una vela', list: [...real].sort((p, q) => (p.candles || 0) - (q.candles || 0) || (q.createdAt || 0) - (p.createdAt || 0)) },
+      themed('Las recordamos este mes', real.filter((m) => m.birthday?.startsWith(month) || m.passedDay?.startsWith(month)), 'Huellitas de luz eterna', 1),
+      themed('Perritos del jardín', real.filter((m) => m.species === 'perro'), 'Amigos que nunca se olvidan', 2),
+      themed('Gatitos y compañeros', real.filter((m) => m.species && m.species !== 'perro'), 'Recuerdos que brillan', 3),
+    ];
+  }
+  // Un cuadrito de vitrina (o de la boca de un pasillo): la foto y el nombre de una huellita, o
+  // "lugar libre" si no hay nadie para mostrar ahí.
+  function paintCell(cell, m, corridor) {
+    const key = m ? `${m.id}:${m.photo || ''}:${m.name}:${cell.lightPlaque ? 'L' : 'G'}` : `vacant:${cell.lightPlaque ? 'L' : 'G'}`;
+    if (cell.key === key) return;
+    cell.key = key;
+    let cached = wallTexCache.get(key);
+    if (!cached) {
+      const tex = m ? (m.photo ? photoTexture(m.photo) : portraitTexture(m)) : vacantCellTexture();
+      const lt = labelTexture(m ? m.name : 'Lugar libre', {
+        w: 360, h: 74,
+        font: '400 44px "Young Serif", Georgia, serif',
+        bg: cell.lightPlaque ? 'rgba(216,207,192,0.98)' : 'rgba(201,151,63,0.98)',
+        fg: '#26160a',
+      });
+      cached = { tex, lt };
+      wallTexCache.set(key, cached);
+    }
+    cell.photo.material.map = cached.tex;
+    cell.photo.material.needsUpdate = true;
+    cell.photo.userData = m ? { kind: 'spot', id: m.id } : { kind: 'add', corridor };
+    cell.plaque.material.map = cached.lt;
+    cell.plaque.material.needsUpdate = true;
+  }
+
   function render(memorials) {
     const here = new Map();
     let hasCenterFeatured = false;
@@ -2052,65 +2080,47 @@ export function buildHall(scene, colliders, tier) {
     if (!hasCenterFeatured) setWelcomeAltar(memorials);
     slots.forEach((s, i) => (here.has(i) ? fillSlot(s, here.get(i)) : clearSlot(s)));
     // Poblar las vitrinas de obituarios de las paredes del salón, cuadros de entrada y los atriles de pie.
-    if (memorials.length) {
-      const COMPANIONS = [
-        { name: 'Micky', species: 'perro', hue: 38 },
-        { name: 'Luna', species: 'gato', hue: 280 },
-        { name: 'Toto', species: 'perro', hue: 22 },
-        { name: 'Nina', species: 'gato', hue: 340 },
-        { name: 'Coco', species: 'perro', hue: 145 },
-        { name: 'Mora', species: 'perro', hue: 205 },
-        { name: 'Simón', species: 'gato', hue: 50 },
-        { name: 'Lola', species: 'perro', hue: 315 },
-        { name: 'Rocco', species: 'perro', hue: 18 },
-        { name: 'Mia', species: 'gato', hue: 170 },
-        { name: 'Bobi', species: 'perro', hue: 95 },
-        { name: 'Kira', species: 'perro', hue: 255 },
-      ];
-      wallCells.forEach((cell, idx) => {
-        const real = idx < memorials.length ? memorials[idx] : memorials[idx % memorials.length];
-        const useReal = idx < memorials.length;
-        const item = useReal ? real : COMPANIONS[idx % COMPANIONS.length];
-        const key = `${useReal ? `${real.id}:${real.photo || ''}:${real.name}` : `comp:${item.name}`}:${cell.lightPlaque ? 'L' : 'G'}`;
-        if (cell.key === key) return;
-        cell.key = key;
-        let cached = wallTexCache.get(key);
-        if (!cached) {
-          const tex = (useReal && real.photo) ? photoTexture(real.photo) : portraitTexture(item);
-          const lt = labelTexture(item.name, {
-            w: 360, h: 74,
-            font: '400 44px "Young Serif", Georgia, serif',
-            bg: cell.lightPlaque ? 'rgba(216,207,192,0.98)' : 'rgba(201,151,63,0.98)',
-            fg: '#26160a',
-          });
-          cached = { tex, lt };
-          wallTexCache.set(key, cached);
-        }
-        cell.photo.material.map = cached.tex;
-        cell.photo.material.needsUpdate = true;
-        cell.photo.userData = real ? { kind: 'spot', id: real.id } : { kind: 'featured' };
-        cell.plaque.material.map = cached.lt;
-        cell.plaque.material.needsUpdate = true;
-      });
-      standingEasels.forEach((ea, idx) => {
-        const m = memorials[idx % memorials.length];
-        if (!m) return;
-        const key = `${m.id}:${m.photo || ''}:${m.name}`;
-        if (ea.key === key) return;
-        ea.key = key;
-        ea.tex?.dispose();
-        ea.lt?.dispose();
-        ea.tex = m.photo ? photoTexture(m.photo) : portraitTexture(m);
-        ea.lt = labelTexture(`🐾 ${m.name}`, {
-          w: 480, h: 96, font: '700 54px "Young Serif", Georgia, serif', bg: 'rgba(216,207,192,0.98)', fg: '#26160a',
-        });
-        ea.photo.material.map = ea.tex;
-        ea.photo.material.needsUpdate = true;
-        ea.photo.userData = { kind: 'spot', id: m.id };
-        ea.name.material.map = ea.lt;
-        ea.name.material.needsUpdate = true;
-      });
+    // Sólo huellitas de verdad: cada cuadrito abre el obituario de la mascota que muestra. Lo que
+    // sobra queda como "lugar libre" (tocándolo, sumás a tu mascota), nunca con mascotas inventadas.
+    const real = memorials.filter((m) => m && m.id && m.name);
+    const lists = themedLists(real);
+    vitrines.forEach((v, i) => {
+      const theme = lists[i % lists.length];
+      if (v.title !== theme.title) {
+        v.title = theme.title;
+        const mat = v.banner.material;
+        mat.map?.dispose();
+        mat.map = labelTexture(theme.title, { w: 760, h: 112, font: '400 48px "Young Serif", Georgia, serif', bg: 'rgba(228,218,202,0.98)', fg: '#2b1b10' });
+        mat.needsUpdate = true;
+      }
+    });
+    // Los cuadros de la boca de cada pasillo: quienes descansan en ese pasillo, en este piso.
+    const byCorridor = Array.from({ length: CORRIDORS }, () => []);
+    for (const [i, m] of here) byCorridor[Math.floor((i % 90) / 18)].push(m);
+    for (const list of byCorridor) list.sort((p, q) => (q.createdAt || 0) - (p.createdAt || 0));
+    for (const cell of wallCells) {
+      const m = cell.corridor !== undefined ? byCorridor[cell.corridor][cell.pos] : lists[cell.vitrine % lists.length].list[cell.pos];
+      paintCell(cell, m || null, cell.corridor);
     }
+    // "Luz de hoy": tres huellitas que cambian cada día.
+    const day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000);
+    standingEasels.forEach((ea, idx) => {
+      const m = real.length ? real[(day * 7 + idx) % real.length] : null;
+      const key = m ? `${m.id}:${m.photo || ''}:${m.name}` : 'vacant';
+      if (ea.key === key) return;
+      ea.key = key;
+      ea.tex?.dispose();
+      ea.lt?.dispose();
+      ea.tex = m ? (m.photo ? photoTexture(m.photo) : portraitTexture(m)) : null;
+      ea.lt = labelTexture(m ? `🐾 ${m.name}` : 'Lugar libre', {
+        w: 480, h: 96, font: '700 54px "Young Serif", Georgia, serif', bg: 'rgba(216,207,192,0.98)', fg: '#26160a',
+      });
+      ea.photo.material.map = ea.tex || vacantCellTexture();
+      ea.photo.material.needsUpdate = true;
+      ea.photo.userData = m ? { kind: 'spot', id: m.id } : { kind: 'add' };
+      ea.name.material.map = ea.lt;
+      ea.name.material.needsUpdate = true;
+    });
     // Cada pasillo con su nombre y cuántas huellitas tiene en este piso.
     const per = new Array(CORRIDORS).fill(0);
     const corridorOfSlot = (i) => Math.floor((i % 90) / 18);
@@ -2170,6 +2180,25 @@ export function buildHall(scene, colliders, tier) {
     // De qué pasillo es un lugar (0..4).
     corridorOf: (i) => Math.floor((i % 90) / 18),
     // Dónde pararse para mirar un lugar. `shift` corre la vista para que la ficha no tape el marco.
+    // El cuadrito (vitrina, boca de pasillo o atril) que tenés adelante y cerca, para el botón de acción.
+    nearestCell(pos, heading, maxD = 2.6) {
+      let best = null;
+      let bd = maxD;
+      const fx = Math.sin(heading);
+      const fz = Math.cos(heading);
+      for (const cell of [...wallCells, ...standingEasels]) {
+        const ud = cell.photo.userData;
+        if (ud.kind !== 'spot' && ud.kind !== 'add') continue;
+        cell.wp ||= cell.photo.getWorldPosition(new THREE.Vector3());
+        const dx = cell.wp.x - pos.x;
+        const dz = cell.wp.z - pos.z;
+        const d = Math.hypot(dx, dz);
+        if (d > bd || d < 0.2 || (dx * fx + dz * fz) / d < 0.55) continue;
+        bd = d;
+        best = { photo: cell.photo, id: ud.id || null, corridor: ud.corridor };
+      }
+      return best;
+    },
     viewpoint(key, shift = 0, distMul = 1) {
       if (key === 'featured') {
         const k = ALTAR_SCALE;

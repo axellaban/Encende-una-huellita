@@ -11,7 +11,7 @@ export const FEATURED = [
     photo: '/huellitas/luca.jpg', // archivo en public/huellitas/
     extraPhotos: ['/huellitas/luca-2.jpg'],
     // Imagen para la vista previa al compartir su link (1200x630; se arma con drawOgCard en la app).
-    og: '/huellitas/luca-og.jpg',
+    og: '/huellitas/luca-og.jpg?v=2',
     // Estampita junto a su ofrenda (se ve en el 3D y en su ficha).
     card: { src: '/huellitas/luca-estampita.jpg', w: 360, h: 506, alt: '“No era más que un zorro semejante a cien mil otros. Pero yo le hice mi amigo y ahora es único en el mundo.” Antoine de Saint-Exupéry' },
     hue: 32,

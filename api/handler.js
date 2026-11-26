@@ -86,6 +86,14 @@ async function handle(request) {
   return json(r.status, r.json);
 }
 
+// HEAD: algunos robots de vista previa (WhatsApp, Telegram, iMessage, Slack…) preguntan primero por
+// la página o la imagen sin bajarla. Antes respondía 405 y la vista previa podía salir sin foto.
+async function head(request) {
+  const r = await handle(request);
+  return new Response(null, { status: r.status, headers: r.headers });
+}
+
 export const GET = handle;
+export const HEAD = head;
 export const POST = handle;
 export const DELETE = handle;
