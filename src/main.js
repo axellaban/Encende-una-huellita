@@ -403,7 +403,7 @@ async function buildScene() {
     canvas.style.cursor = hit && hit.distance < 16 && (key !== null || (hit.object.userData.kind && hit.object.userData.kind !== 'wall')) ? 'pointer' : '';
   });
   controls.onMove(hideHint);
-  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, renderer, THREE, spirits, elevator, me, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
+  if (new URLSearchParams(location.search).has('debug')) window.__huellita = { controls, camera, scene, renderer, THREE, spirits, elevator, me, hall, startWalk: (id) => startWalk(memorials.find((m) => m.id === id)),
     goFloor: (f) => goFloor(f, true, true),
     ogCard: async (id) => { const m = memorials.find((x) => x.id === id); return (await drawOgCard(m, photoSrc(m))).toDataURL('image/jpeg', 0.88); } };
 

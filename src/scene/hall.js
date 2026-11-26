@@ -2180,6 +2180,15 @@ export function buildHall(scene, colliders, tier) {
     // De qué pasillo es un lugar (0..4).
     corridorOf: (i) => Math.floor((i % 90) / 18),
     // Dónde pararse para mirar un lugar. `shift` corre la vista para que la ficha no tape el marco.
+    // Para las pruebas (?debug): dónde está cada cuadrito y a quién muestra.
+    debugCells() {
+      return [...wallCells, ...standingEasels].map((c) => {
+        c.photo.updateWorldMatrix(true, false);
+        const p = c.photo.getWorldPosition(new THREE.Vector3());
+        const n = new THREE.Vector3(0, 0, 1).transformDirection(c.photo.matrixWorld);
+        return { kind: c.photo.userData.kind, id: c.photo.userData.id || null, x: p.x, y: p.y, z: p.z, nx: n.x, nz: n.z };
+      });
+    },
     // El cuadrito (vitrina, boca de pasillo o atril) que tenés adelante y cerca, para el botón de acción.
     nearestCell(pos, heading, maxD = 2.6) {
       let best = null;

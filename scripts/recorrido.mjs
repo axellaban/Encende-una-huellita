@@ -137,6 +137,13 @@ async function full(b, tag, dev) {
   await p.evaluate(() => document.querySelector('#s-share').click());
   await wait(p, 800);
   check(tag, 'compartir', await isOpen(p, '#share'));
+  // La tarjeta para historias queda lista (imagen JPEG) y el botón de WhatsApp lleva el link de Luca.
+  const shareReady = await p.waitForFunction(() => {
+    const img = document.querySelector('#share-img');
+    return img && !img.hidden && img.naturalWidth === 1080;
+  }, null, { timeout: 20000 }).then(() => true, () => false);
+  const wa = await p.evaluate(() => document.querySelector('#share-wa')?.href || '');
+  check(tag, 'compartir: imagen lista y WhatsApp', shareReady && /^https:\/\/wa\.me\/\?text=/.test(wa) && decodeURIComponent(wa).includes('/h/luca'), wa.slice(0, 60));
   await closeTop(p);
   await p.evaluate(() => document.querySelector('#s-keep').click());
   await wait(p, 3000);
@@ -233,6 +240,24 @@ async function full(b, tag, dev) {
   await hub(p, tag, '[data-then="meadow"]', 'Prado');
   await wait(p, 6000);
   check(tag, 'menú → Prado', await p.evaluate(() => { const P = window.__huellita.controls.player.pos; return Math.hypot(P.x - 24, P.z - 20) < 14; }));
+  // Vitrinas del salón: frente a un cuadrito con foto, el botón de acción ofrece su nombre y abre su
+  // obituario ahí mismo (sin llevarte a su nicho).
+  const cellName = await p.evaluate(() => {
+    const H = window.__huellita;
+    const c = H.hall.debugCells().find((k) => k.kind === 'spot' && k.y < 2.4 && Math.hypot(k.nx, k.nz) > 0.5);
+    if (!c) return null;
+    const n = Math.hypot(c.nx, c.nz);
+    H.controls.placePlayer(new H.THREE.Vector3(c.x + (c.nx / n) * 1.6, 0, c.z + (c.nz / n) * 1.6), new H.THREE.Vector3(c.x, 0, c.z));
+    H.controls.snapFollow();
+    return c.id;
+  });
+  const actOk = cellName && await p.waitForFunction(() => document.querySelector('#act-btn')?.dataset.kind === 'visit', null, { timeout: 15000 }).then(() => true, () => false);
+  if (actOk) await p.evaluate(() => document.querySelector('#act-btn').click());
+  const cellSheet = actOk && await p.waitForFunction(() => !document.querySelector('#sheet').hidden && document.querySelector('#s-name').textContent.length > 0, null, { timeout: 15000 }).then(() => true, () => false);
+  const near = await p.evaluate(() => { const P = window.__huellita.controls.player.pos; const d = Math.hypot(P.x, P.z + 16); return d > 9 && d < 14.6; }); // sigue en el salón (no se fue a un pasillo)
+  check(tag, 'vitrina: cuadrito → obituario ahí mismo', !!(cellSheet && near), `${cellName} → ${await text(p, '#s-name')}`);
+  await p.evaluate(() => document.querySelector('#sheet-x').click());
+  await wait(p, 1500);
   await p.evaluate(() => { const H = window.__huellita; H.controls.placePlayer(new H.THREE.Vector3(12, 0, 30), new H.THREE.Vector3(30, 0, 30)); H.controls.snapFollow(); });
   // Con SwiftShader el reloj de la escena avanza más despacio que el reloj real.
   await p.waitForFunction(() => !document.body.classList.contains('moving'), null, { timeout: 20000 });
@@ -278,7 +303,12 @@ async function full(b, tag, dev) {
   await closeTop(p);
   await hub(p, tag, '[data-then="photo"]', 'Foto');
   await p.waitForFunction(() => document.querySelector('#photo-dialog')?.open, null, { timeout: 25000 }).catch(() => {});
-  check(tag, 'modo foto (polaroid)', (await isOpen(p, '#photo-dialog')) && (await p.evaluate(() => (document.querySelector('#polaroid-preview')?.getAttribute('src') || '').startsWith('data:image/jpeg'))));
+  // La polaroid ya viene preparada como JPEG (blob:) para guardarla o compartirla sin demora.
+  await p.waitForFunction(() => document.querySelector('#polaroid-preview')?.naturalWidth > 0, null, { timeout: 15000 }).catch(() => {});
+  check(tag, 'modo foto (polaroid)', (await isOpen(p, '#photo-dialog')) && (await p.evaluate(() => {
+    const img = document.querySelector('#polaroid-preview');
+    return /^(blob:|data:image\/jpeg)/.test(img?.getAttribute('src') || '') && img.naturalWidth > 0;
+  })));
   await closeTop(p);
 
   // Pisos: el ascensor (caminás hasta la puerta, entrás, la botonera; al cerrarla salís caminando).
