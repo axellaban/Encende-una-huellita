@@ -121,7 +121,7 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     En el jardín se reparten por zonas (`zoneForIndex`): el Prado (`meadow`), la plazoleta de después del
     Puente del Arcoíris (`plaza`), claros del campo (`field`, cada uno con su `d.home` en `fieldHomes`) y
     el césped (`lawn`); `field` y `lawn` te acompañan al mundo abierto. Cuántos: 8 / 12 / 16 según la
-    calidad (`maxPack`). Los que están a más de 38 m de la cámara se animan ~8 veces por segundo (LOD).
+    calidad: Alta / Media / Ahorro (`maxPack`). Los que están a más de 38 m de la cámara se animan ~8 veces por segundo (LOD).
     Cómo se ve cada uno sale de `m.look` (`server/looks.js`) o, si no hay, de un hash de su id.
   - `src/api.js`: cliente HTTP + **modo demo** (localStorage) si no hay base de datos.
     Una vez usado el jardín compartido, un corte de internet ofrece reintentar y no abre otro jardín
@@ -151,7 +151,12 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     `src/photo.js`: polaroid del modo foto (captura del canvas en el mismo cuadro en que se dibuja,
     `captureNext` en el ciclo).
   - `src/game.js` (gestos del día, racha, Glow guardado), `src/guide.js` (la sexta etapa),
-    `src/quality.js` (calidad por dispositivo + resolución adaptativa), `src/audio.js` (todo sintetizado).
+    `src/quality.js` (calidad + resolución adaptativa), `src/audio.js` (todo sintetizado).
+    **Calidad: Alta por defecto.** Lo que elige la persona en Opciones queda en `huellita.quality.v3`.
+    Si el 3D se pierde (`webglcontextlost`) con el jardín a la vista y en uso, baja un escalón **por un
+    día** (`huellita.quality.auto`); si se perdió con la página de fondo (el iPhone le saca la memoria
+    gráfica a las pestañas de fondo), sólo se recarga al volver. Antes bajaba para siempre y muchos
+    quedaban trabados en "Ahorro".
 - **Backend**: `server/core.js` (rutas, independiente del runtime) + `server/store.js` (lógica sobre
   comandos Redis) + `server/kv/` (cliente REST de Upstash y emulador de Redis en memoria/archivo).
   - Local: `server/index.js`. Vercel: `api/handler.js` (todas las `/api/*` llegan por el rewrite de `vercel.json`).
@@ -214,7 +219,8 @@ En el contenedor hay Chromium + Playwright preinstalados. Patrón usado en todo 
 const { chromium, devices } = require('playwright'); // NODE_PATH=$(npm root -g)
 const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const ctx = await b.newContext({ ...devices['iPhone 13'] }); // celular
-// localStorage: 'huellita.quality' = 'low' acelera; 'huellita.welcomed' = '1' salta la bienvenida.
+// localStorage: 'huellita.quality.v3' = 'low' acelera (la clave vieja 'huellita.quality' ya no hace nada);
+// 'huellita.welcomed' = '1' salta la bienvenida.
 // Entrar: await p.click('#enter'), luego un clic en el canvas salta la intro.
 // Con ?debug en la URL: window.__huellita = { controls, camera, THREE, spirits, me, startWalk }:
 //   H.controls.placePlayer(new H.THREE.Vector3(x, 0, z), new H.THREE.Vector3(tx, 0, tz)); H.controls.snapFollow();

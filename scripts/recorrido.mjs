@@ -72,7 +72,7 @@ async function enter(p, { welcomed = true } = {}) {
 async function context(b, dev, { welcomed = true, demo = false } = {}) {
   const ctx = await b.newContext(dev === 'compu' ? { viewport: { width: 1280, height: 800 } } : { ...devices[dev] });
   await ctx.addInitScript(([w]) => {
-    localStorage.setItem('huellita.quality', 'low');
+    localStorage.setItem('huellita.quality.v3', 'low');
     if (w) localStorage.setItem('huellita.welcomed', '1');
   }, [welcomed]);
   if (demo) await ctx.route('**/api/health', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: false }) }));

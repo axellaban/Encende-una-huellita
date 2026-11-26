@@ -320,7 +320,7 @@ export function createSpirits(scene, { blocked, tier }) {
   let camPos = new THREE.Vector3();
   // Cuántos espíritus juegan en el piso: en el jardín se reparten entre el Prado, la plazoleta de
   // después del Puente del Arcoíris, el césped y el campo (ver zoneForIndex en setPack).
-  const maxPack = tier?.grass >= 20000 ? 16 : tier?.grass >= 10000 ? 12 : 8;
+  const maxPack = tier?.grass >= 15000 ? 16 : tier?.grass >= 10000 ? 12 : 8; // Alta / Media / Ahorro
   let currentFl = 0;
   // Claros del campo donde vive cada espíritu "de campo": lejos del salón, del camino, del río y de
   // los otros lugares de juego (para que se vean perritos por todo el jardín y no sólo en el Prado).

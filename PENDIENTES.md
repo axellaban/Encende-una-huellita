@@ -24,6 +24,10 @@ el campo, que las imágenes se bajen bien y que la vista previa de WhatsApp sea 
 - [x] **Vista previa de WhatsApp**: `og.jpg` nuevo (el puente con el arcoíris, título y botón), tarjeta de
       cada huellita con las palabras de la familia, título "En memoria de X 🕯️", textos con llamada a la
       acción, `og:site_name`/tipo/medidas, etiquetas al principio del `<head>` y `HEAD` respondido (antes 405).
+- [x] **Calidad Alta de verdad por defecto**: cada vez que el iPhone le sacaba la memoria gráfica a la
+      página (al cambiar de app o bloquear) el jardín bajaba un escalón **para siempre**; después de dos,
+      quedaba en "Ahorro". Ahora la bajada sólo pasa si se pierde en uso y dura un día, y la clave nueva
+      (`huellita.quality.v3`) devuelve a todos a Alta. Ver AGENTS → calidad.
 - [x] Otros arreglos: "1 velas" → "1 vela" en la ficha; el cartel "Bienvenidos al jardín" del arco tapaba
       media pantalla al pasar la cámara por abajo (ahora se desvanece de cerca); "0 velas encendidas" en la
       tarjeta para historias → "Encendé la primera vela"; el dominio ya no se aplasta en esa tarjeta.

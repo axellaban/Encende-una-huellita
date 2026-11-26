@@ -1,5 +1,11 @@
 // Calidad gráfica según el dispositivo, con ajuste dinámico de resolución según los FPS reales.
-const KEY = 'huellita.quality.v2';
+// La calidad que eligió la persona en Opciones (v3: con la v2 muchos celulares quedaron trabados en
+// "Ahorro" para siempre, ver abajo; al cambiar la clave todos vuelven a Alta).
+const KEY = 'huellita.quality.v3';
+// Una bajada automática (cuando el celular se quedó sin memoria gráfica con el jardín en uso): dura un
+// día y después se vuelve a probar en Alta.
+const AUTO = 'huellita.quality.auto';
+const AUTO_MS = 24 * 3600_000;
 
 export const TIERS = {
   high: { label: 'Alta', maxPixelRatio: 2.25, bloom: true, grass: 18000, flowers: 800, lights: 6, bulbsPerStrand: 18, fireflies: 320 },
@@ -15,22 +21,39 @@ export function reducedMotion() {
   return matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-export function savedQuality() {
-  try { return localStorage.getItem(KEY) || 'high'; } catch { return 'high'; }
+const isTier = (t) => typeof t === 'string' && Object.hasOwn(TIERS, t);
+const read = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const write = (k, v) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* sin storage */ } };
+
+// La calidad con la que arranca: la elegida, si no una bajada automática vigente, si no Alta.
+export function pickTier() {
+  const chosen = read(KEY);
+  if (isTier(chosen)) return chosen;
+  try {
+    const a = JSON.parse(read(AUTO) || 'null');
+    if (a && isTier(a.t) && a.until > Date.now()) return a.t;
+  } catch { /* nada */ }
+  return 'high';
+}
+export const savedQuality = pickTier;
+
+// La que elige la persona en Opciones: queda guardada y borra cualquier bajada automática.
+export function saveQuality(v) {
+  write(KEY, v);
+  write(AUTO, null);
 }
 
-export function saveQuality(v) {
-  try { localStorage.setItem(KEY, v); } catch { /* sin storage */ }
+// Un escalón más abajo por un día (no toca la que eligió la persona).
+export function stepDownQuality(current) {
+  if (isTier(read(KEY))) return current;
+  const next = current === 'high' ? 'mid' : 'low';
+  write(AUTO, JSON.stringify({ t: next, until: Date.now() + AUTO_MS }));
+  return next;
 }
 
 export function autoTier() {
   // Por defecto siempre calidad Alta.
   return 'high';
-}
-
-export function pickTier() {
-  const s = savedQuality();
-  return TIERS[s] ? s : 'high';
 }
 
 // Baja la resolución sólo si la escena va muy lenta de forma sostenida y la sube si sobra rendimiento.

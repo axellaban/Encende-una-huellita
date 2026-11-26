@@ -90,7 +90,7 @@ import { GUIDE_STEPS, renderGuide } from './guide.js';
 }
 import { portraitCanvas } from './scene/textures.js';
 import { setMusic, setSounds, isMusicOn, isSoundsOn, sparkle, tick, pauseAll, ding, setRiver, setMood, step, boop, clink, liftDoors, liftHum, petVoice } from './audio.js';
-import { TIERS, pickTier, savedQuality, saveQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
+import { TIERS, pickTier, savedQuality, saveQuality, stepDownQuality, createAdaptiveResolution, reducedMotion } from './quality.js';
 import { FEATURED } from '../server/seed.js';
 
 const $ = (s) => document.querySelector(s);
@@ -152,6 +152,9 @@ if (!featuredDef) $$('[data-featured]').forEach((el) => el.remove());
 // ---------- escena ----------
 const tierName = pickTier();
 const tier = TIERS[tierName];
+// Desde cuándo está la página a la vista (para saber si una pérdida del 3D fue en uso o de fondo).
+let visibleSince = performance.now();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) visibleSince = performance.now(); });
 const canvas = $('#scene');
 let renderer = null;
 try {
@@ -195,13 +198,22 @@ function setupRenderer() {
   renderer.setSize(innerWidth, innerHeight);
   lastW = innerWidth;
   lastH = innerHeight;
-  // Si el celular se queda sin memoria gráfica, el lienzo queda negro: recargamos un escalón más abajo.
+  // Si el celular se queda sin memoria gráfica, el lienzo queda negro y hay que recargar. Antes además
+  // bajaba la calidad para siempre, y el iPhone le saca esa memoria a cualquier pestaña que queda de
+  // fondo (cambiar de app, bloquear la pantalla): así muchos quedaban trabados en "Ahorro". Ahora sólo se
+  // baja (por un día) si se perdió con el jardín a la vista y en uso; si estaba de fondo, se recarga
+  // igual al volver, sin tocar la calidad.
   renderer.domElement.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
-    const next = tierName === 'high' ? 'mid' : 'low';
-    saveQuality(next);
-    toast('✨ Ajustamos la calidad para que ande mejor en tu equipo…');
-    setTimeout(() => location.reload(), 1200);
+    const inUse = !document.hidden && performance.now() - visibleSince > 8000;
+    const lowered = inUse && stepDownQuality(tierName) !== tierName;
+    const reload = () => {
+      toast(lowered ? '✨ Ajustamos la calidad para que ande mejor en tu equipo…' : '✨ Volviendo a encender el jardín…');
+      setTimeout(() => location.reload(), 900);
+    };
+    if (!document.hidden) return reload();
+    const back = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', back); reload(); } };
+    document.addEventListener('visibilitychange', back);
   }, { once: true });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.16;
