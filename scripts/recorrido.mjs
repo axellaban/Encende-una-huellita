@@ -116,8 +116,9 @@ async function full(b, tag, dev) {
   check(tag, 'vela (una sola por día)', Number(c1) === c0 + 1 && (await text(p, '#s-candles')) === c1, `velas ${c0} → ${c1} → ${await text(p, '#s-candles')}`);
   const f0 = Number(await text(p, '#s-flowers'));
   await p.evaluate(() => document.querySelector('#s-flower').click());
-  await wait(p, 1500);
-  check(tag, 'flor', Number(await text(p, '#s-flowers')) === f0 + 1);
+  // Espera a que llegue la respuesta (en el emulador lento puede tardar más de un segundo y medio).
+  await p.waitForFunction((n) => Number(document.querySelector('#s-flowers')?.textContent) === n, f0 + 1, { timeout: 9000 }).catch(() => {});
+  check(tag, 'flor', Number(await text(p, '#s-flowers')) === f0 + 1, `flores ${f0} → ${await text(p, '#s-flowers')}`);
   await p.evaluate(() => document.querySelector('#s-hug').click());
   await wait(p, 1500);
   check(tag, 'abrazo', await toastIs(p, /abrazo/));
@@ -185,11 +186,10 @@ async function full(b, tag, dev) {
   await wait(p, 1500);
   check(tag, 'agradecer las velas', await toastIs(p, /agradecimiento/));
   await p.evaluate(() => document.querySelector('#tool-gb-toggle')?.click());
-  await wait(p, 1500);
-  const closedOk = await p.evaluate(() => !document.querySelector('#gb-closed-msg').hidden && document.querySelector('#gb-form').hidden);
+  const closedOk = await p.waitForFunction(() => !document.querySelector('#gb-closed-msg').hidden && document.querySelector('#gb-form').hidden, null, { timeout: 9000 }).then(() => true, () => false);
   await p.evaluate(() => document.querySelector('#tool-gb-toggle')?.click());
-  await wait(p, 1500);
-  check(tag, 'cerrar y reabrir libro de visitas', closedOk && (await p.evaluate(() => !document.querySelector('#gb-form').hidden)));
+  const reopenOk = await p.waitForFunction(() => !document.querySelector('#gb-form').hidden, null, { timeout: 9000 }).then(() => true, () => false);
+  check(tag, 'cerrar y reabrir libro de visitas', closedOk && reopenOk);
   await p.evaluate(() => document.querySelector('[data-tool="diary"]').click());
   await wait(p, 800);
   await p.fill('#diary-form textarea', 'Dormía al sol todas las tardes.');
