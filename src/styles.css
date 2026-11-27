@@ -944,3 +944,39 @@ body.obit-mode .toast, body.obit-mode .glow-toast { top: auto; bottom: calc(var(
 }
 .obit-title h2, .obit-title p { margin: 0; }
 body.obit-mode .joy, body.obit-mode .joy-ghost, body.obit-mode .act-btn, body.obit-mode .emote-btn, body.obit-mode .emote-tray, body.obit-mode .bottom { display: none !important; }
+
+/* ---------- el libro del piso 99 ---------- */
+dialog.tome { border: 0; padding: 0; background: transparent; width: min(560px, calc(100vw - 20px)); max-height: none; overflow: visible; color: #3b2418; }
+dialog.tome::backdrop { background: radial-gradient(ellipse at center, rgba(40,18,30,.55), rgba(8,4,12,.88)); }
+dialog.tome .x { position: absolute; top: -6px; right: -2px; z-index: 3; background: rgba(28,14,36,.8); color: #fff6ea; }
+.tome-book { position: relative; perspective: 1600px; height: min(78dvh, 760px); border-radius: 10px 18px 18px 10px; background: linear-gradient(90deg, #4a0f1c, #6a1628 6%, #5a1222); padding: 12px 14px 12px 20px; box-shadow: 0 26px 60px rgba(0,0,0,.55), inset 0 0 0 2px #b8872f; }
+.tome-book::before { content: ''; position: absolute; left: 6px; top: 12px; bottom: 12px; width: 6px; border-radius: 3px; background: linear-gradient(#e2b35a, #a5762a); opacity: .8; }
+.tome-page { position: relative; height: 100%; overflow-y: auto; overscroll-behavior: contain; border-radius: 4px 12px 12px 4px; padding: 34px 30px 26px; background: radial-gradient(ellipse at 50% 40%, #fbf1dc 0%, #f1dfbd 70%, #e2c497 100%); box-shadow: inset 14px 0 22px -12px rgba(90,50,20,.45), inset 0 0 0 3px rgba(184,135,47,.55), inset 0 0 0 9px #f4e4c4, inset 0 0 0 11px rgba(142,34,52,.45); transform-origin: left center; backface-visibility: hidden; }
+.tome-page.out-next { animation: tomeOutNext .32s ease-in forwards; }
+.tome-page.in-next { animation: tomeInNext .38s ease-out; }
+.tome-page.out-prev { animation: tomeOutPrev .32s ease-in forwards; }
+.tome-page.in-prev { animation: tomeInPrev .38s ease-out; }
+@keyframes tomeOutNext { to { transform: rotateY(-88deg); opacity: .6; } }
+@keyframes tomeInNext { from { transform: rotateY(60deg); opacity: .4; } to { transform: none; opacity: 1; } }
+@keyframes tomeOutPrev { to { transform: rotateY(60deg); opacity: .5; } }
+@keyframes tomeInPrev { from { transform: rotateY(-88deg); opacity: .5; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tome-page.out-next, .tome-page.in-next, .tome-page.out-prev, .tome-page.in-prev { animation: none; } }
+.tome-page .t-eyebrow { text-align: center; color: #8e2234; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; font-size: 12.5px; margin: 0 0 8px; }
+.tome-page h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-weight: 600; font-size: clamp(30px, 8vw, 40px); line-height: 1.05; text-align: center; margin: 0 0 10px; color: #3b2418; }
+.tome-page h3 em { color: #a3341f; }
+.tome-page .t-rule { text-align: center; color: #b8872f; font-size: 22px; margin: 4px 0 10px; }
+.tome-page .t-art { display: grid; place-items: center; margin: 4px 0 12px; }
+.tome-page .t-art svg { width: min(230px, 72%); height: auto; filter: sepia(.25); }
+.tome-page .t-body { font-family: 'Cormorant Garamond', Georgia, serif; font-size: clamp(19px, 5vw, 21px); line-height: 1.45; text-align: left; margin: 0; }
+.tome-page .t-body::first-letter { float: left; font-family: 'Young Serif', Georgia, serif; font-size: 3.3em; line-height: .82; padding: 6px 8px 0 0; color: #8e2234; }
+.tome-page .t-sources { margin: 16px 0 0; padding: 12px 0 0; border-top: 1px solid rgba(184,135,47,.6); list-style: none; font-size: 13.5px; line-height: 1.4; color: #6b4a33; font-style: italic; }
+.tome-page .t-folio { margin: 18px 0 0; text-align: center; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 15px; color: #8a6a4c; }
+.tome-page.cover { display: grid; align-content: center; justify-items: center; text-align: center; gap: 6px; }
+.tome-page.cover .t-big { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-weight: 600; font-size: clamp(54px, 15vw, 76px); line-height: .95; color: #3b2418; margin: 6px 0; }
+.tome-page.cover .t-sub { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 22px; color: #5a3a26; margin: 0; }
+.tome-page .t-flowers { font-size: 30px; letter-spacing: 8px; margin: 10px 0; }
+.tome-page .t-acts { display: grid; gap: 10px; margin-top: 18px; }
+.tome-nav { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 12px; color: #fff6ea; font-weight: 800; }
+.tome-nav button { width: 52px; height: 52px; border-radius: 50%; font-size: 30px; line-height: 1; color: #fff6ea; background: rgba(184,135,47,.32); box-shadow: inset 0 0 0 2px rgba(226,179,90,.7); }
+.tome-nav button:disabled { opacity: .3; }
+.tome-nav span { min-width: 90px; text-align: center; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 18px; }

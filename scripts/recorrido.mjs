@@ -344,6 +344,16 @@ async function full(b, tag, dev) {
   await p.evaluate(() => window.__huellita.goFloor(5));
   await wait(p, 2500);
   check(tag, 'ir a otro piso (directo) con 2 ascensores y espíritus', (await text(p, '.floor-num')) === '6' && (await p.evaluate(() => window.__huellita.elevator.lifts.length === 2 && window.__huellita.spirits.pack.length >= 6)));
+  // El libro del piso 99: el botón de acción ofrece leerlo, se abre y se pasa de página.
+  await p.evaluate(() => { const H = window.__huellita; H.goFloor(98); H.controls.placePlayer(new H.THREE.Vector3(0.3, 0, -3.2), new H.THREE.Vector3(0, 0, -5.8)); H.controls.snapFollow(); });
+  const bookAct = await p.waitForFunction(() => document.querySelector('#act-btn')?.dataset.kind === 'book', null, { timeout: 15000 }).then(() => true, () => false);
+  if (bookAct) await p.evaluate(() => document.querySelector('#act-btn').click());
+  await wait(p, 1200);
+  const page1 = await text(p, '#tome-count');
+  await p.evaluate(() => document.querySelector('#tome-next').click());
+  await wait(p, 1500);
+  check(tag, 'piso 99: leer el libro de la sexta etapa', bookAct && (await isOpen(p, '#tome')) && page1.startsWith('1 de') && (await text(p, '#tome-count')).startsWith('2 de'), `${page1} → ${await text(p, '#tome-count')}`);
+  await closeTop(p);
   await p.evaluate(() => window.__huellita.goFloor(0));
   await wait(p, 2500);
   await hub(p, tag, '[data-list="all"]', 'Huellitas');

@@ -25,6 +25,7 @@ import { createMist } from './scene/mist.js';
 import { FURS, PATTERNS, COATS, EARS, TAILS, EYES, SIZES, SNOUTS, PERSONALITIES } from '../server/looks.js';
 import { arrival, viaRef, myRef, shareUrl, uploadOgCard, drawOgCard, drawKeepsake, OG_VERSION } from './share.js';
 import { contentRect, drawCover } from './photoTrim.js';
+import { createTome } from './scene/tome.js';
 import { canvasBlob, saveImage, shareImage, copyText, whatsappUrl, isIOS } from './saveimg.js';
 import { polaroid } from './photo.js';
 // Cómo llegó esta persona (link de una huellita, invitación de alguien). Se lee antes de tocar la URL.
@@ -33,7 +34,7 @@ import { createGame } from './game.js';
 import { GIFTS, SAYINGS, EMOTES, STAGES, stageOf } from '../server/glow.js';
 import { BACKGROUNDS } from '../server/plans.js';
 import { papelPicadoTexture, backgroundTexture, PICADO_COLORS } from './scene/muertos.js';
-import { GUIDE_STEPS, renderGuide } from './guide.js';
+import { GUIDE_STEPS, ART, renderGuide } from './guide.js';
 
 // Tira de papel picado para paneles y entrada: banderitas pastel con caritas de calavera.
 {
@@ -181,6 +182,7 @@ const sunDir = new THREE.Vector3();
 let cozy;
 let avatars;
 let elevator;
+let tome3d; // el atril con el libro del piso 99 (scene/tome.js)
 let spirits;
 let me; // tu personaje
 let captureNext = null; // modo foto
@@ -323,6 +325,8 @@ async function buildScene() {
   cozy = createCozy(scene, tier, world.colliders, world.ground);
   avatars = createAvatars(scene);
   elevator = createElevator(scene, world.colliders, Math.random);
+  // El libro de "La sexta etapa" en el piso 99, frente a la fuente.
+  tome3d = createTome(scene, world.colliders, EASEL_POS);
   avatars.visible = store.get('huellita.quiet') !== '1';
   controls = createControls(camera, canvas, world.colliders, { reduced });
   // Al aterrizar de un planeo: un puf de brillitos y un pasito.
@@ -363,11 +367,12 @@ async function buildScene() {
   controls.onTap((e) => {
     if (document.body.classList.contains('intro')) return skipIntro();
     if (!sheetEl.hidden) { closeSheet(); return; }
-    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, ...elevator.hits, ...world.walkable]);
+    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, ...elevator.hits, ...(tome3d?.visible ? [tome3d.hit] : []), ...world.walkable]);
     if (!hit) return;
     // Un muro: caminar hacia él (no abrir lo que haya del otro lado).
     if (hit.object.userData.kind === 'wall') { controls.walkTo(hit.point.clone().setY(0)); hideHint(); return; }
     if (hit.object.userData.kind === 'jar') { clink(); return openJar(); }
+    if (hit.object.userData.kind === 'book') return openTome();
     if (hit.object.userData.kind === 'sofa') return sitOnSofa(hit.object.userData.sofa);
     if (hit.object.userData.kind === 'elevator') return callElevator(hit.object.userData.liftIdx);
     if (hit.object.userData.kind === 'spirit') return tapSpirit(spirits.spiritOf(hit.object));
@@ -397,7 +402,7 @@ async function buildScene() {
     hideHint();
   });
   controls.onHover((e) => {
-    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, ...elevator.hits]);
+    const hit = cast(e, [...hall.pickables(), ...hall.blockers, ...(world.colliders.up ? [] : cozy.pickables), ...spirits.pickables, ...elevator.hits, ...(tome3d?.visible ? [tome3d.hit] : [])]);
     const key = hit && hit.distance < 16 ? slotKeyFromHit(hit.object) : null;
     hall.setHover(key);
     canvas.style.cursor = hit && hit.distance < 16 && (key !== null || (hit.object.userData.kind && hit.object.userData.kind !== 'wall')) ? 'pointer' : '';
@@ -422,6 +427,7 @@ async function buildScene() {
     const dt = Math.min(clock.getDelta(), 0.1);
     const t = clock.elapsedTime;
     uTime.value = t;
+    tome3d?.update(t);
     controls.update(dt);
     const P = controls.player;
     if (!world.colliders.up) world.updateOpen?.(P.pos.x, P.pos.z);
@@ -864,6 +870,7 @@ async function rideTo(f) {
 function goFloor(f, quiet = false, instant = false) {
   if (!hall || f === hall.floor) return;
   hall.setFloor(f, memorials);
+  tome3d?.setFloor(f);
   heaven?.setFloor(f, instant);
   spirits?.setFloor(f, memorials, walking?.id);
   renderFloors();
@@ -2827,6 +2834,7 @@ function computeAction() {
     if (m) return { kind: 'visit', ic: '🕯️', lbl: m.name, key: `m:${m.id}`, run: () => visit(m) };
     return { kind: 'add', ic: '＋', lbl: 'Sumar acá', key: `a:${fr.i}`, run: () => openAdd(hall.floor * SLOTS_PER_FLOOR + fr.i) };
   }
+  if (tome3d?.visible && Math.hypot(tome3d.pos.x - P.pos.x, tome3d.pos.z - P.pos.z) < 3.4) return { kind: 'book', ic: '📖', lbl: 'Leer el libro', key: 'book', run: openTome };
   if (elevator && elevator.nearestDist(P.pos) < 3.4) return { kind: 'lift', ic: '🛗', lbl: 'Ascensor', key: 'lift', run: () => callElevator() };
   if (currentFloor() === 0 && P.pos.distanceTo(_v.set(JAR_POS.x, 0, JAR_POS.z)) < 3.2) return { kind: 'jar', ic: '🫙', lbl: 'Frasco', key: 'jar', run: () => { clink(); openJar(); } };
   const c = spirits?.companion;
@@ -3396,6 +3404,92 @@ $('#share-save').onclick = async () => {
   if (!shareBlob || !shareFor) return toast('Un segundito, la estamos pintando…');
   savedToast(await saveImage(shareBlob, `${fileSafe(shareFor.name)}-huellita.jpg`), 'Imagen');
 };
+
+// ---------- el libro del piso 99: "La sexta etapa", página por página ----------
+let tomeIdx = 0;
+let tomeBusy = false;
+function tomePages() {
+  const pages = [{ cover: true }];
+  GUIDE_STEPS.forEach((st) => pages.push(st));
+  pages.push({ end: true });
+  return pages;
+}
+function renderTomePage(i) {
+  const pages = tomePages();
+  const pg = pages[i];
+  const el = $('#tome-page');
+  el.className = 'tome-page';
+  el.scrollTop = 0;
+  if (pg.cover) {
+    el.classList.add('cover');
+    el.innerHTML = `<p class="t-eyebrow">✦ Día de Muertos ✦</p><div class="t-flowers">🌼🕯️🌼</div><p class="t-big">La sexta etapa</p><div class="t-rule">❦</div><p class="t-sub">Crear significado después de una pérdida</p><p class="t-sub" style="margin-top:18px;font-size:17px">Un libro para quienes extrañan.<br/>Leelo despacio, con su foto cerca.</p>`;
+  } else if (pg.end) {
+    el.innerHTML = `<p class="t-eyebrow">Para seguir</p><h3>Que su luz te <em>acompañe</em></h3><div class="t-rule">❦</div><p class="t-body">Este libro queda abierto en lo más alto del jardín, para cuando lo necesites. Podés volver a leerlo cuantas veces quieras, y hacer cada paso con calma: escribir tus respuestas, dejarle su cosa, decirle lo que faltó.</p><div class="t-acts"><button class="btn primary wide" data-tome="guide">🕯️ Hacer los pasos, uno por uno</button><button class="btn soft wide" data-tome="close">Cerrar el libro</button></div>`;
+  } else {
+    el.innerHTML = `<p class="t-eyebrow"></p><h3></h3><div class="t-rule">❦</div><div class="t-art">${ART[pg.art] || ''}</div><p class="t-body"></p>${pg.sources ? '<ul class="t-sources"></ul>' : ''}`;
+    el.querySelector('.t-eyebrow').textContent = pg.eyebrow;
+    el.querySelector('h3').innerHTML = pg.title; // texto propio de guide.js (con <em>)
+    el.querySelector('.t-body').textContent = pg.body;
+    if (pg.sources) el.querySelector('.t-sources').append(...pg.sources.map((x) => Object.assign(document.createElement('li'), { textContent: x })));
+  }
+  const folio = document.createElement('p');
+  folio.className = 't-folio';
+  folio.textContent = `— ${i + 1} —`;
+  el.append(folio);
+  $('#tome-count').textContent = `${i + 1} de ${pages.length}`;
+  $('#tome-prev').disabled = i === 0;
+  $('#tome-next').disabled = i === pages.length - 1;
+}
+function turnTome(dir) {
+  const n = tomePages().length;
+  const next = tomeIdx + dir;
+  if (tomeBusy || next < 0 || next >= n) return;
+  tomeBusy = true;
+  const el = $('#tome-page');
+  haptic(6);
+  tick?.();
+  if (reduced) { tomeIdx = next; renderTomePage(tomeIdx); tomeBusy = false; return; }
+  el.classList.add(dir > 0 ? 'out-next' : 'out-prev');
+  setTimeout(() => {
+    tomeIdx = next;
+    renderTomePage(tomeIdx);
+    el.classList.add(dir > 0 ? 'in-next' : 'in-prev');
+    setTimeout(() => { el.classList.remove('in-next', 'in-prev'); tomeBusy = false; }, 400);
+  }, 300);
+}
+function openTome() {
+  closeModals();
+  closeSheet();
+  tomeIdx = 0;
+  renderTomePage(0);
+  $('#tome').showModal();
+}
+$('#tome-prev').onclick = () => turnTome(-1);
+$('#tome-next').onclick = () => turnTome(1);
+$('#tome').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tome]');
+  if (!b) return;
+  $('#tome').close();
+  if (b.dataset.tome === 'guide') openGuide(0);
+});
+$('#tome').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') turnTome(1);
+  if (e.key === 'ArrowLeft') turnTome(-1);
+});
+// Deslizar con el dedo para pasar de página.
+{
+  let sx = null;
+  let sy = 0;
+  const book = $('#tome-book');
+  book.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; });
+  book.addEventListener('pointerup', (e) => {
+    if (sx === null) return;
+    const dx = e.clientX - sx;
+    const dy = e.clientY - sy;
+    sx = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) turnTome(dx < 0 ? 1 : -1);
+  });
+}
 
 // ---------- guía: la sexta etapa ----------
 let guideReady = false;

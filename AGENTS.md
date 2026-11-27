@@ -112,6 +112,12 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     **Tocar cualquier cuadrito con foto abre su obituario ahí mismo** (`visitHere(m, mesh)` en `main.js`:
     la cámara encuadra ese cuadrito, no te lleva al nicho) y el botón de acción lo ofrece si lo tenés
     adelante (`hall.nearestCell`).
+  - **El libro del piso 99** (`src/scene/tome.js`, `createTome`): atril de madera torneada con un libro
+    enorme abierto (páginas pintadas en canvas, tapas bordó con esquinas doradas, cinta, dos velas y polvo
+    de luz), frente a la fuente; sólo se ve en el último piso (`setFloor(98)`). Tocarlo o el botón de
+    acción ("📖 Leer el libro") abre `#tome`: "La sexta etapa" página por página (portada, los pasos de
+    `GUIDE_STEPS` con sus dibujos `ART` de `guide.js`, y un cierre que lleva a la guía interactiva), con
+    vuelta de hoja y deslizar con el dedo (`openTome`/`turnTome` en `main.js`).
   - `heaven.js`: los pisos hacia el cielo (mar de nubes, nubes de algodón, sol, rayos). `elevator.js`:
     la torre: planta baja con el hueco de la puerta y la cabina con interior (descansa en la planta baja
     de cada piso; `setFloor(n)` sólo cambia el indicador). La escena del viaje está en `main.js`

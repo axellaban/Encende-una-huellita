@@ -208,6 +208,19 @@
     </dialog>
 
     <!-- ---------- ficha de una huellita ---------- -->
+    <!-- el libro del piso 99: "La sexta etapa", página por página -->
+    <dialog class="tome" id="tome" aria-label="La sexta etapa">
+      <button class="x" data-close aria-label="Cerrar el libro">✕</button>
+      <div class="tome-book" id="tome-book">
+        <article class="tome-page" id="tome-page" aria-live="polite"></article>
+      </div>
+      <nav class="tome-nav">
+        <button id="tome-prev" aria-label="Página anterior">‹</button>
+        <span id="tome-count"></span>
+        <button id="tome-next" aria-label="Página siguiente">›</button>
+      </nav>
+    </dialog>
+
     <!-- modo obituario: la huellita a pantalla completa (el nicho en 3D, sus datos y los gestos abajo) -->
     <section class="obit" id="obit" hidden aria-label="Obituario">
       <header class="obit-head">

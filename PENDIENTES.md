@@ -4,6 +4,13 @@ Lista para quien siga el proyecto (persona o IA). Leé primero [`AGENTS.md`](AGE
 Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** = lo que más suma,
 **P2** = completa el relevamiento del sitio de referencia, **P3** = deuda técnica y mejoras.
 
+## 🆕 27/11/2026: el libro de "La sexta etapa" en el piso 99
+
+En el último piso, frente a la fuente, un atril con un libro grande abierto; tocándolo se lee "La sexta
+etapa" página por página. Ver AGENTS → El libro del piso 99.
+- [ ] Ideas: que se escuche el pasar de hoja, un marcapáginas que recuerde dónde quedaste, y que el
+      libro se vea también desde el piso 1 con una señal ("En lo más alto del jardín hay un libro…").
+
 ## 🆕 27/11/2026: modo obituario a pantalla completa
 
 Pedido del dueño ("la experiencia del obituario es mejor en el sitio de referencia"): ahora cada
