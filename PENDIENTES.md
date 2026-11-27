@@ -6,6 +6,11 @@ Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** =
 
 ## 🆕 Tanda del 26/11/2026: listo para compartir (cuadritos, espíritus, compartir y WhatsApp)
 
+**Publicado en `main` el 27/11/2026** y verificado en producción (mismo `index-*.js` que el build, `HEAD`
+200 en `/h/luca` y `/api/og/...`, etiquetas nuevas). Recorrido: celular y compu 78/78; SE, acostado,
+modo demo y sin WebGL bien salvo pruebas del recorrido que estaban desactualizadas o con esperas fijas
+(ya corregidas: 2 ascensores, polaroid como `blob:`, esperar la respuesta de flor y libro de visitas).
+
 Pedido del dueño: que todos los cuadritos con fotos abran su obituario, más espíritus en la plazoleta y
 el campo, que las imágenes se bajen bien y que la vista previa de WhatsApp sea lo mejor posible.
 - [x] **Cuadritos del salón → obituario ahí mismo** (`visitHere` en `main.js`, `nearestCell` en `hall.js`).
