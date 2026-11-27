@@ -895,16 +895,12 @@ function visit(m) {
     const key = m.slot < 0 ? 'featured' : m.slot % SLOTS_PER_FLOOR;
     // La ofrenda de la destacada está sólo en el piso 1.
     goFloor(m.slot < 0 ? 0 : floorOf(m), true);
-    const sheet = bottomSheet();
-    const shift = sheet ? 0 : key === 'featured' ? 0.9 : 1.1;
     // En pantallas verticales el campo horizontal es angosto: nos paramos más lejos.
     const distMul = camera.aspect < 0.8 ? 1.55 : camera.aspect < 1.2 ? 1.25 : 1;
-    let { stand, target, frame } = hall.viewpoint(key, shift, distMul);
-    if (sheet) {
-      // La hoja tapa la mitad de abajo: el marco tiene que quedar en el cuarto de arriba.
-      target = frame.clone();
-      target.y -= 0.42 * stand.distanceTo(frame) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    }
+    let { stand, target, frame } = hall.viewpoint(key, 0, distMul);
+    // Modo obituario: el nicho entero (con sus puertitas y repisas) llena el espacio que dejan libre
+    // la cabecera de arriba y la barra de gestos de abajo.
+    if (key !== 'featured') ({ stand, target } = obitShot(frame, stand, target, 0.72, 0.6));
     hideHint();
     if (key === 'featured') placeNear(stand, frame, 1.6, 5.4);
     else {
@@ -935,14 +931,8 @@ function visitHere(m, obj) {
   if (normal.lengthSq() < 1e-4 || right.lengthSq() < 1e-4) return visit(m);
   normal.normalize();
   right.normalize();
-  const sheet = bottomSheet();
-  const distMul = camera.aspect < 0.8 ? 1.55 : camera.aspect < 1.2 ? 1.25 : 1;
-  const dist = 1.2 * distMul;
-  const target = frame.clone().addScaledVector(right, sheet ? 0 : 0.42);
-  const stand = target.clone().addScaledVector(normal, dist);
-  stand.y = Math.max(1.1, frame.y + 0.05);
-  // La hoja tapa la mitad de abajo: el cuadrito tiene que quedar en el cuarto de arriba.
-  if (sheet) target.y -= 0.42 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  // Modo obituario: el cuadrito centrado en el espacio libre entre la cabecera y los gestos.
+  const { stand, target } = obitShot(frame, frame.clone().addScaledVector(normal, 2), frame.clone(), 0.42, 0.36);
   hideHint();
   placeNear(stand, frame, 0.85, 1.3);
   controls.flyTo(stand, target, () => spirits?.sparkle(frame.clone().addScaledVector(normal, 0.08), new THREE.Color(1.9, 1.45, 0.65), 10));
@@ -960,6 +950,26 @@ function addFromCell(corridor) {
     }
   }
   return addHere();
+}
+
+// Desde dónde mirar algo de `halfW` de medio ancho y `halfH` de medio alto para que entre en el
+// espacio libre del modo obituario (arriba la cabecera, abajo la barra de gestos), de frente.
+function obitShot(frame, stand0, target0, halfW, halfH) {
+  const n = new THREE.Vector3().subVectors(stand0, target0).setY(0);
+  if (n.lengthSq() < 1e-6) return { stand: stand0, target: target0 };
+  n.normalize();
+  const tv = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const th = tv * camera.aspect;
+  // Libre: ~60 % del alto (la cabecera ocupa un cuarto, la barra un séptimo) y el ancho entero menos las flechas.
+  const freeV = 0.66;
+  const freeH = 0.84;
+  const d = THREE.MathUtils.clamp(Math.max(halfW / (th * freeH), halfH / (tv * freeV)), 1.1, 3.9);
+  // El centro del espacio libre (entre la cabecera y la barra) queda casi en el medio de la pantalla.
+  const target = frame.clone();
+  target.y -= 0.02 * d * tv;
+  const stand = frame.clone().addScaledVector(n, d);
+  stand.y = frame.y + 0.06;
+  return { stand, target };
 }
 
 // Pone a tu personaje parado frente a un marco (o al ascensor), a un costado para no taparlo.
@@ -1033,16 +1043,26 @@ const peekY = () => Math.max(0, sheetHeight() - innerHeight * 0.5);
 function setSheet(state) {
   sheetState = state;
   if (!bottomSheet()) return;
-  const y = state === 'full' ? 0 : state === 'peek' ? peekY() : sheetHeight() + 20;
+  const y = state === 'full' ? 0 : state === 'peek' ? peekY() : sheetHeight() + 20; // 'closed' y 'obit': afuera
   sheetEl.style.setProperty('--sheet-y', `${y}px`);
 }
 
-async function openSheet(m) {
+async function openSheet(m, { full = false } = {}) {
+  // Sin 3D no hay nicho que mirar: la ficha completa directamente.
+  if (!hall) full = true;
+  const same = current?.id === m.id;
   current = m;
   const wasHidden = sheetEl.hidden;
   sheetEl.hidden = false;
   document.body.classList.add('sheet-open');
-  if (bottomSheet() && wasHidden) {
+  if (!full) {
+    // Modo obituario: la huellita a pantalla completa; la ficha queda guardada para "Su historia".
+    sheetEl.classList.add('dragging');
+    setSheet('obit');
+    sheetEl.getBoundingClientRect();
+    sheetEl.classList.remove('dragging');
+    setObit(true, m, !same || wasHidden);
+  } else if (bottomSheet() && wasHidden) {
     sheetEl.classList.add('dragging');
     setSheet('closed');
     sheetEl.getBoundingClientRect();
@@ -1066,6 +1086,7 @@ async function openSheet(m) {
 function closeSheet() {
   if (sheetEl.hidden) return;
   current = null;
+  setObit(false);
   if (controls?.mode === 'focus') controls.follow();
   document.body.classList.remove('sheet-open');
   history.replaceState(null, '', '/');
@@ -1074,6 +1095,118 @@ function closeSheet() {
     setTimeout(() => { if (!current) sheetEl.hidden = true; }, 420);
   } else sheetEl.hidden = true;
 }
+
+// ---------- modo obituario: la huellita a pantalla completa ----------
+// El nicho en 3D bien grande, arriba su nombre, años, las palabras de la familia, quiénes le encendieron
+// una vela y cuántos la visitaron; a los costados, la huellita de al lado; abajo, los gestos con sus
+// contadores. "Su historia" (o el libro) abre la ficha completa de siempre.
+let obit = false;
+let obitHintT = 0;
+const obitEl = $('#obit');
+const nf = (n) => Number(n || 0).toLocaleString('es-AR');
+function setObit(on, m = current, fresh = false) {
+  obit = on;
+  obitEl.hidden = !on;
+  document.body.classList.toggle('obit-mode', on);
+  clearTimeout(obitHintT);
+  if (!on || !m) { $('#obit-hint').hidden = true; return; }
+  fillObit(m);
+  if (fresh) {
+    countVisit(m);
+    // La primera vez del día, una invitación suave a encenderle una vela.
+    const hint = $('#obit-hint');
+    hint.hidden = didToday('c', m.id);
+    hint.textContent = `Tocá 🕯️ para encenderle una vela a ${m.name}`;
+    obitHintT = setTimeout(() => { hint.hidden = true; }, 7000);
+  }
+}
+function fillObit(m) {
+  $('#obit-name').textContent = m.name || '';
+  const y = [m.birthYear, m.passedYear].filter(Boolean);
+  $('#obit-years').textContent = y.length === 2 ? `${y[0]} – ${y[1]}` : y.length ? `🌈 ${y[0]}` : '';
+  $('#obit-msg').textContent = m.message ? `“${m.message}”` : '';
+  // Quiénes le encendieron una vela (los últimos nombres y cuántos más).
+  const lit = $('#obit-lit');
+  const names = [];
+  for (const c of [...(m.candleList || [])].reverse()) {
+    const n = (c.who || '').trim();
+    if (n && !names.includes(n) && n !== 'Alguien') names.push(n);
+    if (names.length === 2) break;
+  }
+  const total = Number(m.candles) || 0;
+  const rest = Math.max(0, total - names.length);
+  lit.hidden = !total;
+  lit.textContent = names.length
+    ? `🕯️ Le encendieron una vela ${names.join(', ')}${rest ? ` y ${nf(rest)} más` : ''} ›`
+    : `🕯️ ${nf(total)} ${total === 1 ? 'vela encendida' : 'velas encendidas'} ›`;
+  if (m.visits) showVisits(m.visits, m.visitsToday);
+  for (const b of $$('#obit-dock [data-n]')) {
+    const n = Number(m[b.dataset.n]) || 0;
+    b.textContent = n ? (n > 999 ? `${Math.floor(n / 1000)}k` : String(n)) : '';
+  }
+  $('#obit-dock [data-do="candle"]').classList.toggle('lit', didToday('c', m.id));
+  const many = obitList().length > 1;
+  $('#obit-prev').hidden = !many;
+  $('#obit-next').hidden = !many;
+}
+function showVisits(total, todayN) {
+  const v = $('#obit-visits');
+  v.hidden = !total;
+  v.textContent = `👣 ${nf(total)} ${total === 1 ? 'visita' : 'visitas'}`;
+  if (todayN) {
+    const b = document.createElement('b');
+    b.textContent = ` · ${nf(todayN)} hoy`;
+    v.append(b);
+  }
+}
+async function countVisit(m) {
+  try {
+    const r = await api.visit?.(m.id, who());
+    if (r && current?.id === m.id) {
+      current.visits = r.visits;
+      current.visitsToday = r.visitsToday;
+      showVisits(r.visits, r.visitsToday);
+    }
+  } catch { /* sin contador, no pasa nada */ }
+}
+// Las huellitas en el orden del muro (para pasar a la de al lado).
+const obitList = () => memorials.filter((x) => x.slot >= 0).sort((a, b) => a.slot - b.slot);
+function obitStep(dir) {
+  const list = obitList();
+  if (!current || list.length < 2) return;
+  const i = Math.max(0, list.findIndex((x) => x.id === current.id));
+  haptic(8);
+  visit(list[(i + dir + list.length) % list.length]);
+}
+// Abrir la ficha completa (su historia, el libro de visitas, quiénes encendieron velas…).
+function obitExpand(scrollTo = null) {
+  if (!current) return;
+  setObit(false);
+  sheetEl.hidden = false;
+  if (bottomSheet()) setSheet('full');
+  $('#sheet-scroll').scrollTop = 0;
+  if (scrollTo) setTimeout(() => $(scrollTo)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' }), 420);
+}
+// Cerrar la ficha completa vuelve al obituario (no al jardín).
+function backToObit() {
+  if (!current || !hall) return closeSheet();
+  if (bottomSheet()) setSheet('obit');
+  setObit(true, current);
+}
+$('#obit-back').onclick = () => { haptic(6); closeSheet(); };
+$('#obit-prev').onclick = () => obitStep(-1);
+$('#obit-next').onclick = () => obitStep(1);
+$('#obit-lit').onclick = () => obitExpand('#s-candles-who');
+$('#obit-photo').onclick = () => { closeSheet(); photoMode(); };
+$('#obit-dock').onclick = (e) => {
+  const b = e.target.closest('button[data-do]');
+  if (!b || !current) return;
+  const what = b.dataset.do;
+  if (what === 'candle') { $('#obit-hint').hidden = true; $('#s-candle').click(); return; }
+  if (what === 'more') { obitExpand(); return; }
+  if (what === 'book') { obitExpand('#gb-form'); return; }
+  $(`#s-${what}`)?.click();
+};
 
 // Arrastre de la hoja.
 {
@@ -1104,7 +1237,7 @@ function closeSheet() {
     if (!moved) { setSheet(sheetState === 'peek' ? 'full' : 'peek'); return; }
     if (v > 0.6 || y > peekY() + 90) {
       if (sheetState === 'full' && y < peekY() + 90 && v < 1.2) setSheet('peek');
-      else closeSheet();
+      else backToObit();
     } else if (v < -0.4 || y < peekY() * 0.5) setSheet('full');
     else setSheet('peek');
   };
@@ -1122,7 +1255,7 @@ function closeSheet() {
   mqMobile.addEventListener('change', () => { if (!sheetEl.hidden) setSheet(sheetState); });
   addEventListener('resize', () => { if (!sheetEl.hidden && bottomSheet()) setSheet(sheetState); });
 }
-$('#sheet-x').onclick = closeSheet;
+$('#sheet-x').onclick = () => backToObit();
 
 function inspectShelfGift(m, emo, single = null) {
   tick();
@@ -1190,6 +1323,7 @@ function fillSheet(m) {
   $('#s-pass').hidden = true; // (la invitación va en el botón de la vela)
   $('#s-pass-label').textContent = `Pasá la luz: invitá a alguien a encenderle una vela a ${m.name}`;
   maybeOgCard(m);
+  if (obit && current?.id === m.id) fillObit(m);
   $('#s-candle-label').innerHTML = lit ? 'Tu vela brilla · <b>Pasá la luz a alguien</b>' : 'Encender una vela';
   $('#s-flower').classList.toggle('done', didToday('f', m.id));
   $('#s-gift').classList.toggle('done', didToday('g', m.id));

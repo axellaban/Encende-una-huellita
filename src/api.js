@@ -49,6 +49,7 @@ const remote = {
   },
   candle: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/candle`, { method: 'POST', body: who }),
   flower: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/flower`, { method: 'POST', body: who }),
+  visit: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/visit`, { method: 'POST', body: who }),
   gift: (id, who, gift) => req(`/api/memorials/${encodeURIComponent(id)}/gift`, { method: 'POST', body: { ...who, gift } }),
   hug: (id, who) => req(`/api/memorials/${encodeURIComponent(id)}/hug`, { method: 'POST', body: who }),
   sign: (id, entry) => req(`/api/memorials/${encodeURIComponent(id)}/guestbook`, { method: 'POST', body: entry }),
@@ -179,6 +180,17 @@ function makeLocal() {
       ev('candle', m, who.visitor);
       persist();
       return { memorial: pub(m), glow, firstLight: first };
+    },
+    // En modo demo (sólo este navegador) la visita se cuenta igual, una por día.
+    async visit(id) {
+      const c = (db.visits ||= {})[id] ||= { n: 0, day: '', today: 0 };
+      if (onceToday('v', id)) {
+        c.n++;
+        c.today = c.day === day() ? c.today + 1 : 1;
+        c.day = day();
+        persist();
+      }
+      return { visits: c.n, visitsToday: c.day === day() ? c.today : 0 };
     },
     async flower(id, who) {
       if (!onceToday('f', id)) { persist(); return { memorial: pub(find(id)), already: true }; }

@@ -176,6 +176,21 @@ for (const name of ['local', 'vercel']) {
     assert.equal(k.others.find((o) => o.name === 'Otra').pet, null, 'sin nombre no hay espíritu');
   });
 
+  test(`[${name}] visitas: una por persona por día, total y de hoy`, async () => {
+    const before = (await (await call('/api/memorials/luca')).json()).visits || 0;
+    let r = await (await post('/api/memorials/luca/visit', { sid: `vis-${name}-1`, visitor: 'A' })).json();
+    assert.equal(r.visits, before + 1);
+    assert.ok(r.visitsToday >= 1);
+    r = await (await post('/api/memorials/luca/visit', { sid: `vis-${name}-1`, visitor: 'A' })).json();
+    assert.equal(r.visits, before + 1, 'la misma persona no suma dos veces el mismo día');
+    r = await (await post('/api/memorials/luca/visit', { sid: `vis-${name}-2`, visitor: 'B' })).json();
+    assert.equal(r.visits, before + 2);
+    const m = await (await call('/api/memorials/luca')).json();
+    assert.equal(m.visits, before + 2);
+    assert.ok(m.visitsToday >= 2);
+    assert.equal((await post('/api/memorials/nadie-x/visit', { sid: 'z' })).status, 404);
+  });
+
   test(`[${name}] compartir: /h/<id> con vista previa, imagen propia y "Pasá la luz"`, async () => {
     // Luca: su imagen para compartir y su nombre en el título.
     let html = await (await call('/h/luca')).text();

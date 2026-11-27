@@ -899,3 +899,48 @@ body.riding dialog#floors::backdrop { background: transparent; backdrop-filter: 
 .btn.link.subtle { opacity: .65; font-size: 12.5px; margin-top: 4px; }
 .btn.link.subtle:hover { opacity: 1; }
 .splash-night { margin: -4px 0 10px; padding: 5px 14px; border-radius: 999px; background: rgba(255, 196, 107, .14); border: 1px solid rgba(255, 210, 130, .3); color: #ffe3ad; font-size: 13.5px; font-weight: 700; }
+
+/* ---------- modo obituario: la huellita a pantalla completa ---------- */
+.obit { position: fixed; inset: 0; z-index: 9; pointer-events: none; color: #fff6ea; }
+.obit[hidden] { display: none; }
+.obit > * { pointer-events: auto; }
+.obit-head { position: absolute; top: 0; left: 0; right: 0; display: grid; grid-template-columns: 52px 1fr 52px; align-items: start; gap: 4px; padding: calc(var(--safe-t) + 10px) 10px 34px; background: linear-gradient(rgba(16,8,24,.82) 0%, rgba(16,8,24,.55) 62%, rgba(16,8,24,0)); pointer-events: none; animation: obitIn .5s var(--ease); }
+.obit-head > * { pointer-events: auto; }
+.obit-back, .obit-photo { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 30px; line-height: 1; color: #fff6ea; background: rgba(255,246,234,.1); }
+.obit-photo { font-size: 20px; justify-self: end; }
+.obit-title { text-align: center; display: grid; justify-items: center; gap: 3px; min-width: 0; }
+.obit-title h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-weight: 600; font-size: clamp(30px, 8.5vw, 44px); line-height: 1.02; letter-spacing: .5px; text-shadow: 0 2px 14px rgba(255,150,60,.45), 0 1px 2px rgba(0,0,0,.6); overflow-wrap: anywhere; }
+.obit-years { font-weight: 800; font-size: 15px; opacity: .92; }
+.obit-msg { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 17px; line-height: 1.25; opacity: .95; max-width: 34ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.obit-msg:empty, .obit-years:empty { display: none; }
+.obit-lit { margin-top: 3px; font-weight: 800; font-size: 13.5px; color: #ffe0b0; text-decoration: underline dotted rgba(255,224,176,.6); text-underline-offset: 3px; max-width: 100%; }
+.obit-visits { font-size: 13px; font-weight: 700; opacity: .85; }
+.obit-visits b { color: #ffd27a; }
+.obit-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 72px; border-radius: 14px; font-size: 30px; color: #fff6ea; background: rgba(28,14,36,.5); display: grid; place-items: center; }
+.obit-nav.prev { left: 6px; }
+.obit-nav.next { right: 6px; }
+.obit-hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-b) + 104px); padding: 10px 18px; border-radius: 999px; background: rgba(28,14,36,.78); font-weight: 800; font-size: 14px; white-space: nowrap; max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; animation: rise .5s var(--ease); pointer-events: none; }
+.obit-dock { position: absolute; left: 50%; bottom: calc(var(--safe-b) + 12px); transform: translateX(-50%); width: min(620px, calc(100vw - 20px)); display: flex; gap: 2px; padding: 8px 6px; border-radius: 26px; background: rgba(32,16,40,.86); box-shadow: 0 10px 30px rgba(0,0,0,.4); overflow-x: auto; scrollbar-width: none; animation: rise .5s var(--ease); }
+.obit-dock::-webkit-scrollbar { display: none; }
+.obit-dock button { position: relative; flex: 1 0 64px; display: grid; justify-items: center; gap: 2px; padding: 6px 2px 4px; border-radius: 16px; color: #fff6ea; font-weight: 800; font-size: 12px; }
+.obit-dock button:active { transform: scale(.94); background: rgba(255,246,234,.08); }
+.obit-dock i { font-style: normal; font-size: 24px; line-height: 1.1; }
+.obit-dock b { position: absolute; top: -2px; left: 50%; margin-left: 4px; min-width: 22px; padding: 1px 6px; border-radius: 999px; background: linear-gradient(135deg, #f7951f, #e4167c); font-size: 11px; line-height: 16px; }
+.obit-dock b:empty { display: none; }
+.obit-dock button.lit i { filter: drop-shadow(0 0 8px rgba(255,190,90,.9)); }
+.obit-dock button.main:not(.lit) { background: rgba(247,149,31,.16); }
+@keyframes obitIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+/* Con el obituario abierto: nada del juego encima, la ficha guardada y los avisos sobre la barra. */
+body.obit-mode .top, body.obit-mode .hub-btn, body.obit-mode .walk-hud, body.obit-mode .hint, body.obit-mode .ticker { opacity: 0; pointer-events: none; }
+body.obit-mode .sheet { transform: translateX(calc(100% + 40px)); pointer-events: none; transition: transform .4s var(--ease); }
+body.obit-mode .toast, body.obit-mode .glow-toast { top: auto; bottom: calc(var(--safe-b) + 150px); left: 50%; max-width: min(640px, calc(100vw - 28px)); animation-name: rise; }
+@media (max-width: 760px), (pointer: coarse) and (max-height: 540px) {
+  body.obit-mode .sheet { transform: translateY(calc(100% + 30px)); }
+}
+@media (min-width: 761px) {
+  .obit-nav { width: 48px; height: 88px; }
+  .obit-nav.prev { left: 16px; }
+  .obit-nav.next { right: 16px; }
+}
+.obit-title h2, .obit-title p { margin: 0; }
+body.obit-mode .joy, body.obit-mode .joy-ghost, body.obit-mode .act-btn, body.obit-mode .emote-btn, body.obit-mode .emote-tray, body.obit-mode .bottom { display: none !important; }

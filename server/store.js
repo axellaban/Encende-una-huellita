@@ -77,6 +77,9 @@ export function createStore(kv) {
       bg: h.bg || 'crema',
       gathering: Number(h.gathering) > Date.now() - 3 * 3600_000 ? Number(h.gathering) : null,
       diaryCount: Number(h.dc) || 0,
+      // Visitas: una por visitante por día (total y las de hoy).
+      visits: Number(h.visits) || 0,
+      visitsToday: h.vday === today() ? Number(h.vt) || 0 : 0,
       ogCard: h.og ? `/api/og/${id}?v=${h.og}` : null,
     };
   }
@@ -256,6 +259,20 @@ export function createStore(kv) {
       const memorial = toPublic(await getRaw(id), id);
       await event('candle', memorial, who.visitor, code ? { country: code } : {});
       return { memorial, glow, firstLight: first };
+    },
+
+    // Alguien abrió su obituario: cuenta una visita por persona por día.
+    async visit(id, who) {
+      await ensureFeatured();
+      const h = await getRaw(id);
+      if (!h.data) return null;
+      if (await onceToday('v', who.sid, id)) {
+        const day = today();
+        if (h.vday === day) await kv.pipeline([['HINCRBY', `${P}m:${id}`, 'visits', '1'], ['HINCRBY', `${P}m:${id}`, 'vt', '1']]);
+        else await kv.pipeline([['HINCRBY', `${P}m:${id}`, 'visits', '1'], ['HSET', `${P}m:${id}`, 'vt', '1', 'vday', day]]);
+      }
+      const m = toPublic(await getRaw(id), id);
+      return { visits: m.visits, visitsToday: m.visitsToday };
     },
 
     async flower(id, who) {

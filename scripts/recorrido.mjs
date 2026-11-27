@@ -104,11 +104,14 @@ async function full(b, tag, dev) {
   await tap(p, tag, '#help [data-then="featured"]', 'Conocer a Luca');
   await wait(p, 6000);
   check(tag, 'visitar a Luca', (await visible(p, '#sheet')) && (await text(p, '#s-name')) === 'Luca');
+  // Modo obituario: Luca a pantalla completa, con su nombre, sus visitas y los gestos abajo.
+  const visitsOk = await p.waitForFunction(() => /visita/.test(document.querySelector('#obit-visits')?.textContent || ''), null, { timeout: 10000 }).then(() => true, () => false);
+  check(tag, 'obituario a pantalla completa (nombre, visitas y gestos)', (await visible(p, '#obit')) && (await text(p, '#obit-name')) === 'Luca' && visitsOk && (await visible(p, '#obit-dock')));
 
   // Vela (y que no sume dos veces), flor, abrazo, regalito, libro.
   // Relativo a lo que había (si se corren varios dispositivos seguidos, comparten los datos).
   const c0 = Number(await text(p, '#s-candles'));
-  await tap(p, tag, '#s-candle', 'vela');
+  await tap(p, tag, '#obit-dock [data-do="candle"]', 'vela');
   await wait(p, 1500);
   const c1 = await text(p, '#s-candles');
   await p.evaluate(() => document.querySelector('#s-candle').click());
@@ -131,6 +134,10 @@ async function full(b, tag, dev) {
   await p.evaluate(() => document.querySelector('#s-shelf .shelf-item')?.click());
   await wait(p, 600);
   check(tag, 'repisa: tocar regalito muestra quién lo dejó', await toastIs(p, /le dej/), await toastText(p));
+  // "Libro" en la barra del obituario abre la ficha completa en el libro de visitas.
+  await tap(p, tag, '#obit-dock [data-do="book"]', 'libro');
+  await wait(p, 1500);
+  check(tag, 'obituario → libro abre la ficha completa', (await p.evaluate(() => document.querySelector('#obit').hidden)) && (await visible(p, '#gb-form')));
   await p.fill('#gb-form textarea', 'Qué lindo eras, Luca 🤍');
   await p.evaluate(() => document.querySelector('#gb-form').requestSubmit());
   await wait(p, 1500);
@@ -153,7 +160,11 @@ async function full(b, tag, dev) {
   check(tag, 'recuerdo (estampita con QR)', (await isOpen(p, '#keepsake')) && (await p.evaluate(() => document.querySelector('#keep-qr')?.getAttribute('aria-pressed') === 'true')));
   await closeTop(p);
   await p.evaluate(() => document.querySelector('#sheet-x').click());
+  await wait(p, 900);
+  check(tag, 'cerrar la ficha vuelve al obituario', await p.evaluate(() => !document.querySelector('#obit').hidden));
+  await p.evaluate(() => document.querySelector('#obit-back').click());
   await wait(p, 2500);
+  check(tag, '"‹" vuelve al jardín', await p.evaluate(() => document.querySelector('#obit').hidden && !document.body.classList.contains('sheet-open')));
 
   // Sumar una mascota con foto y "cómo era".
   await hub(p, tag, '[data-then="add"]', 'Sumar mascota');
@@ -258,7 +269,12 @@ async function full(b, tag, dev) {
   // Sigue al lado del cuadrito (no lo mandó a su nicho).
   const near = cell && await p.evaluate((c) => { const P = window.__huellita.controls.player.pos; return Math.hypot(P.x - c.x, P.z - c.z) < 3; }, cell);
   check(tag, 'vitrina: cuadrito → obituario ahí mismo', !!(cellSheet && near), `${cellName} → ${await text(p, '#s-name')}`);
-  await p.evaluate(() => document.querySelector('#sheet-x').click());
+  // Las flechas del obituario pasan a la huellita de al lado.
+  const before = await text(p, '#obit-name');
+  await p.evaluate(() => document.querySelector('#obit-next').click());
+  const moved = await p.waitForFunction((n) => (document.querySelector('#obit-name')?.textContent || n) !== n, before, { timeout: 10000 }).then(() => true, () => false);
+  check(tag, 'obituario: flecha a la huellita de al lado', moved, `${before} → ${await text(p, '#obit-name')}`);
+  await p.evaluate(() => document.querySelector('#obit-back').click());
   await wait(p, 1500);
   await p.evaluate(() => { const H = window.__huellita; H.controls.placePlayer(new H.THREE.Vector3(12, 0, 30), new H.THREE.Vector3(30, 0, 30)); H.controls.snapFollow(); });
   // Con SwiftShader el reloj de la escena avanza más despacio que el reloj real.

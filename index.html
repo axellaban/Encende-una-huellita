@@ -208,6 +208,33 @@
     </dialog>
 
     <!-- ---------- ficha de una huellita ---------- -->
+    <!-- modo obituario: la huellita a pantalla completa (el nicho en 3D, sus datos y los gestos abajo) -->
+    <section class="obit" id="obit" hidden aria-label="Obituario">
+      <header class="obit-head">
+        <button class="obit-back" id="obit-back" aria-label="Volver al jardín">‹</button>
+        <div class="obit-title">
+          <h2 id="obit-name"></h2>
+          <p class="obit-years" id="obit-years"></p>
+          <p class="obit-msg" id="obit-msg"></p>
+          <button class="obit-lit" id="obit-lit" hidden></button>
+          <p class="obit-visits" id="obit-visits" hidden></p>
+        </div>
+        <button class="obit-photo" id="obit-photo" aria-label="Sacar una foto">📷</button>
+      </header>
+      <button class="obit-nav prev" id="obit-prev" aria-label="Huellita anterior">‹</button>
+      <button class="obit-nav next" id="obit-next" aria-label="Huellita siguiente">›</button>
+      <p class="obit-hint" id="obit-hint" hidden></p>
+      <nav class="obit-dock" id="obit-dock" aria-label="Gestos">
+        <button data-do="candle" class="main"><i>🕯️</i><b data-n="candles"></b><span>Vela</span></button>
+        <button data-do="flower"><i>🌸</i><b data-n="flowers"></b><span>Flor</span></button>
+        <button data-do="gift"><i>🎁</i><b data-n="gifts"></b><span>Regalito</span></button>
+        <button data-do="hug"><i>🫂</i><span>Abrazo</span></button>
+        <button data-do="book"><i>📖</i><b data-n="guestbookCount"></b><span>Libro</span></button>
+        <button data-do="share"><i>💌</i><span>Compartir</span></button>
+        <button data-do="keep"><i>🖼️</i><span>Recuerdo</span></button>
+        <button data-do="more"><i>✨</i><span>Su historia</span></button>
+      </nav>
+    </section>
     <aside class="sheet" id="sheet" hidden aria-label="Huellita" aria-modal="false">
       <div class="sheet-grab" id="sheet-grab"><span></span></div>
       <button class="x" id="sheet-x" aria-label="Cerrar">✕</button>

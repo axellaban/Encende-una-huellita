@@ -96,6 +96,14 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     cielo de `world.js`. `watercolor.js`: el pase final de acuarela (Opciones → Estilo acuarela).
   - `src/floors.js`: nombres propios de los 99 pisos y de los 10 pasillos (no usar los del original).
   - Muro: cada lugar ocupado es una ventanita con postigos (un solo `InstancedMesh`, `updateShutters`).
+  - **Modo obituario** (`#obit` en `index.html`, `setObit`/`fillObit`/`obitShot` en `main.js`): abrir una
+    huellita la muestra a pantalla completa: el nicho en 3D encuadrado entre la cabecera (nombre, años,
+    palabras de la familia, quiénes le encendieron velas, visitas) y la barra de gestos con contadores;
+    flechas ‹ › a la huellita de al lado (orden del muro). La ficha de siempre (`#sheet`) queda abierta pero
+    guardada fuera de la pantalla (`setSheet('obit')`), así todos sus botones siguen andando: la barra los
+    toca por adentro. "Su historia" o "Libro" la muestran (`obitExpand`); su cruz vuelve al obituario
+    (`backToObit`) y "‹" vuelve al jardín. Sin WebGL se abre la ficha completa. Visitas:
+    `POST /api/memorials/:id/visit` (una por persona por día, `visits`/`visitsToday`, límite propio).
   - **Vitrinas del salón, cuadros de la boca de cada pasillo y atriles** (`hall.js`, `render()` →
     `themedLists`/`paintCell`): **sólo huellitas de verdad**, nunca mascotas inventadas. Cada vitrina tiene
     un tema con su cartel (Siempre en nuestro corazón = más velas, Recién llegadas, Esperando una vela,

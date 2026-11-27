@@ -4,6 +4,18 @@ Lista para quien siga el proyecto (persona o IA). Leé primero [`AGENTS.md`](AGE
 Prioridad: **P0** = verificar/arreglar antes de mostrarlo a más gente, **P1** = lo que más suma,
 **P2** = completa el relevamiento del sitio de referencia, **P3** = deuda técnica y mejoras.
 
+## 🆕 27/11/2026: modo obituario a pantalla completa
+
+Pedido del dueño ("la experiencia del obituario es mejor en el sitio de referencia"): ahora cada
+huellita se abre a pantalla completa con el nicho en 3D grande, cabecera con nombre, años, palabras de
+la familia, quiénes le encendieron una vela y cuántas visitas tuvo (nuevo contador en el servidor), flechas
+a la de al lado y una barra de gestos con contadores; "Su historia" abre la ficha completa. Diseño propio
+(sin copiar textos ni imágenes). Ver AGENTS → Modo obituario.
+- [ ] Probar en un teléfono real: que la barra no choque con el gesto de "inicio" del iPhone y que las
+      flechas no se confundan con la palanca invisible.
+- [ ] Ideas para seguir: deslizar con el dedo para pasar de huellita, acercar/alejar el nicho, ver los
+      regalitos de la repisa tocándolos en el 3D.
+
 ## 🆕 Tanda del 26/11/2026: listo para compartir (cuadritos, espíritus, compartir y WhatsApp)
 
 **Publicado en `main` el 27/11/2026** y verificado en producción (mismo `index-*.js` que el build, `HEAD`

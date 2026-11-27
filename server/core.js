@@ -246,7 +246,7 @@ export async function handleApi(req, store) {
     return ok(await store.heartDiary(m[1], m[2], cleanText(body.sid, 40)));
   }
 
-  m = path.match(/^\/api\/memorials\/([\w-]{3,24})(?:\/(candle|flower|guestbook|gift|hug|eternal|altar))?$/);
+  m = path.match(/^\/api\/memorials\/([\w-]{3,24})(?:\/(candle|flower|guestbook|gift|hug|eternal|altar|visit))?$/);
   if (m) {
     const [, id, action] = m;
     if (!action && method === 'GET') {
@@ -260,12 +260,14 @@ export async function handleApi(req, store) {
       return ok({ ok: true });
     }
     if (action && method === 'POST') {
-      if (await store.limited(`a:${ip}`, 40)) return fail(429, 'Más despacio, por favor 🤍');
+      // Las visitas (abrir obituarios, pasar de uno a otro) tienen su propio límite: no gastan el de los gestos.
+      if (await store.limited(action === 'visit' ? `v:${ip}` : `a:${ip}`, action === 'visit' ? 150 : 40)) return fail(429, 'Más despacio, por favor 🤍');
       const body = await req.json();
       const who = whoFrom(body, req);
       let r;
       if (action === 'candle') r = await store.candle(id, who);
       if (action === 'flower') r = await store.flower(id, who);
+      if (action === 'visit') r = await store.visit(id, who);
       if (action === 'hug') r = await store.hug(id, who);
       if (action === 'gift') r = await store.gift(id, who, cleanText(body.gift, 40));
       if (action === 'eternal') {
