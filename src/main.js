@@ -627,6 +627,17 @@ const floorSky = (f) => {
     : [143 + (134 - 143) * ((k - 0.45) / 0.55), 134 + (195 - 134) * ((k - 0.45) / 0.55), 214 + (242 - 214) * ((k - 0.45) / 0.55)];
   return `rgb(${a.map(Math.round).join(',')})`;
 };
+// Que se vea el piso donde estás (la lista va del 99 al 1: sin esto, en el piso 1 había que bajar todo).
+// Sólo mueve la lista (scrollIntoView podía desplazar la página entera y correr los toques).
+function showFloorsDialog() {
+  $('#floors').showModal();
+  const list = $('#floor-list');
+  const on = list.querySelector('button.on');
+  if (!on) return;
+  const lr = list.getBoundingClientRect();
+  const br = on.getBoundingClientRect();
+  list.scrollTop += br.top - lr.top - (list.clientHeight - br.height) / 2;
+}
 function renderFloors() {
   const counts = new Array(FLOORS).fill(0);
   for (const m of memorials) { const f = floorOf(m); if (f >= 0 && f < FLOORS) counts[f]++; }
@@ -651,8 +662,7 @@ function renderFloors() {
   $$('.floor-num').forEach((el) => { el.textContent = currentFloor() + 1; });
   const here = $('#floor-here');
   if (here) here.textContent = `Estás en el piso ${currentFloor() + 1} · ${floorName(currentFloor())}`;
-  // Que se vea el piso donde estás (la lista va del 99 al 1: sin esto, en el piso 1 había que bajar todo).
-  requestAnimationFrame(() => list.querySelector('button.on')?.scrollIntoView({ block: 'center' }));
+
   elevator?.setFloor(currentFloor());
 }
 
@@ -762,7 +772,7 @@ async function callElevator(liftIdx = null) {
   if (!controls || !elevator || riding) return;
   if (typeof liftIdx === 'number') elevator.useIndex(liftIdx);
   else elevator.useNearest(controls.player.pos);
-  if (reduced) { renderFloors(); $('#floors').showModal(); return; }
+  if (reduced) { renderFloors(); showFloorsDialog(); return; }
   liftBegin();
   const P = controls.player;
   const door = elevator.doorPoint(1.1);
@@ -800,7 +810,7 @@ async function callElevator(liftIdx = null) {
   liftDrop = 0.38;
   insideLift = true;
   renderFloors();
-  $('#floors').showModal();
+  showFloorsDialog();
 }
 
 // Salir caminando de la cabina (al llegar, o si no elegiste piso).
