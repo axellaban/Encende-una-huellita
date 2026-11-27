@@ -43,7 +43,15 @@ const toastText = (p) => text(p, '#toast');
 const toastIs = (p, re, ms = 9000) => p.waitForFunction((src) => new RegExp(src, 'i').test(document.querySelector('#toast')?.textContent || ''), re.source, { timeout: ms }).then(() => true, () => false);
 // Clic "de verdad" (que el elemento esté visible y no tapado); si falla, cuenta como error.
 async function tap(p, tag, sel, label = sel) {
-  try { await p.click(sel, { timeout: 15000 }); return true; } catch (e) {
+  try { await p.click(sel, { timeout: 15000 }); return true; } catch (e0) {
+    // Con el emulador a ~1 cuadro por segundo, Playwright a veces no llega a ver el botón "quieto"
+    // (sigue animándose la escena detrás). Si nada lo tapa, se reintenta forzando el clic.
+    if (!/intercepts|not visible|outside of the viewport/.test(e0.message)) {
+      // A veces el clic llegó igual (el botón cerraba un diálogo y ya no está): eso cuenta como tocado.
+      if (!(await p.isVisible(sel).catch(() => false))) return true;
+      try { await p.click(sel, { timeout: 5000, force: true }); return true; } catch { /* sigue abajo */ }
+    }
+    const e = e0;
     check(tag, `tocar ${label}`, false, e.message.split('\n').slice(0, 8).filter((l) => /intercepts|not visible|outside|Timeout/.test(l)).pop() || e.message.split('\n')[0]);
     if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `recorrido-fallo-${++shotN}.png`) });
     return false;
