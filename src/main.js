@@ -651,6 +651,8 @@ function renderFloors() {
   $$('.floor-num').forEach((el) => { el.textContent = currentFloor() + 1; });
   const here = $('#floor-here');
   if (here) here.textContent = `Estás en el piso ${currentFloor() + 1} · ${floorName(currentFloor())}`;
+  // Que se vea el piso donde estás (la lista va del 99 al 1: sin esto, en el piso 1 había que bajar todo).
+  requestAnimationFrame(() => list.querySelector('button.on')?.scrollIntoView({ block: 'center' }));
   elevator?.setFloor(currentFloor());
 }
 
