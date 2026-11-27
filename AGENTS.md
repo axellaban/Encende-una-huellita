@@ -120,7 +120,7 @@ Node 22. Sin dependencias de servidor (sólo `three` y `vite`).
     chispitas. `setPack(memorials)` elige quiénes juegan; `walk(m, from)` saca a pasear.
     En el jardín se reparten por zonas (`zoneForIndex`): el Prado (`meadow`), la plazoleta de después del
     Puente del Arcoíris (`plaza`), claros del campo (`field`, cada uno con su `d.home` en `fieldHomes`) y
-    el césped (`lawn`); `field` y `lawn` te acompañan al mundo abierto. Cuántos: 8 / 12 / 16 según la
+    el césped (`lawn`); `field` y `lawn` te acompañan al mundo abierto. Cuántos: 16 / 12 / 8 según la
     calidad: Alta / Media / Ahorro (`maxPack`). Los que están a más de 38 m de la cámara se animan ~8 veces por segundo (LOD).
     Cómo se ve cada uno sale de `m.look` (`server/looks.js`) o, si no hay, de un hash de su id.
   - `src/api.js`: cliente HTTP + **modo demo** (localStorage) si no hay base de datos.
